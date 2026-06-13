@@ -25,7 +25,7 @@ export function RightPanel({
   if (!sidepanel) return null;
 
   return (
-    <aside className="flex w-[400px] shrink-0 flex-col border-l bg-card/30">
+    <aside className="flex h-full flex-col border-l bg-card/30">
       <header className="flex h-14 shrink-0 items-center justify-between border-b px-5">
         <h2 className="truncate text-sm font-semibold">
           {sidepanel.kind === "usage" && "Context"}
