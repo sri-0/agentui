@@ -14,7 +14,16 @@ type Writer = UIMessageStreamWriter<ChatMessage>;
 export async function pumpBackendSse(
   body: ReadableStream<Uint8Array>,
   writer: Writer,
+  meta?: { model?: string; agentId?: string },
 ): Promise<void> {
+  // Stamp the assistant message with the model/agent that produced it.
+  if (meta && (meta.model || meta.agentId)) {
+    writer.write({
+      type: "message-metadata",
+      messageMetadata: { model: meta.model, agentId: meta.agentId },
+    });
+  }
+
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";

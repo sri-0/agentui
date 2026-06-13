@@ -5,8 +5,10 @@ import type { UIMessage } from "ai";
  */
 export type ChatMetadata = {
   threadId?: string;
-  /** model or agent id that produced this message */
+  /** model id selected for this message */
   model?: string;
+  /** agent id, if this message was produced by an agent */
+  agentId?: string;
   createdAt?: number;
 };
 

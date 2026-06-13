@@ -57,7 +57,10 @@ export async function POST(req: Request) {
 
   const stream = createUIMessageStream<ChatMessage>({
     execute: async ({ writer }) => {
-      await pumpBackendSse(upstream.body as ReadableStream<Uint8Array>, writer);
+      await pumpBackendSse(upstream.body as ReadableStream<Uint8Array>, writer, {
+        model,
+        agentId,
+      });
     },
     onError: (error) =>
       error instanceof Error ? error.message : "Stream error",
