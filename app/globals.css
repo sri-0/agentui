@@ -274,6 +274,21 @@
   border-bottom: 0;
 }
 
+/*
+ * Sidebar surface. Plain CSS (processed directly from globals, so it's reliable
+ * and overrides the component's bg-sidebar): a soft warm→cool gradient in light
+ * mode, and a flat near-black in dark mode (darker than the main thread).
+ */
+[data-slot="sidebar-inner"] {
+  background-image: linear-gradient(180deg, oklch(0.98 0.012 45), oklch(0.955 0.02 230));
+}
+.dark [data-slot="sidebar-inner"] {
+  background-image: linear-gradient(180deg, oklch(0.075 0 0), oklch(0.04 0 0));
+}
+
+
+
+
 
 
 
