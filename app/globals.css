@@ -81,6 +81,11 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* AI accent — warm → cool sweep (stronger in light mode) */
+  --ai-from: oklch(0.68 0.19 35); /* coral / peach */
+  --ai-to: oklch(0.66 0.14 220); /* sky / teal */
+  --ai-from-deep: oklch(0.58 0.18 32);
+  --ai-to-deep: oklch(0.54 0.13 222);
 }
 
 .dark {
@@ -115,6 +120,16 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /* AI accent — brighter in dark for glow presence */
+  --ai-from: oklch(0.7 0.16 35);
+  --ai-to: oklch(0.7 0.12 220);
+  --ai-from-deep: oklch(0.6 0.16 33);
+  --ai-to-deep: oklch(0.56 0.12 221);
+}
+
+@theme inline {
+  --color-ai-from: var(--ai-from);
+  --color-ai-to: var(--ai-to);
 }
 
 @layer base {
@@ -126,5 +141,94 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer utilities {
+  /* The AI gradient as fill or text */
+  .ai-gradient {
+    background-image: linear-gradient(120deg, var(--ai-from), var(--ai-to));
+  }
+  /* deeper variant for solid controls like the send button */
+  .ai-gradient-strong {
+    background-image: linear-gradient(
+      135deg,
+      var(--ai-from-deep),
+      var(--ai-to-deep)
+    );
+  }
+  .ai-text-gradient {
+    background-image: linear-gradient(120deg, var(--ai-from), var(--ai-to));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Soft ambient glow placed behind the composer */
+  .ai-glow {
+    position: absolute;
+    inset: -34px -28px;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        45% 120% at 30% 50%,
+        color-mix(in oklch, var(--ai-from) 55%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        45% 120% at 72% 45%,
+        color-mix(in oklch, var(--ai-to) 55%, transparent),
+        transparent 70%
+      );
+    filter: blur(56px);
+    opacity: 0.75;
+    animation: ai-glow-drift 9s ease-in-out infinite alternate;
+  }
+  .dark .ai-glow {
+    opacity: 0.42;
+  }
+
+  @keyframes ai-glow-drift {
+    0% {
+      transform: translateX(-4%) scale(1);
+    }
+    100% {
+      transform: translateX(4%) scale(1.06);
+    }
+  }
+
+  /* Glowing gradient orb — the "thinking" / loading indicator */
+  .ai-orb {
+    border-radius: 9999px;
+    background:
+      radial-gradient(
+        circle at 32% 28%,
+        color-mix(in oklch, white 65%, transparent),
+        transparent 40%
+      ),
+      linear-gradient(135deg, var(--ai-from), var(--ai-to));
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--ai-from) 25%, transparent),
+      0 6px 20px -4px color-mix(in oklch, var(--ai-to) 60%, transparent);
+    animation: ai-orb-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes ai-orb-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+      filter: brightness(1);
+    }
+    50% {
+      transform: scale(1.08);
+      filter: brightness(1.15);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ai-glow,
+    .ai-orb {
+      animation: none;
+    }
   }
 }
