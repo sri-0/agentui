@@ -8,6 +8,11 @@ import {
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { RightPanel } from "@/components/right-panel/right-panel";
 import { Badge } from "@/components/ui/badge";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useModels } from "@/lib/api/models";
 import { useThreadMessages } from "@/lib/api/threads";
@@ -68,6 +73,9 @@ function ThreadChat({
   });
   const buildBody = useRequestBody(threadId, isTemporary);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
+  const sidepanel = useUiStore((s) => s.sidepanel);
+  const panelOpen = Boolean(sidepanel);
+  const sideDefault = sidepanel?.kind === "agent" ? 42 : 34;
   const { data: models = [] } = useModels();
   const selectedModel = useUiStore((s) => s.selectedModel);
   const contextWindow =
@@ -98,46 +106,63 @@ function ThreadChat({
   const usage = deriveUsage(messages, contextWindow);
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
-          <SidebarTrigger className="text-muted-foreground" />
-          {isTemporary && (
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <GhostIcon className="size-3.5" />
-              Temporary chat
-              <Badge
-                variant="secondary"
-                className="rounded-full px-2 py-0 text-[10px]"
-              >
-                not saved
-              </Badge>
-            </span>
-          )}
-        </header>
+    <ResizablePanelGroup
+      orientation="horizontal"
+      className="flex-1 overflow-hidden"
+    >
+      <ResizablePanel id="chat" minSize="40%">
+        <div className="flex h-full flex-col overflow-hidden">
+          <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+            <SidebarTrigger className="text-muted-foreground" />
+            {isTemporary && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <GhostIcon className="size-3.5" />
+                Temporary chat
+                <Badge
+                  variant="secondary"
+                  className="rounded-full px-2 py-0 text-[10px]"
+                >
+                  not saved
+                </Badge>
+              </span>
+            )}
+          </header>
 
-        <Conversation className="flex-1">
-          <ConversationContent className="px-4 py-6">
-            <MessageList messages={messages} status={status} />
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
+          <Conversation className="flex-1">
+            <ConversationContent className="px-4 py-6">
+              <MessageList messages={messages} status={status} />
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
 
-        <div className="px-4 pb-5 pt-2">
-          <TaskBar messages={messages} />
-          <div className="mx-auto w-full max-w-3xl">
-            <Composer
-              onSubmit={onSubmit}
-              status={status}
-              onStop={stop}
-              usage={{ used: usage.used, total: usage.total }}
-              onOpenUsage={() => openSidepanel({ kind: "usage" })}
-            />
+          <div className="px-4 pb-5 pt-2">
+            <TaskBar messages={messages} />
+            <div className="mx-auto w-full max-w-3xl">
+              <Composer
+                onSubmit={onSubmit}
+                status={status}
+                onStop={stop}
+                usage={{ used: usage.used, total: usage.total }}
+                onOpenUsage={() => openSidepanel({ kind: "usage" })}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      </ResizablePanel>
 
-      <RightPanel messages={messages} contextWindow={contextWindow} />
-    </div>
+      {panelOpen && (
+        <>
+          <ResizableHandle withHandle />
+          <ResizablePanel
+            id="side"
+            defaultSize={`${sideDefault}%`}
+            minSize="24%"
+            maxSize="65%"
+          >
+            <RightPanel messages={messages} contextWindow={contextWindow} />
+          </ResizablePanel>
+        </>
+      )}
+    </ResizablePanelGroup>
   );
 }
