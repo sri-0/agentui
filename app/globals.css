@@ -232,3 +232,48 @@
     }
   }
 }
+
+/*
+ * Simpler, ChatGPT-style markdown blocks. These rules are intentionally
+ * UNLAYERED so they win over Streamdown's Tailwind utility classes without
+ * needing !important. Action buttons (copy / CSV+Markdown download /
+ * fullscreen) are left untouched.
+ */
+
+/* Tables: drop the enclosing card, use clean dividers */
+[data-streamdown="table-wrapper"] {
+  margin: 1.25rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  gap: 0.25rem;
+}
+[data-streamdown="table"] {
+  width: 100%;
+  border: 0;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+[data-streamdown="table-header-cell"] {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  padding: 0.5rem 0.875rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--foreground);
+}
+[data-streamdown="table-cell"] {
+  border: 0;
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
+  padding: 0.5rem 0.875rem;
+  vertical-align: top;
+}
+[data-streamdown="table-row"]:last-child [data-streamdown="table-cell"] {
+  border-bottom: 0;
+}
+
+
+
+
