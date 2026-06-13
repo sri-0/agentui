@@ -17,6 +17,7 @@ import {
 import { useDeleteThread, useThreads } from "@/lib/api/threads";
 import { groupThreads, threadTitle } from "@/lib/group-threads";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/stores/ui-store";
 import {
   MoonIcon,
   PenSquareIcon,
@@ -35,6 +36,7 @@ export function AppSidebar() {
   const groups = groupThreads(threads);
   const params = useParams();
   const activeId = params?.threadId as string | undefined;
+  const requestNewChat = useUiStore((s) => s.requestNewChat);
 
   return (
     <Sidebar collapsible="icon">
@@ -52,7 +54,7 @@ export function AppSidebar() {
         <SidebarMenu className="gap-1.5">
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="New chat" className="h-10">
-              <Link href="/chat">
+              <Link href="/chat" onClick={() => requestNewChat()}>
                 <PenSquareIcon className="size-4" />
                 <span>New chat</span>
               </Link>

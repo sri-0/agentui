@@ -7,8 +7,11 @@ import { useModels } from "@/lib/api/models";
 import { useUiStore } from "@/stores/ui-store";
 import { nanoid } from "nanoid";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { Composer } from "./composer/composer";
+import { TemporaryToggle } from "./temporary-toggle";
+import { ThreadChat } from "./thread-view";
 
 const SUGGESTIONS = [
   "Summarize the latest board report",
@@ -25,12 +28,18 @@ export function LandingView() {
   const reasoningEffort = useUiStore((s) => s.reasoningEffort);
   const temporary = useUiStore((s) => s.temporary);
 
+  // A temporary chat runs in-place here (no route / no persistence). A normal
+  // chat navigates to /chat/[id] so it's saved and shareable.
+  const [tempThreadId, setTempThreadId] = useState<string | null>(null);
+  const newChatNonce = useUiStore((s) => s.newChatNonce);
+  useEffect(() => setTempThreadId(null), [newChatNonce]);
+
   const contextWindow =
     models.find((m) => m.id === selectedModel)?.context_length ?? 128_000;
 
   const start = (message: PromptInputMessage) => {
     if (!message.text.trim() && (message.files?.length ?? 0) === 0) return;
-    const threadId = temporary ? `temp-${nanoid()}` : nanoid();
+    const threadId = nanoid();
     setPendingMessage(threadId, {
       text: message.text,
       files: message.files,
@@ -43,13 +52,31 @@ export function LandingView() {
         reasoningEffort: reasoningEffort === "off" ? undefined : reasoningEffort,
       },
     });
-    router.push(`/chat/${threadId}`);
+    if (temporary) {
+      setTempThreadId(threadId);
+    } else {
+      router.push(`/chat/${threadId}`);
+    }
   };
+
+  if (tempThreadId) {
+    return (
+      <ThreadChat
+        key={tempThreadId}
+        threadId={tempThreadId}
+        isTemporary
+        initialMessages={[]}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <header className="flex h-14 shrink-0 items-center px-4">
         <SidebarTrigger className="text-muted-foreground" />
+        <div className="ml-auto">
+          <TemporaryToggle />
+        </div>
       </header>
 
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 pb-16">

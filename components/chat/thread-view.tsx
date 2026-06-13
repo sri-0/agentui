@@ -21,22 +21,24 @@ import { takePendingMessage } from "@/lib/chat/pending";
 import type { ChatMessage } from "@/lib/chat/types";
 import { deriveUsage } from "@/lib/chat/usage";
 import { useUiStore } from "@/stores/ui-store";
-import { GhostIcon } from "lucide-react";
+import { MessageCircleDashedIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { Composer } from "./composer/composer";
 import { ConversationSkeleton } from "./loading";
 import { MessageList } from "./messages/message-list";
 import { TaskBar } from "./task-bar";
+import { TemporaryToggle } from "./temporary-toggle";
 import { useAgentChat } from "./use-agent-chat";
 import { useRequestBody } from "./use-request-body";
 
 export function ThreadView({ threadId }: { threadId: string }) {
-  const isTemporary = threadId.startsWith("temp-");
-  const history = useThreadMessages(isTemporary ? null : threadId);
+  // /chat/[threadId] is always a persisted thread — temporary chats run in-place
+  // on /chat with no route (see LandingView).
+  const history = useThreadMessages(threadId);
 
   // Wait for history before mounting the chat so initialMessages is correct.
-  if (!isTemporary && history.isLoading) {
+  if (history.isLoading) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
@@ -47,18 +49,17 @@ export function ThreadView({ threadId }: { threadId: string }) {
     );
   }
 
-  const initial = isTemporary ? [] : fromHistory(history.data ?? []);
   return (
     <ThreadChat
       key={threadId}
       threadId={threadId}
-      isTemporary={isTemporary}
-      initialMessages={initial}
+      isTemporary={false}
+      initialMessages={fromHistory(history.data ?? [])}
     />
   );
 }
 
-function ThreadChat({
+export function ThreadChat({
   threadId,
   isTemporary,
   initialMessages,
@@ -116,7 +117,7 @@ function ThreadChat({
             <SidebarTrigger className="text-muted-foreground" />
             {isTemporary && (
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <GhostIcon className="size-3.5" />
+                <MessageCircleDashedIcon className="size-3.5" />
                 Temporary chat
                 <Badge
                   variant="secondary"
@@ -126,6 +127,9 @@ function ThreadChat({
                 </Badge>
               </span>
             )}
+            <div className="ml-auto">
+              <TemporaryToggle />
+            </div>
           </header>
 
           <Conversation className="flex-1">

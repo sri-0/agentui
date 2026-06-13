@@ -18,6 +18,8 @@ type UiState = {
   temporary: boolean;
   sidepanel: SidepanelState;
   sidebarOpen: boolean;
+  /** bumped when "New chat" is clicked, so an in-place temp chat can reset */
+  newChatNonce: number;
 
   setModel: (id: string | null) => void;
   setAgent: (id: string | null) => void;
@@ -27,6 +29,7 @@ type UiState = {
   closeSidepanel: () => void;
   toggleSidebar: () => void;
   setSidebarOpen: (v: boolean) => void;
+  requestNewChat: () => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -38,6 +41,7 @@ export const useUiStore = create<UiState>()(
       temporary: false,
       sidepanel: null,
       sidebarOpen: true,
+      newChatNonce: 0,
 
       setModel: (id) => set({ selectedModel: id }),
       setAgent: (id) => set({ selectedAgentId: id }),
@@ -47,6 +51,8 @@ export const useUiStore = create<UiState>()(
       closeSidepanel: () => set({ sidepanel: null }),
       toggleSidebar: () => set((st) => ({ sidebarOpen: !st.sidebarOpen })),
       setSidebarOpen: (v) => set({ sidebarOpen: v }),
+      requestNewChat: () =>
+        set((st) => ({ newChatNonce: st.newChatNonce + 1, sidepanel: null })),
     }),
     {
       name: "agentui-ui",

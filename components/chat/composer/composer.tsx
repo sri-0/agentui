@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
-import { GhostIcon, PaperclipIcon, XIcon } from "lucide-react";
+import { PaperclipIcon, XIcon } from "lucide-react";
 
 import { AgentSelector } from "./agent-selector";
 import { ContextCircle } from "./context-circle";
@@ -55,23 +55,6 @@ function AttachmentChips() {
         </span>
       ))}
     </div>
-  );
-}
-
-function TemporaryToggle() {
-  const temporary = useUiStore((s) => s.temporary);
-  const setTemporary = useUiStore((s) => s.setTemporary);
-  return (
-    <PromptInputButton
-      tooltip={temporary ? "Temporary chat is on" : "Temporary chat"}
-      onClick={() => setTemporary(!temporary)}
-      className={cn(
-        "size-9 rounded-full text-muted-foreground hover:bg-accent",
-        temporary && "bg-accent text-[var(--ai-from)]",
-      )}
-    >
-      <GhostIcon className="size-4" />
-    </PromptInputButton>
   );
 }
 
@@ -130,7 +113,6 @@ export function Composer({
             <ModelSelector />
             <AgentSelector />
             <ReasoningEffortSelector />
-            <TemporaryToggle />
           </PromptInputTools>
           <div className="flex items-center gap-2">
             <ContextCircle
