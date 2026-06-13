@@ -26,6 +26,7 @@ import { FileTextIcon } from "lucide-react";
 import { ThinkingIndicator } from "../loading";
 import { AgentCards } from "./agent-cards";
 import { MessageActions } from "./message-actions";
+import { MessageMeta } from "./message-meta";
 import { RunProgress } from "./run-progress";
 import { ToolInterrupt } from "./tool-interrupt";
 
@@ -154,7 +155,12 @@ function MessageItem({
           }
         })}
 
-        {showActions && <MessageActions message={message} />}
+        {showActions && (
+          <div className="mt-1.5 flex items-center gap-3 opacity-0 transition-opacity group-hover:opacity-100">
+            <MessageActions message={message} />
+            <MessageMeta message={message} />
+          </div>
+        )}
       </MessageContent>
     </Message>
   );
