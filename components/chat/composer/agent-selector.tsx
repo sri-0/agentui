@@ -47,7 +47,10 @@ export function AgentSelector() {
               )}
             >
               <BotIcon
-                className={cn("size-4 shrink-0", current && "ai-text-gradient")}
+                className={cn(
+                  "size-4 shrink-0",
+                  current && "text-[var(--ai-from)]",
+                )}
               />
               <span className="truncate">{current?.name ?? "No agent"}</span>
               <ChevronsUpDownIcon className="size-3.5 shrink-0 opacity-60" />

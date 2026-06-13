@@ -67,7 +67,7 @@ function TemporaryToggle() {
       onClick={() => setTemporary(!temporary)}
       className={cn(
         "size-9 rounded-full text-muted-foreground hover:bg-accent",
-        temporary && "ai-text-gradient",
+        temporary && "bg-accent text-[var(--ai-from)]",
       )}
     >
       <GhostIcon className="size-4" />

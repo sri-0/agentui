@@ -9,6 +9,8 @@ export type ChatMetadata = {
   model?: string;
   /** agent id, if this message was produced by an agent */
   agentId?: string;
+  /** wall-clock time the response took to stream, in ms */
+  durationMs?: number;
   createdAt?: number;
 };
 

@@ -43,7 +43,9 @@ export function ReasoningEffortSelector() {
                 on ? "bg-accent text-foreground" : "text-muted-foreground",
               )}
             >
-              <GaugeIcon className={cn("size-4", on && "ai-text-gradient")} />
+              <GaugeIcon
+                className={cn("size-4", on && "text-[var(--ai-from)]")}
+              />
               <span className="hidden sm:inline">
                 {on ? `Reasoning: ${active.label}` : "Reasoning"}
               </span>

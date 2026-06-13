@@ -16,6 +16,8 @@ export async function pumpBackendSse(
   writer: Writer,
   meta?: { model?: string; agentId?: string },
 ): Promise<void> {
+  const startedAt = Date.now();
+
   // Stamp the assistant message with the model/agent that produced it.
   if (meta && (meta.model || meta.agentId)) {
     writer.write({
@@ -272,6 +274,15 @@ export async function pumpBackendSse(
     flushToolInputs();
     closeReasoning();
     closeText();
+    // Final metadata carries everything (merge-safe) incl. the elapsed time.
+    writer.write({
+      type: "message-metadata",
+      messageMetadata: {
+        model: meta?.model,
+        agentId: meta?.agentId,
+        durationMs: Date.now() - startedAt,
+      },
+    });
     reader.releaseLock();
   }
 }

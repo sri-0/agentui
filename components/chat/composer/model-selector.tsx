@@ -19,6 +19,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ProviderIcon } from "@/components/provider-icon";
 import { useGroupedModels } from "@/lib/api/models";
 import { useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
@@ -60,7 +61,11 @@ export function ModelSelector() {
                 "hover:bg-accent hover:text-foreground",
               )}
             >
-              <BoxIcon className="size-4 shrink-0" />
+              {current ? (
+                <ProviderIcon modelId={current.id} className="size-4" />
+              ) : (
+                <BoxIcon className="size-4 shrink-0" />
+              )}
               <span className="truncate">
                 {current?.name ??
                   current?.id ??
@@ -94,6 +99,10 @@ export function ModelSelector() {
                         "size-4 shrink-0",
                         selectedModel === m.id ? "opacity-100" : "opacity-0",
                       )}
+                    />
+                    <ProviderIcon
+                      modelId={m.id}
+                      className="size-4 text-muted-foreground"
                     />
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate text-sm">

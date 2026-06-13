@@ -6,6 +6,7 @@ export type SidepanelState =
   | { kind: "usage" }
   | { kind: "agent"; agent: string; messageId: string }
   | { kind: "artifact"; artifactId: string }
+  | { kind: "model"; modelId: string }
   | null;
 
 export type ReasoningEffort = "off" | "low" | "medium" | "high";
