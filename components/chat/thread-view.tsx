@@ -149,6 +149,9 @@ export function ThreadChat({
                 usage={{ used: usage.used, total: usage.total }}
                 onOpenUsage={() => openSidepanel({ kind: "usage" })}
               />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                AI can make mistakes. Always validate responses.
+              </p>
             </div>
           </div>
         </div>
