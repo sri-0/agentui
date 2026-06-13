@@ -26,6 +26,7 @@ import { FileTextIcon } from "lucide-react";
 
 import { GradientOrb, ThinkingIndicator } from "../loading";
 import { AgentCards } from "./agent-cards";
+import { MessageActions } from "./message-actions";
 import { ToolInterrupt } from "./tool-interrupt";
 
 export function MessageList({
@@ -41,11 +42,12 @@ export function MessageList({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      {messages.map((message) => (
+      {messages.map((message, index) => (
         <MessageItem
           key={message.id}
           message={message}
           streaming={status === "streaming"}
+          isLast={index === messages.length - 1}
         />
       ))}
       {waiting && (
@@ -60,12 +62,16 @@ export function MessageList({
 function MessageItem({
   message,
   streaming,
+  isLast,
 }: {
   message: ChatMessage;
   streaming: boolean;
+  isLast: boolean;
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const isUser = message.role === "user";
+  const hasText = message.parts.some((p) => p.type === "text" && p.text);
+  const showActions = !isUser && hasText && !(streaming && isLast);
 
   // Latest transient progress line (if currently streaming)
   const progress = [...message.parts]
@@ -156,6 +162,8 @@ function MessageItem({
             </Shimmer>
           </div>
         )}
+
+        {showActions && <MessageActions message={message} />}
       </MessageContent>
     </Message>
   );
