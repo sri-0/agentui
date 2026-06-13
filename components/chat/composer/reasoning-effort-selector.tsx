@@ -18,7 +18,11 @@ import { type ReasoningEffort, useUiStore } from "@/stores/ui-store";
 import { CheckIcon, ChevronDownIcon, GaugeIcon } from "lucide-react";
 
 const OPTIONS: { value: ReasoningEffort; label: string; hint: string }[] = [
-  { value: "off", label: "No reasoning", hint: "Fastest, no extended thinking" },
+  {
+    value: "off",
+    label: "No reasoning",
+    hint: "Fastest, no extended thinking",
+  },
   { value: "low", label: "Low", hint: "A little thinking" },
   { value: "medium", label: "Medium", hint: "Balanced" },
   { value: "high", label: "High", hint: "Deepest reasoning" },
@@ -47,7 +51,7 @@ export function ReasoningEffortSelector() {
                 className={cn("size-4", on && "text-[var(--ai-from)]")}
               />
               <span className="hidden sm:inline">
-                {on ? `Reasoning: ${active.label}` : "Reasoning"}
+                {on ? active.label : "Reasoning"}
               </span>
               <ChevronDownIcon className="size-3.5 opacity-60" />
             </button>
