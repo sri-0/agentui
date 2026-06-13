@@ -11,7 +11,12 @@ import { useModels } from "@/lib/api/models";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
-import { CheckIcon, CopyIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
+} from "lucide-react";
 import { useState } from "react";
 
 function messageText(message: ChatMessage): string {
@@ -49,7 +54,7 @@ function useModelLabel(
 
   const label = agent
     ? modelName
-      ? `${agent.name} · ${modelName}`
+      ? `${modelName} · ${agent.name} `
       : agent.name
     : (modelName ?? "");
   return { label, modelId };

@@ -13,43 +13,48 @@ type AgentState = {
   preview: string;
 };
 
-/** Collapse a message's agent-step / agent-stream parts into one card per agent. */
-function collectAgents(message: ChatMessage): AgentState[] {
-  const map = new Map<string, AgentState>();
+/**
+ * Cards for SUB-agents only — i.e. agents that stream their own output
+ * separately (multi-agent workflows). The final/output agent streams into the
+ * main thread, so it gets no card here.
+ */
+function collectAgents(message: ChatMessage, streaming: boolean): AgentState[] {
+  // Reconstruct each sub-agent's text by concatenating its incremental deltas.
+  const texts = new Map<string, string>();
+  const stepNums = new Map<string, number>();
+  const steps = new Map<string, "started" | "done">();
+
   for (const part of message.parts) {
-    if (part.type === "data-agent-step") {
-      const d = part.data;
-      const entry = map.get(d.agent) ?? {
-        agent: d.agent,
-        status: "started" as const,
-        step: d.step,
-        preview: "",
-      };
-      entry.status = d.status;
-      entry.step = d.step;
-      map.set(d.agent, entry);
-    } else if (part.type === "data-agent-stream") {
-      const d = part.data;
-      const entry = map.get(d.agent) ?? {
-        agent: d.agent,
-        status: "started" as const,
-        step: d.step,
-        preview: "",
-      };
-      entry.preview = d.text;
-      map.set(d.agent, entry);
+    if (part.type === "data-agent-delta") {
+      texts.set(part.data.agent, (texts.get(part.data.agent) ?? "") + part.data.delta);
+      stepNums.set(part.data.agent, part.data.step);
+    } else if (part.type === "data-agent-step") {
+      steps.set(part.data.agent, part.data.status);
     }
   }
-  return [...map.values()];
+
+  const out: AgentState[] = [];
+  for (const [agent, text] of texts) {
+    // once the whole run has finished, no agent can still be "working"
+    const status = streaming ? (steps.get(agent) ?? "started") : "done";
+    out.push({ agent, status, step: stepNums.get(agent) ?? 0, preview: text });
+  }
+  return out;
 }
 
-export function AgentCards({ message }: { message: ChatMessage }) {
-  const agents = collectAgents(message);
+export function AgentCards({
+  message,
+  streaming,
+}: {
+  message: ChatMessage;
+  streaming: boolean;
+}) {
+  const agents = collectAgents(message, streaming);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   if (agents.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex w-full flex-col gap-2">
       {agents.map((a) => {
         const running = a.status !== "done";
         return (

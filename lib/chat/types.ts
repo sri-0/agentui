@@ -24,8 +24,12 @@ export type ChatMetadata = {
 export type ChatDataParts = {
   /** sub-agent lifecycle (started/done) for the multi-agent cards */
   "agent-step": { agent: string; step: number; status: "started" | "done" };
-  /** sub-agent streamed text, keyed by agent name; drives the agent detail panel */
-  "agent-stream": { agent: string; step: number; text: string };
+  /**
+   * Sub-agent streamed text as an INCREMENTAL delta (one token chunk). Each is a
+   * distinct part (unique id) so the wire stays O(n) — the client concatenates
+   * a given agent's deltas to reconstruct its full output.
+   */
+  "agent-delta": { agent: string; step: number; delta: string };
   /** transient status line ("Analyzing…") — not persisted */
   "agent-progress": { phase: string; message: string; agent?: string };
   /** human-in-the-loop tool confirmation */

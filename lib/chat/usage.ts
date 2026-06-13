@@ -106,8 +106,8 @@ export function deriveRichUsage(
         const input = "input" in p ? JSON.stringify(p.input ?? "") : "";
         const output = "output" in p ? JSON.stringify(p.output ?? "") : "";
         toolTok += estimateTokens(input + output);
-      } else if (p.type === "data-agent-stream") {
-        assistantTok += estimateTokens(p.data.text);
+      } else if (p.type === "data-agent-delta") {
+        assistantTok += estimateTokens(p.data.delta);
       }
     }
   }

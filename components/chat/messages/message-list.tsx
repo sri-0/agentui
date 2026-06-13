@@ -10,7 +10,6 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
   Tool,
   ToolContent,
@@ -24,9 +23,10 @@ import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
 import { FileTextIcon } from "lucide-react";
 
-import { GradientOrb, ThinkingIndicator } from "../loading";
+import { ThinkingIndicator } from "../loading";
 import { AgentCards } from "./agent-cards";
 import { MessageActions } from "./message-actions";
+import { RunProgress } from "./run-progress";
 import { ToolInterrupt } from "./tool-interrupt";
 
 export function MessageList({
@@ -73,15 +73,15 @@ function MessageItem({
   const hasText = message.parts.some((p) => p.type === "text" && p.text);
   const showActions = !isUser && hasText && !(streaming && isLast);
 
-  // Latest transient progress line (if currently streaming)
-  const progress = [...message.parts]
-    .reverse()
-    .find((p) => p.type === "data-agent-progress");
-
   return (
     <Message from={message.role}>
-      <MessageContent>
-        <AgentCards message={message} />
+      <MessageContent
+        className={isUser ? undefined : "w-full max-w-full min-w-0"}
+      >
+        {!isUser && (
+          <RunProgress message={message} streaming={streaming} isLast={isLast} />
+        )}
+        <AgentCards message={message} streaming={streaming && isLast} />
 
         {message.parts.map((part, i) => {
           switch (part.type) {
@@ -153,15 +153,6 @@ function MessageItem({
               return null;
           }
         })}
-
-        {!isUser && streaming && progress?.type === "data-agent-progress" && (
-          <div className="flex items-center gap-2.5">
-            <GradientOrb />
-            <Shimmer className="text-sm" duration={1.6}>
-              {progress.data.message}
-            </Shimmer>
-          </div>
-        )}
 
         {showActions && <MessageActions message={message} />}
       </MessageContent>

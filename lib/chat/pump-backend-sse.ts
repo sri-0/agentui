@@ -41,8 +41,6 @@ export async function pumpBackendSse(
     number,
     { id: string; name: string; args: string; started: boolean }
   >();
-  // sub-agent text accumulators, keyed by agent name (→ data-agent-stream id)
-  const agentStreams = new Map<string, { step: number; text: string }>();
 
   const ensureText = () => {
     if (textId === null) {
@@ -162,24 +160,20 @@ export async function pumpBackendSse(
       return;
     }
 
-    // 2. Sub-agent streamed text ------------------------------------------
+    // 2. Sub-agent streamed text (incremental delta, O(n) wire) -----------
     if (json.agent_event && typeof json.agent_event === "object") {
       const ev = json.agent_event as Record<string, unknown>;
       const agent = (ev.agent as string) || "agent";
       const step = (ev.step as number) ?? 0;
       const content = (ev.content as string) ?? "";
       const type = ev.type as string;
-      const entry = agentStreams.get(agent) ?? { step, text: "" };
-      if (type === "text_delta" || type === "reasoning_delta") {
-        entry.text += content;
+      if ((type === "text_delta" || type === "reasoning_delta") && content) {
+        writer.write({
+          type: "data-agent-delta",
+          id: nextId("adelta"),
+          data: { agent, step, delta: content },
+        });
       }
-      entry.step = step;
-      agentStreams.set(agent, entry);
-      writer.write({
-        type: "data-agent-stream",
-        id: agent,
-        data: { agent, step, text: entry.text },
-      });
       return;
     }
 
@@ -198,9 +192,11 @@ export async function pumpBackendSse(
           },
         });
       } else {
+        // Persist progress phases (planning / executing / …) as discrete steps
+        // so the top-level agent's progress can be rendered as a step log.
         writer.write({
           type: "data-agent-progress",
-          transient: true,
+          id: nextId("prog"),
           data: {
             phase,
             message: (p.message as string) ?? "",

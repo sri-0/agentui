@@ -168,11 +168,10 @@ function AgentView({
   messageId: string;
 }) {
   const message = messages.find((m) => m.id === messageId);
-  const stream = message?.parts.find(
-    (p) => p.type === "data-agent-stream" && p.data.agent === agent,
-  );
-  const text =
-    stream && stream.type === "data-agent-stream" ? stream.data.text : "";
+  const text = (message?.parts ?? [])
+    .filter((p) => p.type === "data-agent-delta" && p.data.agent === agent)
+    .map((p) => (p.type === "data-agent-delta" ? p.data.delta : ""))
+    .join("");
 
   if (!text) {
     return (
