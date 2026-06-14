@@ -22,7 +22,7 @@ import {
 import { formatDuration } from "@/lib/dayjs";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
-import { ChevronRightIcon, DownloadIcon, XIcon } from "lucide-react";
+import { BotIcon, ChevronRightIcon, DownloadIcon, XIcon } from "lucide-react";
 
 import {
   AgentStatusBadge,
@@ -66,6 +66,7 @@ export function RightPanel({
       <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-5">
         {sidepanel.kind === "agent" ? (
           <nav className="flex min-w-0 items-center gap-1.5">
+            <BotIcon className="size-4 shrink-0 text-muted-foreground" />
             <span className="truncate text-sm text-muted-foreground">
               {rootName}
             </span>
