@@ -17,15 +17,33 @@ const PERCENT_MAX = 100;
 const ICON_RADIUS = 10;
 const ICON_VIEWBOX = 24;
 const ICON_CENTER = 12;
-const ICON_STROKE_WIDTH = 2;
+const ICON_STROKE_WIDTH = 2.5;
+
+/** Fraction of the context window at which the ring switches color. */
+const DEFAULT_WARN_THRESHOLD = 0.75;
+const DEFAULT_DANGER_THRESHOLD = 0.9;
+/** Tailwind `stroke-*` classes for each usage band. */
+const DEFAULT_RING_COLORS: RingColors = {
+  normal: "stroke-primary",
+  warn: "stroke-amber-500",
+  danger: "stroke-destructive",
+};
 
 type ModelId = string;
+
+export type RingColors = { normal: string; warn: string; danger: string };
 
 interface ContextSchema {
   usedTokens: number;
   maxTokens: number;
   usage?: LanguageModelUsage;
   modelId?: ModelId;
+  /** Usage fraction (0–1) at which the ring turns `warn`. Default 0.75. */
+  warnThreshold?: number;
+  /** Usage fraction (0–1) at which the ring turns `danger`. Default 0.9. */
+  dangerThreshold?: number;
+  /** Override the `stroke-*` color for any band. */
+  ringColors?: Partial<RingColors>;
 }
 
 const ContextContext = createContext<ContextSchema | null>(null);
@@ -47,11 +65,30 @@ export const Context = ({
   maxTokens,
   usage,
   modelId,
+  warnThreshold,
+  dangerThreshold,
+  ringColors,
   ...props
 }: ContextProps) => {
   const contextValue = useMemo(
-    () => ({ maxTokens, modelId, usage, usedTokens }),
-    [maxTokens, modelId, usage, usedTokens]
+    () => ({
+      maxTokens,
+      modelId,
+      usage,
+      usedTokens,
+      warnThreshold,
+      dangerThreshold,
+      ringColors,
+    }),
+    [
+      maxTokens,
+      modelId,
+      usage,
+      usedTokens,
+      warnThreshold,
+      dangerThreshold,
+      ringColors,
+    ]
   );
 
   return (
@@ -61,42 +98,62 @@ export const Context = ({
   );
 };
 
-const ContextIcon = () => {
-  const { usedTokens, maxTokens } = useContextValue();
+export const ContextIcon = () => {
+  const {
+    usedTokens,
+    maxTokens,
+    warnThreshold = DEFAULT_WARN_THRESHOLD,
+    dangerThreshold = DEFAULT_DANGER_THRESHOLD,
+    ringColors,
+  } = useContextValue();
+  const colors = { ...DEFAULT_RING_COLORS, ...ringColors };
   const circumference = 2 * Math.PI * ICON_RADIUS;
-  const usedPercent = usedTokens / maxTokens;
+  const usedPercent =
+    maxTokens > 0 ? Math.min(usedTokens / maxTokens, 1) : 0;
   const dashOffset = circumference * (1 - usedPercent);
+  const stroke =
+    usedPercent > dangerThreshold
+      ? colors.danger
+      : usedPercent > warnThreshold
+        ? colors.warn
+        : colors.normal;
 
   return (
     <svg
       aria-label="Model context usage"
       height="20"
       role="img"
-      style={{ color: "currentcolor" }}
       viewBox={`0 0 ${ICON_VIEWBOX} ${ICON_VIEWBOX}`}
       width="20"
+      style={{ transform: "rotate(-90deg)" }}
     >
+      {/* filled disc so the control is visible even at 0% */}
       <circle
         cx={ICON_CENTER}
         cy={ICON_CENTER}
-        fill="none"
-        opacity="0.25"
-        r={ICON_RADIUS}
-        stroke="currentColor"
-        strokeWidth={ICON_STROKE_WIDTH}
+        r={ICON_RADIUS + 1.5}
+        className="fill-muted"
       />
+      {/* track ring */}
       <circle
         cx={ICON_CENTER}
         cy={ICON_CENTER}
         fill="none"
-        opacity="0.7"
         r={ICON_RADIUS}
-        stroke="currentColor"
+        strokeWidth={ICON_STROKE_WIDTH}
+        className="stroke-muted-foreground/30"
+      />
+      {/* progress ring */}
+      <circle
+        cx={ICON_CENTER}
+        cy={ICON_CENTER}
+        fill="none"
+        r={ICON_RADIUS}
         strokeDasharray={`${circumference} ${circumference}`}
         strokeDashoffset={dashOffset}
         strokeLinecap="round"
         strokeWidth={ICON_STROKE_WIDTH}
-        style={{ transform: "rotate(-90deg)", transformOrigin: "center" }}
+        className={cn("transition-[stroke-dashoffset] duration-500", stroke)}
       />
     </svg>
   );
