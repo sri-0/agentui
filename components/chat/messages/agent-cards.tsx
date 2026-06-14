@@ -221,6 +221,4 @@ export const AgentCards = memo(function AgentCards({
       ))}
     </div>
   );
-},
-(a, b) =>
-  a.streaming === b.streaming && agentCardsKey(a.message) === agentCardsKey(b.message));
+});

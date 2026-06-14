@@ -128,8 +128,4 @@ export const RunProgress = memo(function RunProgress({
       </TaskContent>
     </Task>
   );
-},
-(a, b) =>
-  a.streaming === b.streaming &&
-  a.isLast === b.isLast &&
-  runProgressKey(a.message) === runProgressKey(b.message));
+});
