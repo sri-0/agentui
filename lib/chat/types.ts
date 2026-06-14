@@ -22,14 +22,26 @@ export type ChatMetadata = {
  * AI SDK's built-in part types so the AI Elements components work out of the box.
  */
 export type ChatDataParts = {
-  /** sub-agent lifecycle (started/done) for the multi-agent cards */
-  "agent-step": { agent: string; step: number; status: "started" | "done" };
+  /** sub-agent lifecycle (started/done) for the multi-agent cards.
+   *  durationMs is set on the `done` step (how long the sub-agent ran). */
+  "agent-step": {
+    agent: string;
+    step: number;
+    status: "started" | "done";
+    durationMs?: number;
+  };
   /**
-   * Sub-agent streamed text as an INCREMENTAL delta (one token chunk). Each is a
-   * distinct part (unique id) so the wire stays O(n) — the client concatenates
-   * a given agent's deltas to reconstruct its full output.
+   * Sub-agent streamed output as an INCREMENTAL delta (one token chunk), split by
+   * kind so the side panel can render reasoning separately from the answer. Each
+   * is a distinct part (unique id) so the wire stays O(n) — the client
+   * concatenates a given agent's deltas (per kind) to reconstruct its output.
    */
-  "agent-delta": { agent: string; step: number; delta: string };
+  "agent-delta": {
+    agent: string;
+    step: number;
+    kind: "reasoning" | "text";
+    delta: string;
+  };
   /** transient status line ("Analyzing…") — not persisted */
   "agent-progress": { phase: string; message: string; agent?: string };
   /** human-in-the-loop tool confirmation */
@@ -40,9 +52,14 @@ export type ChatDataParts = {
     details?: unknown;
     threadId?: string;
   };
-  /** todo/task list snapshot — rendered above the composer (keyed, replaces prior) */
+  /** todo/task list snapshot from the `todowrite` tool (keyed, replaces prior) */
   "task-list": {
-    tasks: { id: string; title: string; status: "pending" | "in_progress" | "completed" }[];
+    tasks: {
+      id: string;
+      title: string;
+      status: "pending" | "in_progress" | "completed" | "cancelled";
+      priority?: "high" | "medium" | "low";
+    }[];
   };
   /** artifact pushed to the right sidepanel (keyed by id, re-emit to update) */
   artifact: {

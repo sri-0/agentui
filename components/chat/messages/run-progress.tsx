@@ -44,8 +44,10 @@ export function RunProgress({
 }) {
   const { data: agents = [] } = useAgents();
 
+  // Top-level orchestrator progress only — per-agent steps (which carry an
+  // `agent`) render inside that sub-agent's card instead.
   const rawSteps = message.parts
-    .filter((p) => p.type === "data-agent-progress")
+    .filter((p) => p.type === "data-agent-progress" && !p.data.agent)
     .map((p) => (p.type === "data-agent-progress" ? p.data.message : ""))
     .filter(Boolean);
 
