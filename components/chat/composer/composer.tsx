@@ -14,10 +14,16 @@ import {
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
-import { PaperclipIcon, XIcon } from "lucide-react";
+import { PaperclipIcon } from "lucide-react";
 import { memo, type ReactNode } from "react";
 
 import { AgentSelector } from "./agent-selector";
+import {
+  AttachmentDropOverlay,
+  AttachmentList,
+  attachmentInputProps,
+  useAttachmentErrors,
+} from "./attachments";
 import { ModelSelector } from "./model-selector";
 import { ReasoningEffortSelector } from "./reasoning-effort-selector";
 
@@ -33,30 +39,6 @@ const AttachmentButton = memo(function AttachmentButton() {
     </PromptInputButton>
   );
 });
-
-function AttachmentChips() {
-  const attachments = usePromptInputAttachments();
-  if (attachments.files.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1.5 px-5 pt-4">
-      {attachments.files.map((f) => (
-        <span
-          key={f.id}
-          className="flex items-center gap-1.5 rounded-full bg-muted py-1 pl-2.5 pr-1 text-xs"
-        >
-          <span className="max-w-[160px] truncate">{f.filename}</span>
-          <button
-            type="button"
-            onClick={() => attachments.remove(f.id)}
-            className="rounded-full p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
-          >
-            <XIcon className="size-3" />
-          </button>
-        </span>
-      ))}
-    </div>
-  );
-}
 
 export const Composer = memo(function Composer({
   onSubmit,
@@ -77,10 +59,13 @@ export const Composer = memo(function Composer({
 }) {
   const temporary = useUiStore((s) => s.temporary);
   const idle = status === "ready" || status === "error";
+  // File attachments (drag & drop) — see ./attachments.
+  const { onError: onAttachmentError, errorNode } = useAttachmentErrors();
 
   return (
     <div className="relative">
       {glow && <div className="ai-glow" />}
+      <AttachmentDropOverlay />
       <PromptInput
         onSubmit={onSubmit}
         className={cn(
@@ -92,10 +77,11 @@ export const Composer = memo(function Composer({
           temporary &&
             "[&_[data-slot=input-group]]:border-dashed [&_[data-slot=input-group]]:border-primary/40",
         )}
-        multiple
-        globalDrop
+        {...attachmentInputProps}
+        onError={onAttachmentError}
       >
-        <AttachmentChips />
+        {errorNode}
+        <AttachmentList />
         <PromptInputBody>
           <PromptInputTextarea
             autoFocus={autoFocus}
