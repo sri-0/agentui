@@ -3,17 +3,10 @@
 import { ProviderIcon } from "@/components/provider-icon";
 import { useAgents } from "@/lib/api/agents";
 import { useModels } from "@/lib/api/models";
-import dayjs from "@/lib/dayjs";
+import { formatDuration } from "@/lib/dayjs";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
 import { BotIcon } from "lucide-react";
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  const d = dayjs.duration(ms);
-  if (ms < 60_000) return `${d.asSeconds().toFixed(1)}s`;
-  return d.format("m[m] s[s]");
-}
 
 function useModelInfo(message: ChatMessage) {
   const { data: models = [] } = useModels();
