@@ -26,7 +26,7 @@ const OPTIONS: { value: ReasoningEffort; label: string; hint: string }[] = [
   {
     value: "off",
     label: "Instant",
-    hint: "No extended thinking — instant response",
+    hint: "No extended thinking",
   },
   { value: "low", label: "Low", hint: "A little thinking" },
   { value: "medium", label: "Medium", hint: "Balanced" },
