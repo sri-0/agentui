@@ -19,12 +19,12 @@ import { useThreadMessages } from "@/lib/api/threads";
 import { fromHistory } from "@/lib/chat/from-history";
 import { takePendingMessage } from "@/lib/chat/pending";
 import type { ChatMessage } from "@/lib/chat/types";
-import { deriveUsage } from "@/lib/chat/usage";
 import { useUiStore } from "@/stores/ui-store";
 import { MessageCircleDashedIcon } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 
 import { Composer } from "./composer/composer";
+import { ThreadUsageRing } from "./composer/thread-usage-ring";
 import { InterruptContext } from "./interrupt-context";
 import { useInterruptResolver } from "./use-interrupt-resolver";
 import { ConversationSkeleton } from "./loading";
@@ -70,15 +70,16 @@ export function ThreadChat({
   isTemporary: boolean;
   initialMessages: ChatMessage[];
 }) {
-  const { messages, sendMessage, setMessages, status, stop } = useAgentChat({
-    id: threadId,
-    initialMessages,
-  });
+  const { messages, sendMessage, setMessages, status, stop, chat } =
+    useAgentChat({
+      id: threadId,
+      initialMessages,
+    });
   const buildBody = useRequestBody(threadId, isTemporary);
 
   // HITL: approve/deny a tool interrupt, then merge the backend continuation
   // (tool result + final answer) back into the conversation.
-  const resolveInterrupt = useInterruptResolver(messages, setMessages);
+  const resolveInterrupt = useInterruptResolver(threadId, messages, setMessages);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
   const panelOpen = Boolean(sidepanel);
@@ -102,15 +103,27 @@ export function ThreadChat({
     }
   }, [threadId, sendMessage]);
 
-  const onSubmit = (message: PromptInputMessage) => {
-    if (!message.text.trim() && (message.files?.length ?? 0) === 0) return;
-    sendMessage(
-      { text: message.text, files: message.files },
-      { body: buildBody({ hasFiles: (message.files?.length ?? 0) > 0 }) },
-    );
-  };
-
-  const usage = deriveUsage(messages, contextWindow);
+  // Stable handlers + a self-subscribing usage ring keep the memoized Composer
+  // and header out of the per-token re-render path. See AGENTS.md
+  // "Thread & chat-stream performance".
+  const onSubmit = useCallback(
+    (message: PromptInputMessage) => {
+      if (!message.text.trim() && (message.files?.length ?? 0) === 0) return;
+      sendMessage(
+        { text: message.text, files: message.files },
+        { body: buildBody({ hasFiles: (message.files?.length ?? 0) > 0 }) },
+      );
+    },
+    [sendMessage, buildBody],
+  );
+  const onOpenUsage = useCallback(
+    () => openSidepanel({ kind: "usage" }),
+    [openSidepanel],
+  );
+  const contextSlot = useMemo(
+    () => <ThreadUsageRing chat={chat} onOpenUsage={onOpenUsage} />,
+    [chat, onOpenUsage],
+  );
 
   return (
     <InterruptContext.Provider value={resolveInterrupt}>
@@ -120,24 +133,7 @@ export function ThreadChat({
     >
       <ResizablePanel id="chat" minSize="40%">
         <div className="flex h-full flex-col overflow-hidden">
-          <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
-            <SidebarTrigger className="text-muted-foreground" />
-            {isTemporary && (
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <MessageCircleDashedIcon className="size-3.5" />
-                Temporary chat
-                <Badge
-                  variant="secondary"
-                  className="rounded-full px-2 py-0 text-[10px]"
-                >
-                  not saved
-                </Badge>
-              </span>
-            )}
-            <div className="ml-auto">
-              <TemporaryToggle />
-            </div>
-          </header>
+          <ThreadHeader isTemporary={isTemporary} />
 
           <Conversation className="flex-1">
             <ConversationContent className="px-4 py-6">
@@ -153,8 +149,7 @@ export function ThreadChat({
                 onSubmit={onSubmit}
                 status={status}
                 onStop={stop}
-                usage={{ used: usage.used, total: usage.total }}
-                onOpenUsage={() => openSidepanel({ kind: "usage" })}
+                contextSlot={contextSlot}
               />
               <p className="mt-2 text-center text-xs text-muted-foreground">
                 AI can make mistakes. Always validate responses.
@@ -181,3 +176,31 @@ export function ThreadChat({
     </InterruptContext.Provider>
   );
 }
+
+/** Static thread header — memoized so it never re-renders during streaming. */
+const ThreadHeader = memo(function ThreadHeader({
+  isTemporary,
+}: {
+  isTemporary: boolean;
+}) {
+  return (
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+      <SidebarTrigger className="text-muted-foreground" />
+      {isTemporary && (
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <MessageCircleDashedIcon className="size-3.5" />
+          Temporary chat
+          <Badge
+            variant="secondary"
+            className="rounded-full px-2 py-0 text-[10px]"
+          >
+            not saved
+          </Badge>
+        </span>
+      )}
+      <div className="ml-auto">
+        <TemporaryToggle />
+      </div>
+    </header>
+  );
+});

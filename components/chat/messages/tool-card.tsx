@@ -17,7 +17,7 @@ import {
   ShieldXIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 import { useResolveInterrupt } from "../interrupt-context";
 
@@ -29,8 +29,11 @@ type Interrupt = ChatDataParts["tool-interrupt"];
  * in the native `approval-requested` state (and not yet resolved) the card shows
  * an amber outline, the params, and Approve/Deny. After resolution it reverts to
  * the normal outline + running/completed state, keeping an Approved/Rejected tag.
+ *
+ * Memoized on the tool's meaningful state (state transition / resolution), so it
+ * doesn't re-render on every streamed token of a sibling text part.
  */
-export function ToolCard({
+export const ToolCard = memo(function ToolCard({
   part,
   interrupt,
 }: {
@@ -41,6 +44,7 @@ export function ToolCard({
   const pending = part.state === "approval-requested" && !interrupt?.resolved;
   const [open, setOpen] = useState(pending);
   const [submitting, setSubmitting] = useState(false);
+  const approvalRef = useRef<HTMLDivElement>(null);
 
   // Open the card while it needs approval (so the buttons are visible), then
   // collapse it once the decision is made. After that the user can toggle freely.
@@ -49,15 +53,24 @@ export function ToolCard({
     else if (interrupt?.resolved) setOpen(false);
   }, [pending, interrupt?.resolved]);
 
+  // A fresh approval can render below the fold (flush against the composer with
+  // no answer text yet) — scroll the Approve/Deny buttons into view so they're
+  // always reachable.
+  useEffect(() => {
+    if (!pending || !open) return;
+    const id = requestAnimationFrame(() =>
+      approvalRef.current?.scrollIntoView({ block: "nearest" }),
+    );
+    return () => cancelAnimationFrame(id);
+  }, [pending, open]);
+
   const resolve = async (action: "approved" | "denied") => {
-    if (!resolveInterrupt || !interrupt || submitting) return;
+    // Use the tool part's own id (always present) — the interrupt side-channel
+    // may be absent; the resolver finds the message + thread id itself.
+    if (!resolveInterrupt || submitting) return;
     setSubmitting(true);
     try {
-      await resolveInterrupt(
-        interrupt.toolCallId,
-        interrupt.threadId ?? "",
-        action,
-      );
+      await resolveInterrupt(part.toolCallId, action);
     } finally {
       setSubmitting(false);
     }
@@ -95,7 +108,10 @@ export function ToolCard({
           <ToolInput input={part.input} />
         )}
         {pending && (
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div
+            ref={approvalRef}
+            className="flex flex-wrap items-center justify-between gap-2"
+          >
             <span className="flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
               <ShieldAlertIcon className="size-3.5" />
               {interrupt?.prompt || "Review the parameters, then approve or deny."}
@@ -128,4 +144,10 @@ export function ToolCard({
       </ToolContent>
     </Tool>
   );
-}
+},
+(a, b) =>
+  a.part.state === b.part.state &&
+  a.part.toolName === b.part.toolName &&
+  ("output" in a.part ? a.part.output : undefined) ===
+    ("output" in b.part ? b.part.output : undefined) &&
+  a.interrupt?.resolved === b.interrupt?.resolved);

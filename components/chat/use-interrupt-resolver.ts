@@ -14,53 +14,77 @@ type SetMessages = (
 /**
  * Builds the HITL interrupt resolver: posts the approve/deny decision to the
  * resume proxy, then merges the streamed continuation (tool result + final
- * answer) back into the interrupted assistant message via readUIMessageStream.
+ * answer) back into the interrupted assistant message.
+ *
+ * Robust to tool-call ids being REUSED across turns (some models reset them per
+ * turn): it targets the MOST RECENT message whose tool call is still awaiting
+ * approval — not the first id match, which could be an older, already-resolved
+ * card. It also doesn't require the interrupt side-channel to exist (it derives
+ * the backend thread id from it when present, else the route thread id).
  */
 export function useInterruptResolver(
+  threadId: string,
   messages: ChatMessage[],
   setMessages: SetMessages,
 ): ResolveInterrupt {
-  // Read latest messages without re-creating the callback each render.
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
   return useCallback<ResolveInterrupt>(
-    async (toolCallId, threadId, action) => {
-      const original = messagesRef.current.find((m) =>
-        m.parts.some(
+    async (toolCallId, action) => {
+      const msgs = messagesRef.current;
+
+      // Most recent message whose tool call `toolCallId` is still pending.
+      let original: ChatMessage | undefined;
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        const pending = m.parts.some(
           (p) =>
-            p.type === "data-tool-interrupt" &&
-            p.data.toolCallId === toolCallId,
-        ),
-      );
-      // Record the decision on the interrupt part: flips the card out of the
-      // pending state immediately and keeps the Approved/Rejected badge after
-      // the tool completes. Continue the resume from this updated message.
-      const target = original
-        ? {
-            ...original,
-            parts: original.parts.map((p) =>
-              p.type === "data-tool-interrupt" &&
-              p.data.toolCallId === toolCallId
-                ? { ...p, data: { ...p.data, resolved: action } }
-                : p,
-            ),
-          }
-        : undefined;
-      if (target) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === target.id ? target : m)),
+            (p.type === "dynamic-tool" &&
+              p.toolCallId === toolCallId &&
+              p.state === "approval-requested") ||
+            (p.type === "data-tool-interrupt" &&
+              p.data.toolCallId === toolCallId &&
+              !p.data.resolved),
         );
+        if (pending) {
+          original = m;
+          break;
+        }
       }
+      if (!original) return;
+
+      // Backend resume is keyed by thread id: prefer the interrupt's recorded
+      // one, fall back to the route thread id.
+      const interruptPart = original.parts.find(
+        (p) =>
+          p.type === "data-tool-interrupt" && p.data.toolCallId === toolCallId,
+      );
+      const backendThreadId =
+        (interruptPart?.type === "data-tool-interrupt"
+          ? interruptPart.data.threadId
+          : undefined) ?? threadId;
+
+      // Record the decision on the interrupt part so the card flips out of the
+      // pending state immediately and keeps the Approved/Rejected badge after.
+      const target: ChatMessage = {
+        ...original,
+        parts: original.parts.map((p) =>
+          p.type === "data-tool-interrupt" && p.data.toolCallId === toolCallId
+            ? { ...p, data: { ...p.data, resolved: action } }
+            : p,
+        ),
+      };
+      setMessages((prev) => prev.map((m) => (m.id === target.id ? target : m)));
 
       const res = await fetch("/api/chat/resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          threadId,
+          threadId: backendThreadId,
           action,
-          model: target?.metadata?.model,
-          agentId: target?.metadata?.agentId,
+          model: target.metadata?.model,
+          agentId: target.metadata?.agentId,
         }),
       });
       if (!res.ok || !res.body) return;
@@ -80,6 +104,6 @@ export function useInterruptResolver(
         });
       }
     },
-    [setMessages],
+    [threadId, setMessages],
   );
 }

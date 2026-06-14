@@ -11,6 +11,17 @@ import { useAgents } from "@/lib/api/agents";
 import type { ChatMessage } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
 import { BotIcon, Check, ChevronDownIcon } from "lucide-react";
+import { memo } from "react";
+
+/** Signature of the run-level (orchestrator) progress — changes only when a new
+ *  progress phase arrives, not on output tokens. */
+function runProgressKey(message: ChatMessage): string {
+  let k = "";
+  for (const p of message.parts) {
+    if (p.type === "data-agent-progress" && !p.data.agent) k += `${p.data.message}|`;
+  }
+  return k;
+}
 
 /** A small pulsing circle (expanding ring + solid dot), used instead of a spinner. */
 function PulseDot({ className }: { className?: string }) {
@@ -33,7 +44,7 @@ function PulseDot({ className }: { className?: string }) {
  * the main thread). Sub-agents get clickable cards instead — see AgentCards.
  * Renders the backend's agent_progress phases as a collapsible step log.
  */
-export function RunProgress({
+export const RunProgress = memo(function RunProgress({
   message,
   streaming,
   isLast,
@@ -117,4 +128,8 @@ export function RunProgress({
       </TaskContent>
     </Task>
   );
-}
+},
+(a, b) =>
+  a.streaming === b.streaming &&
+  a.isLast === b.isLast &&
+  runProgressKey(a.message) === runProgressKey(b.message));

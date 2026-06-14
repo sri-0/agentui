@@ -12,6 +12,24 @@ import {
   ChevronRightIcon,
   LoaderIcon,
 } from "lucide-react";
+import { memo } from "react";
+
+/** Signature of sub-agent state shown on the cards: which agents exist, their
+ *  lifecycle/duration, and progress steps — but NOT per-token deltas (the card
+ *  shows steps/status, not streamed text), so tokens don't re-render the cards. */
+function agentCardsKey(message: ChatMessage): string {
+  const seen = new Set<string>();
+  let lifecycle = "";
+  let prog = "";
+  for (const p of message.parts) {
+    if (p.type === "data-agent-delta") seen.add(p.data.agent);
+    else if (p.type === "data-agent-step")
+      lifecycle += `${p.data.agent}:${p.data.status}:${p.data.durationMs ?? ""};`;
+    else if (p.type === "data-agent-progress" && p.data.agent)
+      prog += `${p.data.message};`;
+  }
+  return `${[...seen].sort().join(",")}|${lifecycle}|${prog}`;
+}
 
 type Step = {
   label: string;
@@ -95,7 +113,7 @@ function collectAgents(message: ChatMessage, streaming: boolean): AgentState[] {
   });
 }
 
-export function AgentCards({
+export const AgentCards = memo(function AgentCards({
   message,
   streaming,
 }: {
@@ -203,4 +221,6 @@ export function AgentCards({
       ))}
     </div>
   );
-}
+},
+(a, b) =>
+  a.streaming === b.streaming && agentCardsKey(a.message) === agentCardsKey(b.message));

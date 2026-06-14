@@ -5,11 +5,6 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
-import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningTrigger,
-} from "@/components/ai-elements/reasoning";
 import { Button } from "@/components/ui/button";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
@@ -21,6 +16,7 @@ import { ThinkingIndicator } from "../loading";
 import { AgentCards } from "./agent-cards";
 import { MessageActions } from "./message-actions";
 import { MessageMeta } from "./message-meta";
+import { MessageReasoning } from "./message-reasoning";
 import { RunProgress } from "./run-progress";
 import { ToolCard } from "./tool-card";
 
@@ -97,14 +93,11 @@ const MessageItem = memo(function MessageItem({
 
             case "reasoning":
               return (
-                <Reasoning
+                <MessageReasoning
                   key={i}
+                  text={part.text}
                   isStreaming={streaming && i === message.parts.length - 1}
-                  className="w-full"
-                >
-                  <ReasoningTrigger />
-                  <ReasoningContent>{part.text}</ReasoningContent>
-                </Reasoning>
+                />
               );
 
             case "dynamic-tool": {

@@ -3,7 +3,6 @@
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { setPendingMessage } from "@/lib/chat/pending";
-import { useModels } from "@/lib/api/models";
 import { useUiStore } from "@/stores/ui-store";
 import { nanoid } from "nanoid";
 import { useRouter } from "next/navigation";
@@ -12,6 +11,8 @@ import { useEffect, useState } from "react";
 import { Composer } from "./composer/composer";
 import { TemporaryToggle } from "./temporary-toggle";
 import { ThreadChat } from "./thread-view";
+
+const noop = () => {};
 
 const SUGGESTIONS = [
   "Summarize the latest board report",
@@ -22,7 +23,6 @@ const SUGGESTIONS = [
 
 export function LandingView() {
   const router = useRouter();
-  const { data: models = [] } = useModels();
   const selectedModel = useUiStore((s) => s.selectedModel);
   const selectedAgentId = useUiStore((s) => s.selectedAgentId);
   const reasoningEffort = useUiStore((s) => s.reasoningEffort);
@@ -33,9 +33,6 @@ export function LandingView() {
   const [tempThreadId, setTempThreadId] = useState<string | null>(null);
   const newChatNonce = useUiStore((s) => s.newChatNonce);
   useEffect(() => setTempThreadId(null), [newChatNonce]);
-
-  const contextWindow =
-    models.find((m) => m.id === selectedModel)?.context_length ?? 128_000;
 
   const start = (message: PromptInputMessage) => {
     if (!message.text.trim() && (message.files?.length ?? 0) === 0) return;
@@ -94,9 +91,7 @@ export function LandingView() {
             autoFocus
             onSubmit={start}
             status="ready"
-            onStop={() => {}}
-            usage={{ used: 0, total: contextWindow }}
-            onOpenUsage={() => {}}
+            onStop={noop}
           />
         </div>
 

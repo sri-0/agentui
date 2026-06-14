@@ -6,7 +6,6 @@ import { createContext, useContext } from "react";
  *  the conversation. Provided by ThreadChat (which owns the useChat instance). */
 export type ResolveInterrupt = (
   toolCallId: string,
-  threadId: string,
   action: "approved" | "denied",
 ) => Promise<void>;
 

@@ -15,10 +15,9 @@ import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
 import { PaperclipIcon, XIcon } from "lucide-react";
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 
 import { AgentSelector } from "./agent-selector";
-import { ContextCircle } from "./context-circle";
 import { ModelSelector } from "./model-selector";
 import { ReasoningEffortSelector } from "./reasoning-effort-selector";
 
@@ -59,20 +58,20 @@ function AttachmentChips() {
   );
 }
 
-export function Composer({
+export const Composer = memo(function Composer({
   onSubmit,
   status,
   onStop,
-  usage,
-  onOpenUsage,
+  contextSlot,
   autoFocus,
   glow = true,
 }: {
   onSubmit: (message: PromptInputMessage) => void;
   status: ChatStatus;
   onStop: () => void;
-  usage: { used: number; total: number; cost?: number };
-  onOpenUsage: () => void;
+  // The live token-usage ring, rendered self-subscribing so the composer itself
+  // doesn't take a per-token `usage` prop (which would defeat this memo).
+  contextSlot?: ReactNode;
   autoFocus?: boolean;
   glow?: boolean;
 }) {
@@ -116,12 +115,7 @@ export function Composer({
             <ReasoningEffortSelector />
           </PromptInputTools>
           <div className="flex items-center gap-2">
-            <ContextCircle
-              used={usage.used}
-              total={usage.total}
-              cost={usage.cost}
-              onClick={onOpenUsage}
-            />
+            {contextSlot}
             <PromptInputSubmit
               status={status}
               onStop={onStop}
@@ -135,4 +129,4 @@ export function Composer({
       </PromptInput>
     </div>
   );
-}
+});

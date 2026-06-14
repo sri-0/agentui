@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/chat/types";
 import { CheckCircle2Icon, CircleIcon, LoaderIcon } from "lucide-react";
+import { memo } from "react";
 
 function latestTasks(messages: ChatMessage[]) {
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -13,9 +14,20 @@ function latestTasks(messages: ChatMessage[]) {
   return null;
 }
 
-export function TaskBar({ messages }: { messages: ChatMessage[] }) {
+/** Signature of the current task list — changes only when a task is added or its
+ *  status changes, so memoized TaskBar skips per-token re-renders. */
+function taskSignature(messages: ChatMessage[]): string {
   const tasks = latestTasks(messages);
-  if (!tasks || tasks.length === 0) return null;
+  if (!tasks) return "";
+  let s = "";
+  for (const t of tasks) s += `${t.id}:${t.status};`;
+  return s;
+}
+
+export const TaskBar = memo(
+  function TaskBar({ messages }: { messages: ChatMessage[] }) {
+    const tasks = latestTasks(messages);
+    if (!tasks || tasks.length === 0) return null;
 
   const done = tasks.filter((t) => t.status === "completed").length;
   const allDone = done === tasks.length;
@@ -52,4 +64,6 @@ export function TaskBar({ messages }: { messages: ChatMessage[] }) {
       </ul>
     </div>
   );
-}
+  },
+  (a, b) => taskSignature(a.messages) === taskSignature(b.messages),
+);
