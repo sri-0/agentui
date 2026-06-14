@@ -16,11 +16,9 @@ function messageText(message: ChatMessage): string {
     .join("\n\n");
 }
 
-/** Copy / feedback actions only — the model/agent identity lives in MessageMeta. */
-export function MessageActions({ message }: { message: ChatMessage }) {
+/** Copy to clipboard — available on both sides of the conversation. */
+function CopyAction({ message }: { message: ChatMessage }) {
   const [copied, setCopied] = useState(false);
-  const [vote, setVote] = useState<"up" | "down" | null>(null);
-
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(messageText(message));
@@ -30,33 +28,59 @@ export function MessageActions({ message }: { message: ChatMessage }) {
       /* clipboard unavailable */
     }
   };
+  return (
+    <MessageAction tooltip={copied ? "Copied" : "Copy"} onClick={copy}>
+      {copied ? (
+        <CheckIcon className="size-4 text-emerald-500" />
+      ) : (
+        <CopyIcon className="size-4" />
+      )}
+    </MessageAction>
+  );
+}
 
+/** Thumbs up/down feedback — only meaningful for assistant responses. */
+function FeedbackActions() {
+  const [vote, setVote] = useState<"up" | "down" | null>(null);
+  return (
+    <>
+      <MessageAction
+        tooltip="Good response"
+        onClick={() => setVote(vote === "up" ? null : "up")}
+      >
+        <ThumbsUpIcon
+          className={cn("size-4", vote === "up" && "text-emerald-500")}
+        />
+      </MessageAction>
+      <MessageAction
+        tooltip="Bad response"
+        onClick={() => setVote(vote === "down" ? null : "down")}
+      >
+        <ThumbsDownIcon
+          className={cn("size-4", vote === "down" && "text-destructive")}
+        />
+      </MessageAction>
+    </>
+  );
+}
+
+/**
+ * Row of message actions, tailored to which side of the conversation the message
+ * is on. The model/agent identity lives in MessageMeta. Add new per-role actions
+ * inside the relevant branch below.
+ */
+export function MessageActions({
+  message,
+  role = message.role,
+}: {
+  message: ChatMessage;
+  role?: ChatMessage["role"];
+}) {
   return (
     <div className="flex items-center gap-0.5">
       <MessageActionsRow>
-        <MessageAction tooltip={copied ? "Copied" : "Copy"} onClick={copy}>
-          {copied ? (
-            <CheckIcon className="size-4 text-emerald-500" />
-          ) : (
-            <CopyIcon className="size-4" />
-          )}
-        </MessageAction>
-        <MessageAction
-          tooltip="Good response"
-          onClick={() => setVote(vote === "up" ? null : "up")}
-        >
-          <ThumbsUpIcon
-            className={cn("size-4", vote === "up" && "text-emerald-500")}
-          />
-        </MessageAction>
-        <MessageAction
-          tooltip="Bad response"
-          onClick={() => setVote(vote === "down" ? null : "down")}
-        >
-          <ThumbsDownIcon
-            className={cn("size-4", vote === "down" && "text-destructive")}
-          />
-        </MessageAction>
+        <CopyAction message={message} />
+        {role === "assistant" && <FeedbackActions />}
       </MessageActionsRow>
     </div>
   );

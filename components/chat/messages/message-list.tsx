@@ -148,6 +148,11 @@ const MessageItem = memo(function MessageItem({
           </div>
         )}
       </MessageContent>
+      {isUser && hasText && (
+        <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
+          <MessageActions message={message} role="user" />
+        </div>
+      )}
     </Message>
   );
 });

@@ -68,7 +68,7 @@ export type ChatDataParts = {
   artifact: {
     id: string;
     title: string;
-    kind: "markdown" | "code" | "html" | "json";
+    kind: "markdown" | "code" | "html" | "json" | "csv";
     content: string;
     language?: string;
   };
