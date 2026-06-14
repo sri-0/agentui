@@ -92,13 +92,17 @@ export async function pumpBackendSse(
       const choice = (json.choices as Record<string, unknown>[])[0] ?? {};
       const delta = (choice.delta ?? {}) as Record<string, unknown>;
 
-      if (typeof delta.reasoning === "string" && delta.reasoning) {
+      // Reasoning may arrive as `reasoning` or `reasoning_content`; accept either.
+      const reasoningDelta =
+        (typeof delta.reasoning === "string" && delta.reasoning) ||
+        (typeof delta.reasoning_content === "string" && delta.reasoning_content);
+      if (reasoningDelta) {
         closeText();
         ensureReasoning();
         writer.write({
           type: "reasoning-delta",
           id: reasoningId as string,
-          delta: delta.reasoning,
+          delta: reasoningDelta,
         });
       }
 
@@ -160,20 +164,34 @@ export async function pumpBackendSse(
       return;
     }
 
-    // 2. Sub-agent streamed text (incremental delta, O(n) wire) -----------
+    // 2. Sub-agent streamed output (incremental delta, O(n) wire) ---------
+    // Symmetric delta shape: `text_delta` carries `content`, `reasoning_delta`
+    // carries `reasoning_content`. Both map to one data part via `kind`.
     if (json.agent_event && typeof json.agent_event === "object") {
       const ev = json.agent_event as Record<string, unknown>;
       const agent = (ev.agent as string) || "agent";
       const step = (ev.step as number) ?? 0;
-      const content = (ev.content as string) ?? "";
-      const type = ev.type as string;
-      if ((type === "text_delta" || type === "reasoning_delta") && content) {
+
+      if (ev.type === "text_delta" && ev.content) {
         writer.write({
           type: "data-agent-delta",
           id: nextId("adelta"),
-          data: { agent, step, delta: content },
+          data: { agent, step, kind: "text", delta: ev.content as string },
+        });
+      } else if (ev.type === "reasoning_delta" && ev.reasoning_content) {
+        writer.write({
+          type: "data-agent-delta",
+          id: nextId("adelta"),
+          data: {
+            agent,
+            step,
+            kind: "reasoning",
+            delta: ev.reasoning_content as string,
+          },
         });
       }
+      // tool_call / tool_result / text_done are surfaced as per-agent steps via
+      // the attributed `agent_progress` (executing) events — see branch 3.
       return;
     }
 
@@ -182,13 +200,16 @@ export async function pumpBackendSse(
       const p = json.agent_progress as Record<string, unknown>;
       const phase = (p.phase as string) ?? "";
       if (phase === "agent_start" || phase === "agent_done") {
+        const done = phase === "agent_done";
+        const durationMs = p.duration_ms;
         writer.write({
           type: "data-agent-step",
           id: `${(p.agent as string) ?? "agent"}-${(p.step as number) ?? 0}`,
           data: {
             agent: (p.agent as string) ?? "agent",
             step: (p.step as number) ?? 0,
-            status: phase === "agent_start" ? "started" : "done",
+            status: done ? "done" : "started",
+            ...(done && typeof durationMs === "number" ? { durationMs } : {}),
           },
         });
       } else {
