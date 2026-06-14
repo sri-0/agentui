@@ -44,13 +44,16 @@ export type ChatDataParts = {
   };
   /** transient status line ("Analyzing…") — not persisted */
   "agent-progress": { phase: string; message: string; agent?: string };
-  /** human-in-the-loop tool confirmation */
+  /** human-in-the-loop tool confirmation. The tool part itself enters the
+   *  native `approval-requested` state; this side-channel carries the backend
+   *  threadId (no native slot) and records the user's decision for the badge. */
   "tool-interrupt": {
     toolCallId: string;
     toolName: string;
     prompt: string;
     details?: unknown;
     threadId?: string;
+    resolved?: "approved" | "denied";
   };
   /** todo/task list snapshot from the `todowrite` tool (keyed, replaces prior) */
   "task-list": {

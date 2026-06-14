@@ -10,13 +10,6 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "@/components/ai-elements/tool";
 import { Button } from "@/components/ui/button";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
@@ -29,7 +22,7 @@ import { AgentCards } from "./agent-cards";
 import { MessageActions } from "./message-actions";
 import { MessageMeta } from "./message-meta";
 import { RunProgress } from "./run-progress";
-import { ToolInterrupt } from "./tool-interrupt";
+import { ToolCard } from "./tool-card";
 
 export function MessageList({
   messages,
@@ -78,6 +71,13 @@ const MessageItem = memo(function MessageItem({
   const hasText = message.parts.some((p) => p.type === "text" && p.text);
   const showActions = !isUser && hasText && !(streaming && isLast);
 
+  // HITL interrupts are merged into their tool card (matched by toolCallId),
+  // not rendered as a separate card.
+  const interrupts = new Map<string, ChatMessage["parts"][number]>();
+  for (const p of message.parts) {
+    if (p.type === "data-tool-interrupt") interrupts.set(p.data.toolCallId, p);
+  }
+
   return (
     <Message from={message.role}>
       <MessageContent
@@ -107,33 +107,22 @@ const MessageItem = memo(function MessageItem({
                 </Reasoning>
               );
 
-            case "dynamic-tool":
+            case "dynamic-tool": {
+              const ip = interrupts.get(part.toolCallId);
               return (
-                <Tool key={i}>
-                  <ToolHeader
-                    type="dynamic-tool"
-                    state={part.state}
-                    toolName={part.toolName}
-                  />
-                  <ToolContent>
-                    {"input" in part && part.input != null && (
-                      <ToolInput input={part.input} />
-                    )}
-                    {(("output" in part && part.output != null) ||
-                      ("errorText" in part && part.errorText)) && (
-                      <ToolOutput
-                        output={"output" in part ? part.output : undefined}
-                        errorText={
-                          "errorText" in part ? part.errorText : undefined
-                        }
-                      />
-                    )}
-                  </ToolContent>
-                </Tool>
+                <ToolCard
+                  key={i}
+                  part={part}
+                  interrupt={
+                    ip?.type === "data-tool-interrupt" ? ip.data : undefined
+                  }
+                />
               );
+            }
 
+            // Interrupts render inside their tool card (see above), not separately.
             case "data-tool-interrupt":
-              return <ToolInterrupt key={i} data={part.data} />;
+              return null;
 
             case "data-artifact":
               return (

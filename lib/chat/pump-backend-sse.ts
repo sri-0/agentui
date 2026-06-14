@@ -241,13 +241,19 @@ export async function pumpBackendSse(
     }
 
     // 5. HITL tool interrupt ----------------------------------------------
+    // The tool's `tool-input-available` already streamed (from the OpenAI
+    // tool_calls path). Flip that same part into the native `approval-requested`
+    // state, and keep a side-channel data part for the backend threadId (which
+    // the native approval chunk has no slot for) + the resolution badge.
     if (json.tool_interrupt && typeof json.tool_interrupt === "object") {
       const ti = json.tool_interrupt as Record<string, unknown>;
+      const toolCallId = (ti.toolCallId as string) ?? nextId("int");
+      writer.write({ type: "tool-approval-request", approvalId: toolCallId, toolCallId });
       writer.write({
         type: "data-tool-interrupt",
-        id: (ti.toolCallId as string) ?? nextId("int"),
+        id: toolCallId,
         data: {
-          toolCallId: (ti.toolCallId as string) ?? "",
+          toolCallId,
           toolName: (ti.toolName as string) ?? "tool",
           prompt: (ti.prompt as string) ?? "",
           details: ti.details,
