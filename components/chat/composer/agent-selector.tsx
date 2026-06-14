@@ -23,7 +23,13 @@ import { useAgents } from "@/lib/api/agents";
 import { modelSupportsTools, useSelectedModel } from "@/lib/api/models";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
-import { BotIcon, CheckIcon, ChevronsUpDownIcon, NetworkIcon } from "lucide-react";
+import {
+  BotIcon,
+  CheckIcon,
+  ChevronsUpDownIcon,
+  InfoIcon,
+  NetworkIcon,
+} from "lucide-react";
 import { memo, useState } from "react";
 
 export const AgentSelector = memo(function AgentSelector() {
@@ -31,6 +37,7 @@ export const AgentSelector = memo(function AgentSelector() {
   const { data: agents = [] } = useAgents();
   const selectedAgentId = useUiStore((s) => s.selectedAgentId);
   const setAgent = useUiStore((s) => s.setAgent);
+  const openSidepanel = useUiStore((s) => s.openSidepanel);
   const model = useSelectedModel();
 
   const current = agents.find((a) => a.id === selectedAgentId);
@@ -123,6 +130,19 @@ export const AgentSelector = memo(function AgentSelector() {
                       </span>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    title="Agent details"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openSidepanel({ kind: "agent-details", agentId: a.id });
+                      setOpen(false);
+                    }}
+                    className="mt-0.5 shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    <InfoIcon className="size-3.5" />
+                  </button>
                 </CommandItem>
               ))}
             </CommandGroup>

@@ -4,10 +4,19 @@ export type Agent = {
   id: string;
   name: string;
   description?: string;
+  system_prompt?: string;
   model?: string;
   provider?: string;
   tools?: string[];
-  sub_agents?: { id: string; name: string; description?: string }[];
+  sub_agents?: {
+    id: string;
+    name: string;
+    description?: string;
+    system_prompt?: string;
+    model?: string;
+    provider?: string;
+    tools?: string[] | null;
+  }[];
   keywords?: string[];
   max_iterations?: number;
 };

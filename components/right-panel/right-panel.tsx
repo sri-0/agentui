@@ -5,6 +5,14 @@ import {
   ConversationContent,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -31,6 +39,7 @@ import {
   deriveAgentStatus,
   findAgentMessage,
 } from "./agent-view";
+import { AgentDetailsView } from "./agent-details-view";
 import { ArtifactView } from "./artifact-view";
 import { ModelView } from "./model-view";
 import { UsageView } from "./usage-view";
@@ -44,6 +53,7 @@ export function RightPanel({
 }) {
   const sidepanel = useUiStore((s) => s.sidepanel);
   const close = useUiStore((s) => s.closeSidepanel);
+  const openSidepanel = useUiStore((s) => s.openSidepanel);
   const { data: agentList = [] } = useAgents();
 
   if (!sidepanel) return null;
@@ -84,6 +94,46 @@ export function RightPanel({
               </span>
             )}
           </nav>
+        ) : sidepanel.kind === "agent-details" ? (
+          <Breadcrumb className="min-w-0">
+            <BreadcrumbList className="flex-nowrap text-sm">
+              <BreadcrumbItem className="min-w-0">
+                <BotIcon className="size-4 shrink-0 text-muted-foreground" />
+                {sidepanel.subAgent ? (
+                  <BreadcrumbLink asChild>
+                    <button
+                      type="button"
+                      className="truncate font-medium"
+                      onClick={() =>
+                        openSidepanel({
+                          kind: "agent-details",
+                          agentId: sidepanel.agentId,
+                        })
+                      }
+                    >
+                      {agentList.find((a) => a.id === sidepanel.agentId)?.name ??
+                        "Agent"}
+                    </button>
+                  </BreadcrumbLink>
+                ) : (
+                  <BreadcrumbPage className="truncate font-semibold">
+                    {agentList.find((a) => a.id === sidepanel.agentId)?.name ??
+                      "Agent"}
+                  </BreadcrumbPage>
+                )}
+              </BreadcrumbItem>
+              {sidepanel.subAgent && (
+                <>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem className="min-w-0">
+                    <BreadcrumbPage className="truncate font-semibold">
+                      {sidepanel.subAgent}
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </>
+              )}
+            </BreadcrumbList>
+          </Breadcrumb>
         ) : sidepanel.kind === "artifact" ? (
           <div className="flex min-w-0 items-center gap-3">
             <h2 className="shrink-0 text-sm font-semibold">Artifacts</h2>
@@ -138,6 +188,12 @@ export function RightPanel({
           )}
           {sidepanel.kind === "model" && (
             <ModelView modelId={sidepanel.modelId} />
+          )}
+          {sidepanel.kind === "agent-details" && (
+            <AgentDetailsView
+              agentId={sidepanel.agentId}
+              subAgent={sidepanel.subAgent}
+            />
           )}
         </div>
       )}

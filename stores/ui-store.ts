@@ -5,6 +5,7 @@ import { persist } from "zustand/middleware";
 export type SidepanelState =
   | { kind: "usage" }
   | { kind: "agent"; agent: string; messageId: string }
+  | { kind: "agent-details"; agentId: string; subAgent?: string }
   | { kind: "artifact"; artifactId: string }
   | { kind: "model"; modelId: string }
   | null;
