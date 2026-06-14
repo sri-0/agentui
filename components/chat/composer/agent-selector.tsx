@@ -20,6 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAgents } from "@/lib/api/agents";
+import { modelSupportsTools, useSelectedModel } from "@/lib/api/models";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import { BotIcon, CheckIcon, ChevronsUpDownIcon, NetworkIcon } from "lucide-react";
@@ -30,8 +31,12 @@ export const AgentSelector = memo(function AgentSelector() {
   const { data: agents = [] } = useAgents();
   const selectedAgentId = useUiStore((s) => s.selectedAgentId);
   const setAgent = useUiStore((s) => s.setAgent);
+  const model = useSelectedModel();
 
   const current = agents.find((a) => a.id === selectedAgentId);
+
+  // Agents drive tool calls — only offer the picker when the model supports them.
+  if (!modelSupportsTools(model)) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

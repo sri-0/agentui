@@ -13,16 +13,20 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  modelSupportsReasoningEffort,
+  useSelectedModel,
+} from "@/lib/api/models";
 import { cn } from "@/lib/utils";
 import { type ReasoningEffort, useUiStore } from "@/stores/ui-store";
-import { CheckIcon, ChevronDownIcon, GaugeIcon } from "lucide-react";
+import { BrainIcon, CheckIcon, ChevronDownIcon, ZapIcon } from "lucide-react";
 import { memo } from "react";
 
 const OPTIONS: { value: ReasoningEffort; label: string; hint: string }[] = [
   {
     value: "off",
-    label: "No reasoning",
-    hint: "Fastest, no extended thinking",
+    label: "Instant",
+    hint: "No extended thinking — instant response",
   },
   { value: "low", label: "Low", hint: "A little thinking" },
   { value: "medium", label: "Medium", hint: "Balanced" },
@@ -32,8 +36,12 @@ const OPTIONS: { value: ReasoningEffort; label: string; hint: string }[] = [
 export const ReasoningEffortSelector = memo(function ReasoningEffortSelector() {
   const effort = useUiStore((s) => s.reasoningEffort);
   const setEffort = useUiStore((s) => s.setReasoningEffort);
+  const model = useSelectedModel();
   const active = OPTIONS.find((o) => o.value === effort) ?? OPTIONS[0];
   const on = effort !== "off";
+
+  // Only models with a reasoning-effort control get this picker.
+  if (!modelSupportsReasoningEffort(model)) return null;
 
   return (
     <DropdownMenu>
@@ -48,12 +56,12 @@ export const ReasoningEffortSelector = memo(function ReasoningEffortSelector() {
                 on ? "bg-accent text-foreground" : "text-muted-foreground",
               )}
             >
-              <GaugeIcon
-                className={cn("size-4", on && "text-[var(--ai-from)]")}
-              />
-              <span className="hidden sm:inline">
-                {on ? active.label : "Reasoning"}
-              </span>
+              {on ? (
+                <BrainIcon className="size-4 text-[var(--ai-from)]" />
+              ) : (
+                <ZapIcon className="size-4" />
+              )}
+              <span className="hidden sm:inline">{active.label}</span>
               <ChevronDownIcon className="size-3.5 opacity-60" />
             </button>
           </DropdownMenuTrigger>

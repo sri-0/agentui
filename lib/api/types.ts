@@ -26,6 +26,16 @@ export type Model = {
   reasoning?: boolean;
   audio?: boolean;
   multimodal?: boolean;
+  owned_by?: string;
+  capabilities?: string[];
+  supported_parameters?: string[];
+  architecture?: {
+    input_modalities?: string[];
+    output_modalities?: string[];
+    modality?: string;
+    tokenizer?: string;
+    instruct_type?: string;
+  };
 };
 
 export type Thread = {

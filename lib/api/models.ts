@@ -3,6 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import { useUiStore } from "@/stores/ui-store";
+
 import { apiFetch } from "./client";
 import type { ListResponse, Model } from "./types";
 
@@ -16,6 +18,25 @@ export function useModels() {
       return (res.data ?? []).filter((m) => m.type === "llm" || !m.type);
     },
   });
+}
+
+/** The currently-selected model object (or undefined while loading / unset). */
+export function useSelectedModel(): Model | undefined {
+  const { data: models = [] } = useModels();
+  const selectedModel = useUiStore((s) => s.selectedModel);
+  return models.find((m) => m.id === selectedModel);
+}
+
+/** Whether the model can call tools (drives agent availability). */
+export function modelSupportsTools(model?: Model): boolean {
+  return Boolean(
+    model && (model.tools || model.capabilities?.includes("tool_calling")),
+  );
+}
+
+/** Whether the model exposes a reasoning-effort control. */
+export function modelSupportsReasoningEffort(model?: Model): boolean {
+  return Boolean(model?.supported_parameters?.includes("reasoning_effort"));
 }
 
 export type ProviderGroup = { providerId: string; providerName: string; models: Model[] };
