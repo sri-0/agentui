@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -109,22 +114,32 @@ export function RightPanel({
           </Button>
         </div>
       </header>
-      <div className="flex-1 overflow-y-auto p-6">
-        {sidepanel.kind === "usage" && (
-          <UsageView messages={messages} contextWindow={contextWindow} />
-        )}
-        {sidepanel.kind === "agent" && (
-          <AgentView
-            messages={messages}
-            agent={sidepanel.agent}
-            messageId={sidepanel.messageId}
-          />
-        )}
-        {sidepanel.kind === "artifact" && (
-          <ArtifactView messages={messages} artifactId={sidepanel.artifactId} />
-        )}
-        {sidepanel.kind === "model" && <ModelView modelId={sidepanel.modelId} />}
-      </div>
+      {sidepanel.kind === "agent" ? (
+        // Auto-follow the sub-agent's stream (and a scroll-to-bottom button),
+        // identical to the main thread.
+        <Conversation className="flex-1">
+          <ConversationContent className="p-6">
+            <AgentView
+              messages={messages}
+              agent={sidepanel.agent}
+              messageId={sidepanel.messageId}
+            />
+          </ConversationContent>
+          <ConversationScrollButton />
+        </Conversation>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-6">
+          {sidepanel.kind === "usage" && (
+            <UsageView messages={messages} contextWindow={contextWindow} />
+          )}
+          {sidepanel.kind === "artifact" && (
+            <ArtifactView messages={messages} artifactId={sidepanel.artifactId} />
+          )}
+          {sidepanel.kind === "model" && (
+            <ModelView modelId={sidepanel.modelId} />
+          )}
+        </div>
+      )}
     </aside>
   );
 }
