@@ -15,13 +15,14 @@ import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
 import { PaperclipIcon, XIcon } from "lucide-react";
+import { memo } from "react";
 
 import { AgentSelector } from "./agent-selector";
 import { ContextCircle } from "./context-circle";
 import { ModelSelector } from "./model-selector";
 import { ReasoningEffortSelector } from "./reasoning-effort-selector";
 
-function AttachmentButton() {
+const AttachmentButton = memo(function AttachmentButton() {
   const attachments = usePromptInputAttachments();
   return (
     <PromptInputButton
@@ -32,7 +33,7 @@ function AttachmentButton() {
       <PaperclipIcon className="size-4" />
     </PromptInputButton>
   );
-}
+});
 
 function AttachmentChips() {
   const attachments = usePromptInputAttachments();

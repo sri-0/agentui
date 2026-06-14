@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { type ReasoningEffort, useUiStore } from "@/stores/ui-store";
 import { CheckIcon, ChevronDownIcon, GaugeIcon } from "lucide-react";
+import { memo } from "react";
 
 const OPTIONS: { value: ReasoningEffort; label: string; hint: string }[] = [
   {
@@ -28,7 +29,7 @@ const OPTIONS: { value: ReasoningEffort; label: string; hint: string }[] = [
   { value: "high", label: "High", hint: "Deepest reasoning" },
 ];
 
-export function ReasoningEffortSelector() {
+export const ReasoningEffortSelector = memo(function ReasoningEffortSelector() {
   const effort = useUiStore((s) => s.reasoningEffort);
   const setEffort = useUiStore((s) => s.setReasoningEffort);
   const active = OPTIONS.find((o) => o.value === effort) ?? OPTIONS[0];
@@ -83,4 +84,4 @@ export function ReasoningEffortSelector() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
+});

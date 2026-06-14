@@ -26,13 +26,32 @@ export function useInterruptResolver(
 
   return useCallback<ResolveInterrupt>(
     async (toolCallId, threadId, action) => {
-      const target = messagesRef.current.find((m) =>
+      const original = messagesRef.current.find((m) =>
         m.parts.some(
           (p) =>
             p.type === "data-tool-interrupt" &&
             p.data.toolCallId === toolCallId,
         ),
       );
+      // Record the decision on the interrupt part: flips the card out of the
+      // pending state immediately and keeps the Approved/Rejected badge after
+      // the tool completes. Continue the resume from this updated message.
+      const target = original
+        ? {
+            ...original,
+            parts: original.parts.map((p) =>
+              p.type === "data-tool-interrupt" &&
+              p.data.toolCallId === toolCallId
+                ? { ...p, data: { ...p.data, resolved: action } }
+                : p,
+            ),
+          }
+        : undefined;
+      if (target) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === target.id ? target : m)),
+        );
+      }
 
       const res = await fetch("/api/chat/resume", {
         method: "POST",

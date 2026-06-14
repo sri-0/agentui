@@ -23,9 +23,9 @@ import { useAgents } from "@/lib/api/agents";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import { BotIcon, CheckIcon, ChevronsUpDownIcon, NetworkIcon } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 
-export function AgentSelector() {
+export const AgentSelector = memo(function AgentSelector() {
   const [open, setOpen] = useState(false);
   const { data: agents = [] } = useAgents();
   const selectedAgentId = useUiStore((s) => s.selectedAgentId);
@@ -126,4 +126,4 @@ export function AgentSelector() {
       </PopoverContent>
     </Popover>
   );
-}
+});
