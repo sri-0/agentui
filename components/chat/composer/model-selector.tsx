@@ -31,9 +31,9 @@ import {
   EyeIcon,
   WrenchIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 
-export function ModelSelector() {
+export const ModelSelector = memo(function ModelSelector() {
   const [open, setOpen] = useState(false);
   const { groups, isLoading } = useGroupedModels();
   const selectedModel = useUiStore((s) => s.selectedModel);
@@ -77,6 +77,9 @@ export function ModelSelector() {
         </TooltipTrigger>
         <TooltipContent>Choose model</TooltipContent>
       </Tooltip>
+      {/* Only build the (large) model list while the popover is open — when
+          closed this whole subtree is skipped, so renders stay cheap. */}
+      {open && (
       <PopoverContent align="start" className="w-[340px] p-0">
         <Command>
           <CommandInput placeholder="Search models…" />
@@ -132,6 +135,7 @@ export function ModelSelector() {
           </CommandList>
         </Command>
       </PopoverContent>
+      )}
     </Popover>
   );
-}
+});

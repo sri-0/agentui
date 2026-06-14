@@ -22,6 +22,7 @@ import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
 import { FileTextIcon } from "lucide-react";
+import { memo } from "react";
 
 import { ThinkingIndicator } from "../loading";
 import { AgentCards } from "./agent-cards";
@@ -60,7 +61,10 @@ export function MessageList({
   );
 }
 
-function MessageItem({
+// Memoized so a streaming token only re-renders the streaming (last) message —
+// completed messages keep a stable object ref and skip the whole subtree
+// (Streamdown, AgentCards/collectAgents, RunProgress).
+const MessageItem = memo(function MessageItem({
   message,
   streaming,
   isLast,
@@ -164,4 +168,4 @@ function MessageItem({
       </MessageContent>
     </Message>
   );
-}
+});
