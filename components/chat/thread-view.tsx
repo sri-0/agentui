@@ -25,6 +25,8 @@ import { MessageCircleDashedIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { Composer } from "./composer/composer";
+import { InterruptContext } from "./interrupt-context";
+import { useInterruptResolver } from "./use-interrupt-resolver";
 import { ConversationSkeleton } from "./loading";
 import { MessageList } from "./messages/message-list";
 import { TaskBar } from "./task-bar";
@@ -68,11 +70,15 @@ export function ThreadChat({
   isTemporary: boolean;
   initialMessages: ChatMessage[];
 }) {
-  const { messages, sendMessage, status, stop } = useAgentChat({
+  const { messages, sendMessage, setMessages, status, stop } = useAgentChat({
     id: threadId,
     initialMessages,
   });
   const buildBody = useRequestBody(threadId, isTemporary);
+
+  // HITL: approve/deny a tool interrupt, then merge the backend continuation
+  // (tool result + final answer) back into the conversation.
+  const resolveInterrupt = useInterruptResolver(messages, setMessages);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
   const panelOpen = Boolean(sidepanel);
@@ -107,6 +113,7 @@ export function ThreadChat({
   const usage = deriveUsage(messages, contextWindow);
 
   return (
+    <InterruptContext.Provider value={resolveInterrupt}>
     <ResizablePanelGroup
       orientation="horizontal"
       className="flex-1 overflow-hidden"
@@ -171,5 +178,6 @@ export function ThreadChat({
         </>
       )}
     </ResizablePanelGroup>
+    </InterruptContext.Provider>
   );
 }

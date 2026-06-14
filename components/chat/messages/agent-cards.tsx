@@ -48,15 +48,16 @@ function collectAgents(message: ChatMessage, streaming: boolean): AgentState[] {
   };
 
   for (const part of message.parts) {
+    // Only agents that stream their OWN output (data-agent-delta) get a card —
+    // the top-level/output agent's answer is in the main thread and its progress
+    // shows in RunProgress, so it must not be carded (avoids the double-up).
     if (part.type === "data-agent-delta") {
       touch(part.data.agent);
     } else if (part.type === "data-agent-step") {
-      touch(part.data.agent);
       lifecycle.set(part.data.agent, part.data.status);
       if (part.data.durationMs != null)
         durations.set(part.data.agent, part.data.durationMs);
     } else if (part.type === "data-agent-progress" && part.data.agent) {
-      touch(part.data.agent);
       const list = progress.get(part.data.agent) ?? [];
       list.push({ message: part.data.message, phase: part.data.phase });
       progress.set(part.data.agent, list);

@@ -1,29 +1,29 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { apiFetch } from "@/lib/api/client";
 import type { ChatDataParts } from "@/lib/chat/types";
-import { useMutation } from "@tanstack/react-query";
 import { CheckIcon, ShieldAlertIcon, XIcon } from "lucide-react";
 import { useState } from "react";
+
+import { useResolveInterrupt } from "../interrupt-context";
 
 type Data = ChatDataParts["tool-interrupt"];
 
 export function ToolInterrupt({ data }: { data: Data }) {
+  const resolveInterrupt = useResolveInterrupt();
   const [resolved, setResolved] = useState<"approved" | "denied" | null>(null);
+  const [pending, setPending] = useState(false);
 
-  const resume = useMutation({
-    mutationFn: (action: "approved" | "denied") =>
-      apiFetch("/v1/agent/resume", {
-        method: "POST",
-        body: JSON.stringify({
-          thread_id: data.threadId,
-          tool_call_id: data.toolCallId,
-          action,
-        }),
-      }),
-    onSuccess: (_r, action) => setResolved(action),
-  });
+  const resolve = async (action: "approved" | "denied") => {
+    if (!resolveInterrupt || pending) return;
+    setPending(true);
+    try {
+      await resolveInterrupt(data.toolCallId, data.threadId ?? "", action);
+      setResolved(action);
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <div className="my-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
@@ -33,7 +33,9 @@ export function ToolInterrupt({ data }: { data: Data }) {
           <p className="text-sm font-medium">
             Approval required: <span className="font-mono">{data.toolName}</span>
           </p>
-          <p className="text-sm text-muted-foreground">{data.prompt}</p>
+          {data.prompt && (
+            <p className="text-sm text-muted-foreground">{data.prompt}</p>
+          )}
           {data.details != null && (
             <pre className="overflow-x-auto rounded bg-muted/50 p-2 text-xs">
               {JSON.stringify(data.details, null, 2)}
@@ -47,16 +49,16 @@ export function ToolInterrupt({ data }: { data: Data }) {
             <div className="flex gap-2 pt-1">
               <Button
                 size="sm"
-                onClick={() => resume.mutate("approved")}
-                disabled={resume.isPending}
+                onClick={() => resolve("approved")}
+                disabled={pending}
               >
                 <CheckIcon className="size-4" /> Approve
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => resume.mutate("denied")}
-                disabled={resume.isPending}
+                onClick={() => resolve("denied")}
+                disabled={pending}
               >
                 <XIcon className="size-4" /> Deny
               </Button>
