@@ -13,6 +13,7 @@ import type { ChatMessage } from "@/lib/chat/types";
 import { deriveRichUsage } from "@/lib/chat/usage";
 import { useUiStore } from "@/stores/ui-store";
 import { type Chat, useChat } from "@ai-sdk/react";
+import { memo } from "react";
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact" });
 
@@ -39,8 +40,40 @@ export function ThreadUsageRing({
 
   const u = deriveRichUsage(messages, contextWindow);
 
+  // This component re-renders on EVERY throttled chunk (its useChat
+  // subscription). Pass only primitive usage numbers down to a memoized shell so
+  // the Radix popover subtree bails when those numbers are unchanged — during
+  // sub-agent streaming `deriveRichUsage` is now stable (deltas excluded), so the
+  // ring stops re-rendering per frame. See AGENTS.md "Thread & chat-stream perf".
   return (
-    <Context usedTokens={u.totalTokens} maxTokens={u.contextWindow}>
+    <UsageContextShell
+      total={u.totalTokens}
+      window={u.contextWindow}
+      input={u.inputTokens}
+      output={u.outputTokens}
+      reasoning={u.reasoningTokens}
+      onOpenUsage={onOpenUsage}
+    />
+  );
+}
+
+const UsageContextShell = memo(function UsageContextShell({
+  total,
+  window: ctxWindow,
+  input,
+  output,
+  reasoning,
+  onOpenUsage,
+}: {
+  total: number;
+  window: number;
+  input: number;
+  output: number;
+  reasoning: number;
+  onOpenUsage: () => void;
+}) {
+  return (
+    <Context usedTokens={total} maxTokens={ctxWindow}>
       <ContextTrigger>
         <button
           type="button"
@@ -55,17 +88,15 @@ export function ThreadUsageRing({
         <ContextContentHeader />
         <ContextContentBody>
           <div className="space-y-2">
-            <UsageRow label="Input" tokens={u.inputTokens} />
-            <UsageRow label="Output" tokens={u.outputTokens} />
-            {u.reasoningTokens > 0 && (
-              <UsageRow label="Reasoning" tokens={u.reasoningTokens} />
-            )}
+            <UsageRow label="Input" tokens={input} />
+            <UsageRow label="Output" tokens={output} />
+            {reasoning > 0 && <UsageRow label="Reasoning" tokens={reasoning} />}
           </div>
         </ContextContentBody>
       </ContextContent>
     </Context>
   );
-}
+});
 
 function UsageRow({ label, tokens }: { label: string; tokens: number }) {
   return (

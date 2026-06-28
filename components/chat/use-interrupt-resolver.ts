@@ -1,5 +1,6 @@
 "use client";
 
+import { resumeUrl } from "@/lib/chat/api";
 import { sseToChunkStream } from "@/lib/chat/sse-to-chunks";
 import type { ChatMessage } from "@/lib/chat/types";
 import { readUIMessageStream } from "ai";
@@ -77,14 +78,17 @@ export function useInterruptResolver(
       };
       setMessages((prev) => prev.map((m) => (m.id === target.id ? target : m)));
 
-      const res = await fetch("/api/chat/resume", {
+      // Resume goes DIRECTLY to the Go backend, which returns the same native
+      // v6 stream. Body is snake_case `{ thread_id, action }`.
+      const res = await fetch(resumeUrl(), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
         body: JSON.stringify({
-          threadId: backendThreadId,
+          thread_id: backendThreadId,
           action,
-          model: target.metadata?.model,
-          agentId: target.metadata?.agentId,
         }),
       });
       if (!res.ok || !res.body) return;

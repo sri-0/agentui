@@ -15,7 +15,7 @@ export type ChatMetadata = {
 };
 
 /**
- * Custom data parts emitted by the proxy transformer (see lib/chat/pump-backend-sse.ts).
+ * Custom data parts emitted by the Go backend's AI SDK v6 stream.
  * Each key becomes a `data-<key>` part type on the wire and in `message.parts`.
  *
  * Native parts (`text`, `reasoning`, `tool-*`) are NOT listed here — they use the
@@ -62,6 +62,8 @@ export type ChatDataParts = {
       title: string;
       status: "pending" | "in_progress" | "completed" | "cancelled";
       priority?: "high" | "medium" | "low";
+      /** owning sub-agent (worker) for swarm/coordinator boards */
+      agent?: string;
     }[];
   };
   /** artifact pushed to the right sidepanel (keyed by id, re-emit to update) */
@@ -85,7 +87,11 @@ export type ChatDataParts = {
 
 export type ChatMessage = UIMessage<ChatMetadata, ChatDataParts>;
 
-/** Extra fields the client sends in the proxy request body alongside `messages`. */
+/**
+ * Extra fields the client sends alongside `messages`. Held in camelCase here and
+ * at the call sites; mapped to the Go backend's snake_case keys in the transport's
+ * prepareSendMessagesRequest (see components/chat/use-agent-chat.ts).
+ */
 export type ChatRequestBody = {
   agentId?: string;
   model?: string;

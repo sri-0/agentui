@@ -6,6 +6,7 @@ import {
   MessageResponse,
 } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
+import { useAgents } from "@/lib/api/agents";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
@@ -19,6 +20,8 @@ import { MessageMeta } from "./message-meta";
 import { MessageReasoning } from "./message-reasoning";
 import { RunProgress } from "./run-progress";
 import { ToolCard } from "./tool-card";
+
+type Part = ChatMessage["parts"][number];
 
 export function MessageList({
   messages,
@@ -63,28 +66,68 @@ const MessageItem = memo(function MessageItem({
   isLast: boolean;
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
+  const { data: agents = [] } = useAgents();
   const isUser = message.role === "user";
-  const hasText = message.parts.some((p) => p.type === "text" && p.text);
-  const showActions = !isUser && hasText && !(streaming && isLast);
 
-  // HITL interrupts are merged into their tool card (matched by toolCallId),
-  // not rendered as a separate card.
-  const interrupts = new Map<string, ChatMessage["parts"][number]>();
-  for (const p of message.parts) {
-    if (p.type === "data-tool-interrupt") interrupts.set(p.data.toolCallId, p);
-  }
+  // Is this a swarm/coordinator run? Determine it from the AGENT TYPE (known
+  // from message metadata on the first token) so we never flash a sub-agent
+  // card before the first task board arrives. Fall back to a task-list part.
+  const agentType = agents.find(
+    (a) => a.id === message.metadata?.agentId,
+  )?.type;
+  let isSwarm = agentType === "swarm" || agentType === "coordinator";
+
+  // Single pass over parts: classify the renderable ones, find text +
+  // interrupts. Avoids several O(n) scans and — critically — never builds React
+  // elements for the thousands of `data-agent-delta` parts (consumed by the
+  // TaskBar / AgentView).
+  let hasText = false;
+  const interrupts = new Map<string, Part>();
+  const renderable: { part: Part; i: number }[] = [];
+  message.parts.forEach((part, i) => {
+    switch (part.type) {
+      case "text":
+        if (part.text) hasText = true;
+        renderable.push({ part, i });
+        break;
+      case "reasoning":
+      case "dynamic-tool":
+      case "data-artifact":
+        renderable.push({ part, i });
+        break;
+      case "data-tool-interrupt":
+        interrupts.set(part.data.toolCallId, part);
+        break;
+      case "data-task-list":
+        isSwarm = true;
+        break;
+    }
+  });
+  const showActions = !isUser && hasText && !(streaming && isLast);
 
   return (
     <Message from={message.role}>
       <MessageContent
         className={isUser ? undefined : "w-full max-w-full min-w-0"}
       >
+        {/* Top-level run progress ("Analyzing…") renders for ALL agents — for a
+            swarm it's the activity indicator while the coordinator plans, before
+            the task board appears. Swarms suppress the per-worker cards (their
+            work shows in the central task list); pipeline agents keep them. */}
         {!isUser && (
-          <RunProgress message={message} streaming={streaming} isLast={isLast} />
+          <>
+            <RunProgress
+              message={message}
+              streaming={streaming}
+              isLast={isLast}
+            />
+            {!isSwarm && (
+              <AgentCards message={message} streaming={streaming && isLast} />
+            )}
+          </>
         )}
-        <AgentCards message={message} streaming={streaming && isLast} />
 
-        {message.parts.map((part, i) => {
+        {renderable.map(({ part, i }, idx) => {
           switch (part.type) {
             case "text":
               return part.text ? (
@@ -96,7 +139,9 @@ const MessageItem = memo(function MessageItem({
                 <MessageReasoning
                   key={i}
                   text={part.text}
-                  isStreaming={streaming && i === message.parts.length - 1}
+                  isStreaming={
+                    streaming && isLast && idx === renderable.length - 1
+                  }
                 />
               );
 
@@ -112,10 +157,6 @@ const MessageItem = memo(function MessageItem({
                 />
               );
             }
-
-            // Interrupts render inside their tool card (see above), not separately.
-            case "data-tool-interrupt":
-              return null;
 
             case "data-artifact":
               return (

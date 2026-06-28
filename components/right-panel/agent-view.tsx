@@ -120,32 +120,37 @@ export function AgentView({
   messageId: string;
 }) {
   const message = findAgentMessage(messages, messageId, agent);
-  const parts = message?.parts ?? [];
-  const deltas = parts.filter(
-    (p) => p.type === "data-agent-delta" && p.data.agent === agent,
-  );
-  const reasoning = deltas
-    .map((p) =>
-      p.type === "data-agent-delta" && p.data.kind === "reasoning"
-        ? p.data.delta
-        : "",
-    )
-    .join("");
-  const text = deltas
-    .map((p) =>
-      p.type === "data-agent-delta" && p.data.kind === "text" ? p.data.delta : "",
-    )
-    .join("");
 
-  const errorPart = parts.find(
-    (p) =>
+  // This view re-renders on every throttled chunk (it's the live sub-agent
+  // stream — the one thing meant to update). So do the work in a SINGLE pass
+  // over the parts: a swarm message holds thousands of delta parts, and the old
+  // filter + two map().join() chains + find allocated several arrays per frame.
+  // String concat into reasoning/text directly; derive status inline.
+  let reasoning = "";
+  let text = "";
+  let errorMsg: string | undefined;
+  let errored = false;
+  let done = false;
+  for (const p of message?.parts ?? []) {
+    if (p.type === "data-agent-delta" && p.data.agent === agent) {
+      if (p.data.kind === "reasoning") reasoning += p.data.delta;
+      else if (p.data.kind === "text") text += p.data.delta;
+    } else if (
       p.type === "data-agent-progress" &&
       p.data.agent === agent &&
-      p.data.phase === "error",
-  );
-  const errorMsg =
-    errorPart?.type === "data-agent-progress" ? errorPart.data.message : undefined;
-  const status = deriveAgentStatus(message, agent);
+      p.data.phase === "error"
+    ) {
+      errored = true;
+      errorMsg = p.data.message;
+    } else if (
+      p.type === "data-agent-step" &&
+      p.data.agent === agent &&
+      p.data.status === "done"
+    ) {
+      done = true;
+    }
+  }
+  const status: AgentStatus = errored ? "error" : done ? "done" : "working";
 
   return (
     <div className="space-y-5 text-sm text-foreground">

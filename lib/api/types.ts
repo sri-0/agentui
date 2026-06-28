@@ -3,6 +3,8 @@
 export type Agent = {
   id: string;
   name: string;
+  /** agent type: basic | deep-research | triage | swarm | coordinator | … */
+  type?: string;
   description?: string;
   system_prompt?: string;
   model?: string;

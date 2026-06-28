@@ -106,9 +106,13 @@ export function deriveRichUsage(
         const input = "input" in p ? JSON.stringify(p.input ?? "") : "";
         const output = "output" in p ? JSON.stringify(p.output ?? "") : "";
         toolTok += estimateTokens(input + output);
-      } else if (p.type === "data-agent-delta") {
-        assistantTok += estimateTokens(p.data.delta);
       }
+      // NOTE: data-agent-delta (sub-agent stream) parts are deliberately NOT
+      // counted. A swarm produces thousands of them; estimating per-delta on
+      // every throttled chunk tanked FPS, and — worse — it made this value churn
+      // every frame, forcing the live usage ring's Radix popover to re-render
+      // each chunk. The exact backend `data-usage` below is the source of truth;
+      // this estimate is only the pre-usage fallback for the main thread.
     }
   }
 

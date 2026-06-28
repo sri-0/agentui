@@ -4,7 +4,8 @@ import { Chat, useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useMemo } from "react";
 
-import type { ChatMessage } from "@/lib/chat/types";
+import { chatUrl } from "@/lib/chat/api";
+import type { ChatMessage, ChatRequestBody } from "@/lib/chat/types";
 
 export function useAgentChat({
   id,
@@ -21,7 +22,27 @@ export function useAgentChat({
       new Chat<ChatMessage>({
         id,
         messages: initialMessages,
-        transport: new DefaultChatTransport<ChatMessage>({ api: "/api/chat" }),
+        transport: new DefaultChatTransport<ChatMessage>({
+          api: chatUrl(),
+          // Talk DIRECTLY to the Go backend, which parses AI SDK UIMessages and
+          // these snake_case fields. The per-send camelCase `body` (from
+          // useRequestBody) is mapped to snake_case here; `messages` stays as
+          // AI SDK UIMessages (the Go side converts them).
+          prepareSendMessagesRequest: ({ messages, body }) => {
+            const b = (body ?? {}) as Partial<ChatRequestBody>;
+            return {
+              body: {
+                messages,
+                agent_id: b.agentId,
+                model: b.model,
+                thread_id: b.threadId,
+                use_rag: b.useRag,
+                temporary: b.temporary,
+                reasoning_effort: b.reasoningEffort,
+              },
+            };
+          },
+        }),
       }),
     // The thread is keyed by id (ThreadView remounts on id change), so create once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
