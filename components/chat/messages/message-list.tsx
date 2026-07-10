@@ -18,6 +18,7 @@ import { AgentCards } from "./agent-cards";
 import { MessageActions } from "./message-actions";
 import { MessageMeta } from "./message-meta";
 import { MessageReasoning } from "./message-reasoning";
+import { isQuestionInterrupt, QuestionCard } from "./question-card";
 import { RunProgress } from "./run-progress";
 import { ToolCard } from "./tool-card";
 
@@ -96,7 +97,11 @@ const MessageItem = memo(function MessageItem({
         renderable.push({ part, i });
         break;
       case "data-tool-interrupt":
-        interrupts.set(part.data.toolCallId, part);
+        // Question interrupts render as their own interactive form (no paired
+        // dynamic-tool part is required); approve/deny interrupts stay a
+        // side-channel merged into the matching tool card.
+        if (isQuestionInterrupt(part.data)) renderable.push({ part, i });
+        else interrupts.set(part.data.toolCallId, part);
         break;
       case "data-task-list":
         isSwarm = true;
@@ -157,6 +162,9 @@ const MessageItem = memo(function MessageItem({
                 />
               );
             }
+
+            case "data-tool-interrupt":
+              return <QuestionCard key={i} interrupt={part.data} />;
 
             case "data-artifact":
               return (

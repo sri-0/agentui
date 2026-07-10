@@ -1,6 +1,21 @@
 import type { UIMessage } from "ai";
 
 /**
+ * A single question emitted by the `question` tool (Phase 05, opencode schema).
+ * The agent pauses the run until the user answers; the answer round-trips through
+ * the HITL resume endpoint as selected option LABELS.
+ */
+export type Question = {
+  question: string;
+  header: string;
+  options: { label: string; description?: string }[];
+  /** allow selecting more than one option (checkboxes vs. single-select) */
+  multiple?: boolean;
+  /** allow a free-text answer in addition to / instead of the options (default true) */
+  custom?: boolean;
+};
+
+/**
  * Per-message metadata carried alongside the parts.
  */
 export type ChatMetadata = {
@@ -54,6 +69,15 @@ export type ChatDataParts = {
     details?: unknown;
     threadId?: string;
     resolved?: "approved" | "denied";
+    /** Structured questions when `toolName === "question"` (Phase 05). Rendered
+     *  as an interactive form instead of the generic approve/deny card. May also
+     *  be carried inside `details` — the renderer accepts either. */
+    questions?: Question[];
+    /** After a question card is submitted: the selected option labels per
+     *  question (`answers[i]` = labels chosen for question i) for the settled view. */
+    answers?: string[][];
+    /** After submit: the free-text answer, if the user typed one. */
+    answerText?: string;
   };
   /** todo/task list snapshot from the `todowrite` tool (keyed, replaces prior) */
   "task-list": {

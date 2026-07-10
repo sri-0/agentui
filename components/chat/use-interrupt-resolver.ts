@@ -1,5 +1,6 @@
 "use client";
 
+import { getUserId } from "@/lib/api/client";
 import { resumeUrl } from "@/lib/chat/api";
 import { sseToChunkStream } from "@/lib/chat/sse-to-chunks";
 import type { ChatMessage } from "@/lib/chat/types";
@@ -32,7 +33,7 @@ export function useInterruptResolver(
   messagesRef.current = messages;
 
   return useCallback<ResolveInterrupt>(
-    async (toolCallId, action) => {
+    async (toolCallId, action, answers) => {
       const msgs = messagesRef.current;
 
       // Most recent message whose tool call `toolCallId` is still pending.
@@ -66,29 +67,44 @@ export function useInterruptResolver(
           ? interruptPart.data.threadId
           : undefined) ?? threadId;
 
-      // Record the decision on the interrupt part so the card flips out of the
-      // pending state immediately and keeps the Approved/Rejected badge after.
+      // Record the decision (and, for a question card, the chosen answers) on the
+      // interrupt part so the card flips out of the pending state immediately and
+      // keeps its settled state (Approved/Rejected badge, or the picked answers).
       const target: ChatMessage = {
         ...original,
         parts: original.parts.map((p) =>
           p.type === "data-tool-interrupt" && p.data.toolCallId === toolCallId
-            ? { ...p, data: { ...p.data, resolved: action } }
+            ? {
+                ...p,
+                data: {
+                  ...p.data,
+                  resolved: action,
+                  ...(answers?.answers ? { answers: answers.answers } : {}),
+                  ...(answers?.text != null ? { answerText: answers.text } : {}),
+                },
+              }
             : p,
         ),
       };
       setMessages((prev) => prev.map((m) => (m.id === target.id ? target : m)));
 
       // Resume goes DIRECTLY to the Go backend, which returns the same native
-      // v6 stream. Body is snake_case `{ thread_id, action }`.
+      // v6 stream. Body is snake_case `{ thread_id, action }`; for a `question`
+      // card it also carries `answers` (selected option labels per question) and
+      // optional free `text`. X-User-ID must match the chat/REST identity so the
+      // backend resolves the paused run for the right user.
       const res = await fetch(resumeUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
+          "X-User-ID": getUserId(),
         },
         body: JSON.stringify({
           thread_id: backendThreadId,
           action,
+          ...(answers?.answers ? { answers: answers.answers } : {}),
+          ...(answers?.text != null ? { text: answers.text } : {}),
         }),
       });
       if (!res.ok || !res.body) return;

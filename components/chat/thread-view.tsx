@@ -22,7 +22,7 @@ import { takePendingMessage } from "@/lib/chat/pending";
 import type { ChatMessage } from "@/lib/chat/types";
 import { Button } from "@/components/ui/button";
 import { useUiStore } from "@/stores/ui-store";
-import { FileTextIcon, MessageCircleDashedIcon } from "lucide-react";
+import { FileTextIcon, LoaderIcon, MessageCircleDashedIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 
 import { Composer } from "./composer/composer";
@@ -34,6 +34,7 @@ import { MessageList } from "./messages/message-list";
 import { TaskBar } from "./task-bar";
 import { useAgentChat } from "./use-agent-chat";
 import { useRequestBody } from "./use-request-body";
+import { useSessionReconnect } from "./use-session-reconnect";
 
 export function ThreadView({ threadId }: { threadId: string }) {
   // /chat/[threadId] is always a persisted thread — temporary chats run in-place
@@ -81,6 +82,14 @@ export function ThreadChat({
   // HITL: approve/deny a tool interrupt, then merge the backend continuation
   // (tool result + final answer) back into the conversation.
   const resolveInterrupt = useInterruptResolver(threadId, messages, setMessages);
+
+  // Rejoin a still-running server-side session on load / after a drop. Persisted
+  // threads only (temporary chats have no server-side session to rejoin).
+  const { reconnecting } = useSessionReconnect(
+    isTemporary ? "" : threadId,
+    status,
+    setMessages,
+  );
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
   const panelOpen = Boolean(sidepanel);
@@ -155,6 +164,7 @@ export function ThreadChat({
             isTemporary={isTemporary}
             artifactCount={artifacts.length}
             latestArtifactId={latestArtifactId}
+            reconnecting={reconnecting}
           />
 
           <Conversation className="flex-1">
@@ -204,10 +214,12 @@ const ThreadHeader = memo(function ThreadHeader({
   isTemporary,
   artifactCount,
   latestArtifactId,
+  reconnecting,
 }: {
   isTemporary: boolean;
   artifactCount: number;
   latestArtifactId?: string;
+  reconnecting?: boolean;
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const closeSidepanel = useUiStore((s) => s.closeSidepanel);
@@ -217,6 +229,12 @@ const ThreadHeader = memo(function ThreadHeader({
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
       <SidebarTrigger className="text-muted-foreground" />
+      {reconnecting && (
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <LoaderIcon className="size-3.5 animate-spin" />
+          Reconnecting…
+        </span>
+      )}
       {isTemporary && (
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <MessageCircleDashedIcon className="size-3.5" />
