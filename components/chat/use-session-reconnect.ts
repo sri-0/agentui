@@ -29,7 +29,12 @@ type SetMessages = (
  * sequence numbers per part.
  *
  * Only attaches when the client is NOT already streaming this thread (so we
- * never double up on the primary transport), and once per session id.
+ * never double up on the primary transport), and once per session id. Crucially,
+ * "not already streaming" is latched across the whole mount: if the primary
+ * transport ever drove this thread (send / mid-stream / interrupt) this client
+ * owns the run, so we skip reconnect even in the brief windows where `status`
+ * drops back to `ready` (at an interrupt, or right after a turn completes) while
+ * the session is still listed as `running`/`awaiting-input`.
  */
 export function useSessionReconnect(
   threadId: string,
@@ -62,8 +67,22 @@ export function useSessionReconnect(
   // sending/receiving — don't attach a second reader over the top of it.
   const primaryBusy = status === "streaming" || status === "submitted";
 
+  // Once the primary `useChat` transport has driven this thread at all in this
+  // mount (sent a message, hit an interrupt, or is mid-stream), THIS client owns
+  // the run's stream. Reconnect must never attach then: the run appears in the
+  // live `/v1/sessions` list as `running`/`awaiting-input` (so `isLive` is true)
+  // and, at an interrupt or right after a turn completes, the primary stream's
+  // HTTP response has ended so `status` drops back to `ready` (so `primaryBusy`
+  // is momentarily false) — the exact window that let a SECOND stream attach,
+  // duplicating the assistant bubble / question card and racing the interrupt
+  // resolver. Latch it so reconnect only ever runs for a genuine reload/drop
+  // where the primary transport never handled this thread.
+  const primaryOwnedRef = useRef(false);
+  if (primaryBusy) primaryOwnedRef.current = true;
+
   useEffect(() => {
-    if (!isLive || primaryBusy || attachedRef.current) return;
+    if (!isLive || primaryBusy || primaryOwnedRef.current || attachedRef.current)
+      return;
     attachedRef.current = true;
     const controller = new AbortController();
     setReconnecting(true);
