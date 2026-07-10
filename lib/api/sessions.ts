@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { apiFetch } from "./client";
+import { ApiError, apiFetch } from "./client";
 import type { ListResponse } from "./types";
 
 /**
@@ -49,11 +49,23 @@ export function useSessions() {
   });
 }
 
-/** Status of a single session (cheap polling / decide whether to attach). */
-export function useSessionStatus(sessionId: string | null) {
+/**
+ * Status of a single session (cheap polling / decide whether to attach).
+ *
+ * `enabled` lets the caller gate the probe: `GET /v1/sessions/{id}` returns 404
+ * for a settled thread with no ACTIVE run, which the browser logs as a console
+ * 404 on every load. Callers that already know a thread is settled (e.g. it's
+ * absent from the user's live `/v1/sessions` list) should pass `enabled: false`
+ * so we never fire the pointless request. A 404 still resolves to `null` (no
+ * active session) rather than an app-level error, so a stale gate is harmless.
+ */
+export function useSessionStatus(
+  sessionId: string | null,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["session-status", sessionId],
-    enabled: Boolean(sessionId),
+    enabled: Boolean(sessionId) && enabled,
     retry: false,
     queryFn: async () => {
       if (!sessionId) return null;
@@ -61,7 +73,11 @@ export function useSessionStatus(sessionId: string | null) {
         return await apiFetch<SessionHandle>(
           `/v1/sessions/${encodeURIComponent(sessionId)}`,
         );
-      } catch {
+      } catch (err) {
+        // 404 = "no active run for this id" — the normal settled-thread case.
+        // Resolve to null quietly; genuine errors also degrade to "nothing to
+        // reconnect to" since there's nothing actionable for the UI to do.
+        if (err instanceof ApiError && err.status === 404) return null;
         return null;
       }
     },

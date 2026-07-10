@@ -1,7 +1,7 @@
 "use client";
 
 import { getUserId } from "@/lib/api/client";
-import { useSessionStatus } from "@/lib/api/sessions";
+import { useSessionStatus, useSessions } from "@/lib/api/sessions";
 import { sessionStreamUrl } from "@/lib/chat/api";
 import { sseToChunkStream } from "@/lib/chat/sse-to-chunks";
 import type { ChatMessage } from "@/lib/chat/types";
@@ -36,7 +36,23 @@ export function useSessionReconnect(
   status: ChatStatus,
   setMessages: SetMessages,
 ): { reconnecting: boolean } {
-  const { data: session } = useSessionStatus(threadId);
+  // The user's live-session list (already polled for the sidebar) is the source
+  // of truth for "which threads have an ACTIVE run". Gate the per-thread status
+  // probe on it: a settled/persisted thread is absent from this list, so we skip
+  // `GET /v1/sessions/{id}` entirely and avoid the browser logging a 404 on
+  // every reload. Only threads that are genuinely active still get probed —
+  // reconnect behaviour for running sessions is unchanged.
+  const { data: sessions = [] } = useSessions();
+  const maybeLive =
+    Boolean(threadId) &&
+    sessions.some(
+      (s) =>
+        s.session_id === threadId &&
+        (s.status === "running" ||
+          s.status === "awaiting-input" ||
+          s.status === "queued"),
+    );
+  const { data: session } = useSessionStatus(threadId, maybeLive);
   const [reconnecting, setReconnecting] = useState(false);
   const attachedRef = useRef(false);
 
