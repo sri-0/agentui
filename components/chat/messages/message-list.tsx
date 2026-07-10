@@ -91,8 +91,14 @@ const MessageItem = memo(function MessageItem({
         if (part.text) hasText = true;
         renderable.push({ part, i });
         break;
-      case "reasoning":
       case "dynamic-tool":
+        // The `question` tool renders exclusively as the interactive QuestionCard
+        // (from its paired `data-tool-interrupt`). Skip its raw tool card so we
+        // don't ALSO show a generic approve/deny card for the same interrupt.
+        if (part.toolName === "question") break;
+        renderable.push({ part, i });
+        break;
+      case "reasoning":
       case "data-artifact":
         renderable.push({ part, i });
         break;
