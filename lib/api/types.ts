@@ -63,6 +63,12 @@ export type ThreadMessage = {
   role: "user" | "assistant" | "system" | string;
   content: string;
   created_at?: string | number;
+  /** model id that generated the message (assistant turns) */
+  model?: string;
+  /** agent id that produced the message, if any */
+  agent_id?: string;
+  /** wall-clock duration of the turn, in ms */
+  duration_ms?: number;
   [key: string]: unknown;
 };
 

@@ -4,6 +4,8 @@ import type { ChatMessage } from "./types";
 
 type Part = ChatMessage["parts"][number];
 
+// re-exported for clarity: metadata footer type reconstructed on reload.
+
 /** A loosely-typed persisted part as it arrives from the backend history JSON. */
 type RawPart = {
   type?: unknown;
@@ -25,6 +27,9 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
 
 const asString = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
+
+const asNumber = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? v : undefined;
 
 /**
  * Rehydrate one persisted part into the AI-SDK part shape the UI renders.
@@ -49,8 +54,20 @@ function rehydratePart(raw: unknown): Part | null {
     case "text":
       return { type: "text", text: asString(p.text) ?? "" } as Part;
 
-    case "reasoning":
-      return { type: "reasoning", text: asString(p.text) ?? "" } as Part;
+    case "reasoning": {
+      // Preserve the persisted thinking window (opencode model: unix-ms of the
+      // first/last reasoning delta) so the collapse shows the REAL
+      // "Thought for N seconds" on reload instead of a static label.
+      const part: Record<string, unknown> = {
+        type: "reasoning",
+        text: asString(p.text) ?? "",
+      };
+      const startedMs = asNumber(p.startedMs);
+      const endedMs = asNumber(p.endedMs);
+      if (startedMs !== undefined) part.startedMs = startedMs;
+      if (endedMs !== undefined) part.endedMs = endedMs;
+      return part as Part;
+    }
 
     case "dynamic-tool": {
       // Preserve the fields ToolCard reads: toolName / state / input / output /
@@ -115,6 +132,10 @@ export function fromHistory(messages: ThreadMessage[]): ChatMessage[] {
       const id = (m.id as string) ?? `history-${i}`;
       const role = m.role as "user" | "assistant";
 
+      // Rehydrate the per-message metadata footer (model · agent · duration) the
+      // live `message-metadata` frame carried, persisted on the archive doc.
+      const metadata = messageMetadata(m);
+
       const rawParts = (m as { parts?: unknown }).parts;
       if (Array.isArray(rawParts) && rawParts.length > 0) {
         const parts = rawParts
@@ -123,14 +144,28 @@ export function fromHistory(messages: ThreadMessage[]): ChatMessage[] {
         // If nothing survived rehydration, fall back to the text mapping so the
         // bubble is never empty.
         if (parts.length > 0) {
-          return { id, role, parts };
+          return metadata ? { id, role, parts, metadata } : { id, role, parts };
         }
       }
 
-      return {
-        id,
-        role,
-        parts: [{ type: "text" as const, text: m.content ?? "" }],
-      };
+      const parts = [{ type: "text" as const, text: m.content ?? "" }];
+      return metadata ? { id, role, parts, metadata } : { id, role, parts };
     });
+}
+
+/** Build the ChatMetadata footer from a persisted message's top-level fields. */
+function messageMetadata(
+  m: ThreadMessage
+): ChatMessage["metadata"] | undefined {
+  const model = asString(m.model);
+  const agentId = asString((m as { agent_id?: unknown }).agent_id);
+  const durationMs = asNumber((m as { duration_ms?: unknown }).duration_ms);
+  if (model === undefined && agentId === undefined && durationMs === undefined) {
+    return undefined;
+  }
+  const meta: NonNullable<ChatMessage["metadata"]> = {};
+  if (model !== undefined) meta.model = model;
+  if (agentId !== undefined) meta.agentId = agentId;
+  if (durationMs !== undefined) meta.durationMs = durationMs;
+  return meta;
 }
