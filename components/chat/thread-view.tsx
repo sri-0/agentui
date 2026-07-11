@@ -213,7 +213,10 @@ export function ThreadChat({
           </Conversation>
 
           <div className="px-4 pb-5 pt-2">
-            <TaskBar messages={messages} />
+            <TaskBar
+              messages={messages}
+              running={status === "streaming" || status === "submitted"}
+            />
             <div className="mx-auto w-full max-w-3xl">
               <Composer
                 onSubmit={onSubmit}
