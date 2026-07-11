@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
-import { FileTextIcon } from "lucide-react";
+import { FileTextIcon, HelpCircleIcon } from "lucide-react";
 import { memo } from "react";
 
 import { ThinkingIndicator } from "../loading";
@@ -33,12 +33,17 @@ export function MessageList({
   messages,
   status,
   stopped = false,
+  activeQuestionId,
 }: {
   messages: ChatMessage[];
   status: ChatStatus;
   /** The last turn was aborted by the user (Stop). Reflected as a "Stopped"
    *  run-progress badge instead of a false green "Completed". */
   stopped?: boolean;
+  /** toolCallId of the question interrupt currently shown in the composer slot.
+   *  That one is NOT rendered inline here (it lives in the footer) to avoid a
+   *  double render. */
+  activeQuestionId?: string;
 }) {
   const last = messages[messages.length - 1];
   const waiting =
@@ -55,6 +60,7 @@ export function MessageList({
             streaming={status === "streaming"}
             isLast={isLast}
             stopped={stopped && isLast}
+            activeQuestionId={activeQuestionId}
           />
         );
       })}
@@ -75,13 +81,18 @@ const MessageItem = memo(function MessageItem({
   streaming,
   isLast,
   stopped = false,
+  activeQuestionId,
 }: {
   message: ChatMessage;
   streaming: boolean;
   isLast: boolean;
   stopped?: boolean;
+  /** The question currently shown in the composer slot — not rendered inline. */
+  activeQuestionId?: string;
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
+  const skippedQuestions = useUiStore((s) => s.skippedQuestions);
+  const unskipQuestion = useUiStore((s) => s.unskipQuestion);
   const isUser = message.role === "user";
 
   // Single pass over parts: classify the renderable ones, find text +
@@ -91,6 +102,9 @@ const MessageItem = memo(function MessageItem({
   let hasText = false;
   const interrupts = new Map<string, Part>();
   const renderable: { part: Part; i: number }[] = [];
+  // toolCallIds of question interrupts on THIS message the user has skipped but
+  // not yet answered — surfaced as a "Skipped Questions" reopen button.
+  const skippedIds: string[] = [];
   message.parts.forEach((part, i) => {
     switch (part.type) {
       case "text":
@@ -115,8 +129,25 @@ const MessageItem = memo(function MessageItem({
         // Question interrupts render as their own interactive form (no paired
         // dynamic-tool part is required); approve/deny interrupts stay a
         // side-channel merged into the matching tool card.
-        if (isQuestionInterrupt(part.data)) renderable.push({ part, i });
-        else interrupts.set(part.data.toolCallId, part);
+        if (isQuestionInterrupt(part.data)) {
+          const id = part.data.toolCallId;
+          // SETTLED (answered) questions render inline as transcript history.
+          // An UNRESOLVED question is either shown in the composer slot (active)
+          // or, if skipped, represented by the "Skipped Questions" button below
+          // — so it is NOT rendered inline here (avoids a double render).
+          if (part.data.resolved) {
+            renderable.push({ part, i });
+          } else if (id === activeQuestionId) {
+            // shown in the composer slot; skip inline
+          } else if (skippedQuestions.has(id)) {
+            skippedIds.push(id);
+          } else {
+            // unresolved, not-yet-active (e.g. reconnect edge) — render inline
+            renderable.push({ part, i });
+          }
+        } else {
+          interrupts.set(part.data.toolCallId, part);
+        }
         break;
     }
   });
@@ -202,6 +233,20 @@ const MessageItem = memo(function MessageItem({
               return null;
           }
         })}
+
+        {/* A question the user skipped (Dismiss) but hasn't answered — the run
+            is still awaiting-input. Reopen it into the composer slot to answer. */}
+        {skippedIds.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="my-1 w-fit gap-2"
+            onClick={() => skippedIds.forEach((id) => unskipQuestion(id))}
+          >
+            <HelpCircleIcon className="size-4 text-primary" />
+            Skipped Questions
+          </Button>
+        )}
 
         {showActions && (
           <div className="mt-1.5 flex items-center gap-3 opacity-0 transition-opacity group-hover:opacity-100">

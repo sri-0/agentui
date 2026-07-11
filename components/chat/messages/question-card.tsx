@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChatDataParts, Question } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/stores/ui-store";
 import { CheckIcon, HelpCircleIcon, SendIcon, XIcon } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 
@@ -37,11 +38,24 @@ export function isQuestionInterrupt(interrupt: Interrupt): boolean {
  * free-text box (`custom`, default true). On submit it resolves the interrupt
  * with `answers: string[][]` (selected option LABELS per question) + optional
  * `text`, POSTed to the resume endpoint as `action: "approved"`. "Dismiss"
- * resolves with `action: "denied"`.
+ * SKIPS the question LOCALLY (adds the toolCallId to the ui-store's
+ * `skippedQuestions`) WITHOUT posting `denied` — the backend run stays
+ * `awaiting-input` so the user can reopen and answer it later.
+ *
+ * `variant="composer"` styles the card to sit in the composer slot (replacing
+ * the chat input while a question is pending, ChatGPT-style); the default
+ * variant renders inline in the transcript as history.
  */
 export const QuestionCard = memo(
-  function QuestionCard({ interrupt }: { interrupt: Interrupt }) {
+  function QuestionCard({
+    interrupt,
+    variant = "inline",
+  }: {
+    interrupt: Interrupt;
+    variant?: "inline" | "composer";
+  }) {
     const resolveInterrupt = useResolveInterrupt();
+    const skipQuestion = useUiStore((s) => s.skipQuestion);
     const questions = extractQuestions(interrupt) ?? [];
     const settled = Boolean(interrupt.resolved);
 
@@ -79,14 +93,10 @@ export const QuestionCard = memo(
       });
     };
 
-    const submit = async (action: "approved" | "denied") => {
+    const submit = async () => {
       if (!resolveInterrupt || submitting) return;
       setSubmitting(true);
       try {
-        if (action === "denied") {
-          await resolveInterrupt(interrupt.toolCallId, "denied");
-          return;
-        }
         // Fold each question's free text into its answer list so a custom answer
         // is preserved even when no option is picked. Backend takes labels.
         const answers = selected.map((labels, qi) => {
@@ -103,15 +113,22 @@ export const QuestionCard = memo(
       }
     };
 
+    // "Dismiss" = LOCAL skip: hide the panel (composer returns) but leave the
+    // backend awaiting-input so it can be reopened and answered. No `denied`.
+    const skip = () => skipQuestion(interrupt.toolCallId);
+
     // At least one answer (option or text) across all questions enables submit.
     const hasAnswer = selected.some((s) => s.length > 0) || texts.some((t) => t.trim());
 
     return (
       <div
         ref={cardRef}
+        data-question-panel={variant === "composer" ? "" : undefined}
         className={cn(
           "flex w-full flex-col gap-4 rounded-xl border p-4",
           settled ? "bg-card" : "border-primary/40 bg-primary/5",
+          variant === "composer" &&
+            "rounded-[26px] border-border/70 bg-card/80 p-5 shadow-xl shadow-black/10 backdrop-blur-xl",
         )}
       >
         <div className="flex items-center gap-2 text-sm font-medium">
@@ -203,14 +220,14 @@ export const QuestionCard = memo(
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => submit("denied")}
+              onClick={skip}
               disabled={submitting}
             >
               Dismiss
             </Button>
             <Button
               size="sm"
-              onClick={() => submit("approved")}
+              onClick={submit}
               disabled={submitting || !hasAnswer}
             >
               <SendIcon className="size-4" /> Submit
@@ -223,5 +240,6 @@ export const QuestionCard = memo(
   (a, b) =>
     a.interrupt.toolCallId === b.interrupt.toolCallId &&
     a.interrupt.resolved === b.interrupt.resolved &&
-    a.interrupt.questions === b.interrupt.questions,
+    a.interrupt.questions === b.interrupt.questions &&
+    a.variant === b.variant,
 );
