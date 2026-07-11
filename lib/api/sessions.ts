@@ -30,6 +30,19 @@ export interface SessionHandle {
    * moment the user opens the thread (see markViewed).
    */
   viewed: boolean;
+  /**
+   * First event-log sequence THIS run writes. A reconnecting client attaches at
+   * `after = start_seq - 1` so the backend replays exactly the in-progress
+   * turn's events (not the whole session log) before going live.
+   */
+  start_seq: number;
+  /**
+   * 0-based assistant turn this run writes. The backend derives it from the
+   * same projection that keys persisted messages, so the run's live stream,
+   * its replay, and the reloaded history all share one message id
+   * (`{session_id}:{turn}:assistant`).
+   */
+  turn: number;
   started_at: string;
   updated_at: string;
 }

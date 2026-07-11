@@ -5,6 +5,7 @@ import { useSessionStatus, useSessions } from "@/lib/api/sessions";
 import { sessionStreamUrl } from "@/lib/chat/api";
 import { sseToChunkStream } from "@/lib/chat/sse-to-chunks";
 import type { ChatMessage } from "@/lib/chat/types";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ChatStatus } from "ai";
 import { readUIMessageStream } from "ai";
 import { useEffect, useRef, useState } from "react";
@@ -21,12 +22,13 @@ type SetMessages = (
  * merge the replay-then-live AI-SDK stream into the chat by upserting messages
  * on `id` — the same merge shape used by the HITL resume.
  *
- * Seq tradeoff: the AI-SDK UI message stream doesn't surface a per-part `seq` to
- * the client, so we can't compute a precise high-water mark here. We reconnect
- * with `after=0` (full replay-then-live); keyed-replacement makes the replay
- * idempotent (same-id parts overwrite), so re-rendering already-seen messages is
- * harmless. Upgrade to a real high-water `after=<seq>` once the stream exposes
- * sequence numbers per part.
+ * Hybrid rebuild: finished turns are seeded from persisted history (fromHistory
+ * in ThreadView), and this hook attaches at `after = start_seq - 1` — the
+ * session handle's first sequence for the in-progress run — so the backend
+ * replays exactly the current turn's events, not the whole session log. The
+ * backend stamps the deterministic `{session}:{turn}:assistant` message id on
+ * the replayed start frame, so the upsert below is a true idempotent replace
+ * against both the live-streamed and the reloaded rendering of the same turn.
  *
  * Only attaches when the client is NOT already streaming this thread (so we
  * never double up on the primary transport), and once per session id. Crucially,
@@ -48,6 +50,15 @@ export function useSessionReconnect(
   // every reload. Only threads that are genuinely active still get probed —
   // reconnect behaviour for running sessions is unchanged.
   const { data: sessions = [] } = useSessions();
+  // Fire on mount: force the sessions list fresh NOW so a thread whose run
+  // started moments ago (e.g. navigate-away-and-back mid-stream) is detected
+  // immediately instead of waiting for useSessions' 5s poll to converge — the
+  // delay that left a returning thread blank until the next poll tick.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!threadId) return;
+    void queryClient.refetchQueries({ queryKey: ["sessions"] });
+  }, [threadId, queryClient]);
   const maybeLive =
     Boolean(threadId) &&
     sessions.some(
@@ -80,6 +91,13 @@ export function useSessionReconnect(
   const primaryOwnedRef = useRef(false);
   if (primaryBusy) primaryOwnedRef.current = true;
 
+  // Replay only the in-progress run: its first event-log seq is start_seq, so
+  // `after = start_seq - 1` skips every already-persisted turn (those are
+  // seeded from history). Falls back to a full replay (after=0) if the handle
+  // predates the field — harmless, since the deterministic message ids make the
+  // replay an idempotent replace.
+  const startSeq = session?.start_seq;
+
   useEffect(() => {
     if (!isLive || primaryBusy || primaryOwnedRef.current || attachedRef.current)
       return;
@@ -89,7 +107,8 @@ export function useSessionReconnect(
 
     (async () => {
       try {
-        const res = await fetch(sessionStreamUrl(threadId, 0), {
+        const after = Math.max(0, (startSeq ?? 1) - 1);
+        const res = await fetch(sessionStreamUrl(threadId, after), {
           headers: {
             Accept: "text/event-stream",
             "X-User-ID": getUserId(),
@@ -117,7 +136,7 @@ export function useSessionReconnect(
     })();
 
     return () => controller.abort();
-  }, [threadId, isLive, primaryBusy, setMessages]);
+  }, [threadId, isLive, primaryBusy, setMessages, startSeq]);
 
   return { reconnecting };
 }

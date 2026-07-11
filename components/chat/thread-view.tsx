@@ -54,8 +54,13 @@ export function ThreadView({ threadId }: { threadId: string }) {
   // on /chat with no route (see LandingView).
   const history = useThreadMessages(threadId);
 
-  // Wait for history before mounting the chat so initialMessages is correct.
-  if (history.isLoading) {
+  // Wait for history — FRESH history, not a stale cache snapshot — before
+  // mounting the chat so initialMessages is correct. `isFetchedAfterMount`
+  // matters on navigate-back to a mid-stream thread: the cached history
+  // predates the in-progress turn (its user message would be missing), and the
+  // Chat instance seeds initialMessages exactly once per mount, so we hold the
+  // skeleton for the one refetch round-trip and seed from current data.
+  if (history.isLoading || !history.isFetchedAfterMount) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
