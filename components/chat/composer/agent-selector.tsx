@@ -29,6 +29,7 @@ import {
   ChevronsUpDownIcon,
   InfoIcon,
   NetworkIcon,
+  SparklesIcon,
 } from "lucide-react";
 import { memo, useState } from "react";
 
@@ -40,10 +41,14 @@ export const AgentSelector = memo(function AgentSelector() {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const model = useSelectedModel();
 
+  const isAuto = selectedAgentId === "auto";
   const current = agents.find((a) => a.id === selectedAgentId);
 
   // Agents drive tool calls — only offer the picker when the model supports them.
   if (!modelSupportsTools(model)) return null;
+
+  const triggerLabel = isAuto ? "Auto" : (current?.name ?? "No agent");
+  const active = isAuto || !!current;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -55,16 +60,20 @@ export const AgentSelector = memo(function AgentSelector() {
               className={cn(
                 "flex h-9 max-w-[220px] items-center gap-2 rounded-full px-3 text-sm font-medium transition-colors",
                 "hover:bg-accent hover:text-foreground",
-                current ? "bg-accent text-foreground" : "text-muted-foreground",
+                active ? "bg-accent text-foreground" : "text-muted-foreground",
               )}
             >
-              <BotIcon
-                className={cn(
-                  "size-4 shrink-0",
-                  current && "text-[var(--ai-from)]",
-                )}
-              />
-              <span className="truncate">{current?.name ?? "No agent"}</span>
+              {isAuto ? (
+                <SparklesIcon className="size-4 shrink-0 text-[var(--ai-from)]" />
+              ) : (
+                <BotIcon
+                  className={cn(
+                    "size-4 shrink-0",
+                    current && "text-[var(--ai-from)]",
+                  )}
+                />
+              )}
+              <span className="truncate">{triggerLabel}</span>
               <ChevronsUpDownIcon className="size-3.5 shrink-0 opacity-60" />
             </button>
           </PopoverTrigger>
@@ -77,6 +86,30 @@ export const AgentSelector = memo(function AgentSelector() {
           <CommandList className="max-h-[320px]">
             <CommandEmpty>No agents available.</CommandEmpty>
             <CommandGroup>
+              <CommandItem
+                value="auto"
+                onSelect={() => {
+                  setAgent("auto");
+                  setOpen(false);
+                }}
+                className="flex items-start gap-2"
+              >
+                <CheckIcon
+                  className={cn(
+                    "mt-0.5 size-4 shrink-0",
+                    isAuto ? "opacity-100" : "opacity-0",
+                  )}
+                />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="flex items-center gap-1.5 truncate text-sm">
+                    <SparklesIcon className="size-3.5 text-[var(--ai-from)]" />
+                    Auto
+                  </span>
+                  <span className="truncate text-[11px] text-muted-foreground">
+                    Automatically pick the best agent for each message
+                  </span>
+                </div>
+              </CommandItem>
               <CommandItem
                 value="no-agent"
                 onSelect={() => {
