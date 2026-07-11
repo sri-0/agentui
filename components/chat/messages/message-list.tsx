@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
-import { FileTextIcon, HelpCircleIcon } from "lucide-react";
+import { FileIcon, FileTextIcon, HelpCircleIcon } from "lucide-react";
 import { memo } from "react";
 
 import { ThinkingIndicator } from "../loading";
@@ -224,7 +224,11 @@ const MessageItem = memo(function MessageItem({
                     })
                   }
                 >
-                  <FileTextIcon className="size-4" />
+                  {part.data.kind === "file" ? (
+                    <FileIcon className="size-4" />
+                  ) : (
+                    <FileTextIcon className="size-4" />
+                  )}
                   {part.data.title}
                 </Button>
               );

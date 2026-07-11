@@ -1,8 +1,14 @@
 "use client";
 
 import { MessageResponse } from "@/components/ai-elements/message";
-import { type ArtifactData, findArtifact } from "@/lib/chat/artifacts";
+import { Button } from "@/components/ui/button";
+import {
+  type ArtifactData,
+  downloadArtifact,
+  findArtifact,
+} from "@/lib/chat/artifacts";
 import type { ChatMessage } from "@/lib/chat/types";
+import { DownloadIcon, ExternalLinkIcon, FileIcon } from "lucide-react";
 
 import { useParsedCsv } from "./use-csv";
 
@@ -17,24 +23,12 @@ export function ArtifactView({
   if (!artifact) {
     return <p className="text-sm text-muted-foreground">Artifact not found.</p>;
   }
-  return (
-    <ArtifactBody
-      kind={artifact.kind}
-      content={artifact.content}
-      language={artifact.language}
-    />
-  );
+  return <ArtifactBody artifact={artifact} />;
 }
 
-function ArtifactBody({
-  kind,
-  content,
-  language,
-}: {
-  kind: ArtifactData["kind"];
-  content: string;
-  language?: string;
-}) {
+function ArtifactBody({ artifact }: { artifact: ArtifactData }) {
+  const { kind, content, language } = artifact;
+  if (kind === "file") return <FileCard artifact={artifact} />;
   if (kind === "csv") return <CsvTable content={content} />;
   if (kind === "html") {
     // Sandboxed (no scripts) — static HTML/CSS renders, nothing executes.
@@ -58,6 +52,72 @@ function ArtifactBody({
   return (
     <div className="text-sm">
       <MessageResponse>{md}</MessageResponse>
+    </div>
+  );
+}
+
+/** Human-readable byte size, e.g. 24576 → "24 KB". */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+/** Friendly label for a mime/extension (pptx/docx/xlsx → "PowerPoint" etc.). */
+function fileTypeLabel(a: ArtifactData): string {
+  const name = (a.filename ?? a.title ?? "").toLowerCase();
+  const mime = (a.mime ?? "").toLowerCase();
+  if (name.endsWith(".pptx") || mime.includes("presentation"))
+    return "PowerPoint presentation";
+  if (name.endsWith(".docx") || mime.includes("wordprocessing"))
+    return "Word document";
+  if (name.endsWith(".xlsx") || mime.includes("spreadsheet"))
+    return "Excel spreadsheet";
+  return a.mime || "File";
+}
+
+/**
+ * Download card for binary file artifacts (office docs). No inline preview —
+ * pptx/docx/xlsx can't be rendered in-browser, so we surface a clean card with
+ * filename, type, size and a prominent download + open-in-new-tab.
+ */
+function FileCard({ artifact }: { artifact: ArtifactData }) {
+  return (
+    <div className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-6">
+      <div className="flex items-start gap-4">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-md border bg-background">
+          <FileIcon className="size-6 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">
+            {artifact.filename ?? artifact.title}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {fileTypeLabel(artifact)}
+            {artifact.size != null ? ` · ${formatSize(artifact.size)}` : ""}
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          className="gap-2"
+          onClick={() => downloadArtifact(artifact)}
+          disabled={!artifact.url}
+        >
+          <DownloadIcon className="size-4" />
+          Download
+        </Button>
+        {artifact.url && (
+          <Button size="sm" variant="outline" className="gap-2" asChild>
+            <a href={artifact.url} target="_blank" rel="noopener noreferrer">
+              <ExternalLinkIcon className="size-4" />
+              Open in new tab
+            </a>
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
