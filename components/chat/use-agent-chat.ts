@@ -3,11 +3,12 @@
 import { Chat, useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { getUserId } from "@/lib/api/client";
 import { chatUrl } from "@/lib/chat/api";
 import type { ChatMessage, ChatRequestBody } from "@/lib/chat/types";
+import { deriveRichUsage, type RichUsage } from "@/lib/chat/usage";
 
 export function useAgentChat({
   id,
@@ -17,6 +18,19 @@ export function useAgentChat({
   initialMessages?: ChatMessage[];
 }) {
   const queryClient = useQueryClient();
+
+  // Usage captured ONCE per completed turn (and seeded from history on mount),
+  // NOT recomputed per streaming chunk. We store raw token totals (via
+  // deriveRichUsage, which prefers the exact backend `data-usage` part) so the
+  // ring can resolve `contextWindow` from the live selected model rather than a
+  // possibly-stale denominator. See AGENTS.md "Thread & chat-stream perf".
+  // contextWindow passed here is a placeholder — the ring uses the live model's
+  // window, only the token TOTALS from this result are consumed.
+  const [lastUsage, setLastUsage] = useState<RichUsage | null>(() =>
+    initialMessages && initialMessages.length
+      ? deriveRichUsage(initialMessages, 128_000)
+      : null,
+  );
   // Own the Chat instance (keyed by thread id) so secondary subscribers — e.g.
   // the live usage ring — can subscribe to the SAME instance via
   // useChat({ chat }) instead of spinning up a second, empty chat.
@@ -31,8 +45,13 @@ export function useAgentChat({
         // (with its provisional "New Chat" title) without a page reload. The
         // async-generated title is picked up shortly after by the list query's
         // refetchInterval (see useThreads).
-        onFinish: () => {
+        onFinish: ({ messages }) => {
           queryClient.invalidateQueries({ queryKey: ["threads"] });
+          // Capture final usage exactly once, at stream end. deriveRichUsage
+          // reads the backend `data-usage` part when present (exact) and falls
+          // back to a text estimate. Stored as raw totals so the ring resolves
+          // the denominator from the live model.
+          setLastUsage(deriveRichUsage(messages, 128_000));
         },
         transport: new DefaultChatTransport<ChatMessage>({
           api: chatUrl(),
@@ -69,5 +88,5 @@ export function useAgentChat({
   // experimental_throttle batches streaming updates (~20fps) so we re-render the
   // message subtree a few times/sec rather than per token. See AGENTS.md.
   const helpers = useChat<ChatMessage>({ chat, experimental_throttle: 50 });
-  return { ...helpers, chat };
+  return { ...helpers, chat, lastUsage };
 }

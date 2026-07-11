@@ -199,7 +199,7 @@ function CompletedRing({ viewed }: { viewed: boolean }) {
     <span
       aria-label={viewed ? "Viewed" : "Unread response"}
       className={cn(
-        "size-2 shrink-0 rounded-full border-[1.5px]",
+        "size-2.5 shrink-0 rounded-full border-2",
         viewed ? "border-muted-foreground/50" : "border-blue-500",
       )}
     />
@@ -255,25 +255,27 @@ function ThreadRow({
       <SidebarMenuButton asChild isActive={active} className="h-9">
         <Link href={`/chat/${id}`}>
           <span className="truncate">{title}</span>
-          {/* Single status icon per row. Priority: running/queued (green pulse)
-              > awaiting-input (exclamation) > terminal unread (blue ring) >
-              terminal viewed (gray ring) > none. */}
-          {session && (
-            <span className="ml-auto mr-0.5">
-              {session.status === "awaiting-input" ? (
-                <CircleAlertIcon
-                  aria-label="Awaiting your input"
-                  className="size-3.5 text-amber-500"
-                />
-              ) : activeSession ? (
-                <StatusDot />
-              ) : (
-                <CompletedRing viewed={!unviewed} />
-              )}
-            </span>
-          )}
         </Link>
       </SidebarMenuButton>
+      {/* Single status icon per row, absolutely positioned in the SAME slot as
+          the hover-trash (right-1). Fades out on row hover so the trash cleanly
+          replaces it with zero shift. Priority: running/queued (green pulse) >
+          awaiting-input (exclamation) > terminal unread (blue ring) > terminal
+          viewed (gray ring) > none. */}
+      {session && (
+        <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 transition-opacity group-hover/menu-item:opacity-0">
+          {session.status === "awaiting-input" ? (
+            <CircleAlertIcon
+              aria-label="Awaiting your input"
+              className="size-3.5 text-amber-500"
+            />
+          ) : activeSession ? (
+            <StatusDot />
+          ) : (
+            <CompletedRing viewed={!unviewed} />
+          )}
+        </span>
+      )}
       <SidebarMenuAction
         showOnHover
         onClick={() =>

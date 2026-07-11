@@ -85,7 +85,7 @@ export function ThreadChat({
   isTemporary: boolean;
   initialMessages: ChatMessage[];
 }) {
-  const { messages, sendMessage, setMessages, status, stop, chat } =
+  const { messages, sendMessage, setMessages, status, stop, lastUsage } =
     useAgentChat({
       id: threadId,
       initialMessages,
@@ -194,8 +194,8 @@ export function ThreadChat({
     [openSidepanel],
   );
   const contextSlot = useMemo(
-    () => <ThreadUsageRing chat={chat} onOpenUsage={onOpenUsage} />,
-    [chat, onOpenUsage],
+    () => <ThreadUsageRing lastUsage={lastUsage} onOpenUsage={onOpenUsage} />,
+    [lastUsage, onOpenUsage],
   );
 
   const artifacts = collectArtifacts(messages);
