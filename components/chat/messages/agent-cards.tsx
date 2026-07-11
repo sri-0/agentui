@@ -12,7 +12,7 @@ import {
   ChevronRightIcon,
   LoaderIcon,
 } from "lucide-react";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 
 /** Signature of sub-agent state shown on the cards: which agents exist, their
  *  lifecycle/duration, and progress steps — but NOT per-token deltas (the card
@@ -133,7 +133,16 @@ export const AgentCards = memo(function AgentCards({
   message: ChatMessage;
   streaming: boolean;
 }) {
-  const agents = collectAgents(message, streaming);
+  // The comparator below already blocks per-token re-renders, but a real event
+  // still re-renders this card — memoize the O(parts) scan on the same cheap
+  // content signature so a swarm turn with thousands of delta parts is only
+  // rescanned when the signature actually changes.
+  const cardsKey = agentCardsKey(message);
+  const agents = useMemo(
+    () => collectAgents(message, streaming),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cardsKey is the content signature of message
+    [cardsKey, streaming],
+  );
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   if (agents.length === 0) return null;
 
@@ -248,4 +257,9 @@ export const AgentCards = memo(function AgentCards({
       ))}
     </div>
   );
-});
+},
+// Content-signature comparator (AGENTS.md §8): re-render on real sub-agent
+// events (agent seen / lifecycle / progress), never on per-token deltas.
+(a, b) =>
+  a.streaming === b.streaming &&
+  agentCardsKey(a.message) === agentCardsKey(b.message));

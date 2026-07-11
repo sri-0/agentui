@@ -76,7 +76,11 @@ export function ThreadView({ threadId }: { threadId: string }) {
       key={threadId}
       threadId={threadId}
       isTemporary={false}
-      initialMessages={fromHistory(history.data ?? [])}
+      initialMessages={fromHistory(history.data?.messages ?? [])}
+      // Head event-log seq folded into the history above (present only while a
+      // session is ACTIVE). The reconnect hook attaches the live stream at
+      // exactly this seq so only the tail streams in — no full-run replay.
+      liveHeadSeq={history.data?.live?.head_seq}
     />
   );
 }
@@ -85,10 +89,12 @@ export function ThreadChat({
   threadId,
   isTemporary,
   initialMessages,
+  liveHeadSeq,
 }: {
   threadId: string;
   isTemporary: boolean;
   initialMessages: ChatMessage[];
+  liveHeadSeq?: number;
 }) {
   const { messages, sendMessage, setMessages, status, stop, lastUsage } =
     useAgentChat({
@@ -131,6 +137,7 @@ export function ThreadChat({
     isTemporary ? "" : threadId,
     status,
     setMessages,
+    liveHeadSeq,
   );
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
@@ -203,7 +210,19 @@ export function ThreadChat({
     [lastUsage, onOpenUsage],
   );
 
-  const artifacts = collectArtifacts(messages);
+  // collectArtifacts is O(messages×parts) — far too heavy to run on every
+  // throttled streaming chunk of a swarm turn (~7k parts). Key it on a cheap
+  // single-pass artifact-part count: artifact parts are upserted by id (a NEW
+  // part only appears for a new artifact event), so the count changes exactly
+  // when the collection does.
+  let artifactSig = 0;
+  for (const m of messages)
+    for (const p of m.parts) if (p.type === "data-artifact") artifactSig++;
+  const artifacts = useMemo(
+    () => collectArtifacts(messages),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- artifactSig is the content signature of messages
+    [artifactSig],
+  );
   const latestArtifactId = artifacts.at(-1)?.id;
 
   // Auto-open the artifacts panel the moment a new artifact is generated during

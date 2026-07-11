@@ -39,6 +39,24 @@ export function useThreads() {
   });
 }
 
+/**
+ * Live-session info attached to a thread-history response while the backend
+ * coordinator has an ACTIVE run for the thread. The history already contains
+ * the in-progress assistant turn FULLY FOLDED up to `head_seq`; a client that
+ * wants to keep streaming attaches the session stream at `after = head_seq`
+ * (tail only — no replay of what the fetch already delivered).
+ */
+export interface ThreadLiveInfo {
+  head_seq: number;
+  turn: number;
+  status: string;
+}
+
+export interface ThreadHistory {
+  messages: ThreadMessage[];
+  live?: ThreadLiveInfo;
+}
+
 export function useThreadMessages(threadId: string | null) {
   const qc = useQueryClient();
   const query = useQuery({
@@ -53,14 +71,18 @@ export function useThreadMessages(threadId: string | null) {
     // when the tab regains focus so returning to a just-finished thread always
     // picks up the persisted parts.
     refetchOnWindowFocus: true,
-    queryFn: async () => {
+    queryFn: async (): Promise<ThreadHistory> => {
       try {
         const res = await apiFetch<
-          ListResponse<ThreadMessage> | ThreadMessage[]
+          | (ListResponse<ThreadMessage> & { live?: ThreadLiveInfo })
+          | ThreadMessage[]
         >(`/v1/threads/${threadId}/messages`);
-        return unwrap(res);
+        // Settled threads keep the plain-array wire shape; a thread with an
+        // ACTIVE session comes wrapped with the folded live turn + head seq.
+        if (Array.isArray(res)) return { messages: res };
+        return { messages: res.data ?? [], live: res.live };
       } catch {
-        return [] as ThreadMessage[];
+        return { messages: [] };
       }
     },
   });
