@@ -17,6 +17,11 @@ export function useThreads() {
   return useQuery({
     queryKey: ["threads"],
     retry: false,
+    // The title of a freshly-created thread is generated ASYNC by the backend a
+    // few seconds after the run finishes. A modest poll (mirrors useSessions)
+    // lets the new thread AND its generated title converge live without a
+    // reload; the invalidate-on-finish in useAgentChat handles immediacy.
+    refetchInterval: 5000,
     queryFn: async () => {
       // Thread persistence needs OpenSearch/Valkey; if it's down the backend
       // returns 500. Degrade gracefully to an empty list rather than erroring.

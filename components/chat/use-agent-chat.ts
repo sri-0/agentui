@@ -2,6 +2,7 @@
 
 import { Chat, useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { getUserId } from "@/lib/api/client";
@@ -15,6 +16,7 @@ export function useAgentChat({
   id: string;
   initialMessages?: ChatMessage[];
 }) {
+  const queryClient = useQueryClient();
   // Own the Chat instance (keyed by thread id) so secondary subscribers — e.g.
   // the live usage ring — can subscribe to the SAME instance via
   // useChat({ chat }) instead of spinning up a second, empty chat.
@@ -23,6 +25,15 @@ export function useAgentChat({
       new Chat<ChatMessage>({
         id,
         messages: initialMessages,
+        // Thread creation is backend-side on the first user message, so a fresh
+        // chat's thread doc only exists once a run finishes. Invalidate the
+        // sidebar's thread list here so a brand-new conversation appears live
+        // (with its provisional "New Chat" title) without a page reload. The
+        // async-generated title is picked up shortly after by the list query's
+        // refetchInterval (see useThreads).
+        onFinish: () => {
+          queryClient.invalidateQueries({ queryKey: ["threads"] });
+        },
         transport: new DefaultChatTransport<ChatMessage>({
           api: chatUrl(),
           // Talk DIRECTLY to the Go backend, which parses AI SDK UIMessages and
