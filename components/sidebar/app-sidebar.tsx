@@ -26,6 +26,7 @@ import { groupThreads, threadTitle } from "@/lib/group-threads";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import {
+  CircleAlertIcon,
   MoonIcon,
   PenSquareIcon,
   SearchIcon,
@@ -103,8 +104,6 @@ export function AppSidebar() {
 
         <SidebarSeparator className="mx-0 my-1 group-data-[collapsible=icon]:hidden" />
 
-        <RunningSessions activeId={activeId} />
-
         <div className="group-data-[collapsible=icon]:hidden">
           {isLoading && (
             <SidebarGroup className="px-0">
@@ -167,54 +166,6 @@ export function AppSidebar() {
   );
 }
 
-/** Live "Running" section: sessions the backend still holds open (queued /
- *  running / awaiting-input) plus recently finished ones, so the user can leave
- *  and rejoin a running swarm. Degrades to nothing if /v1/sessions is empty or
- *  errors (the hook try/catches to []). */
-function RunningSessions({ activeId }: { activeId?: string }) {
-  const { data: sessions = [] } = useSessions();
-  // Surface the interesting ones first; hide fully-idle noise when there's
-  // nothing live to show.
-  const live = sessions.filter(
-    (s) =>
-      s.status === "running" ||
-      s.status === "awaiting-input" ||
-      s.status === "queued",
-  );
-  if (live.length === 0) return null;
-
-  return (
-    <SidebarGroup className="px-0 group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel className="px-2 text-xs font-semibold text-sidebar-foreground/65">
-        Running
-      </SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu className="gap-0.5">
-          {live.map((s) => (
-            <SessionRow
-              key={s.session_id}
-              session={s}
-              active={s.session_id === activeId}
-            />
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  );
-}
-
-const STATUS_STYLE: Record<
-  SessionHandle["status"],
-  { label: string; dot: string; pulse: boolean }
-> = {
-  queued: { label: "Queued", dot: "bg-amber-500", pulse: true },
-  running: { label: "Running", dot: "bg-emerald-500", pulse: true },
-  "awaiting-input": { label: "Needs input", dot: "bg-blue-500", pulse: true },
-  done: { label: "Done", dot: "bg-muted-foreground/40", pulse: false },
-  error: { label: "Error", dot: "bg-destructive", pulse: false },
-  cancelled: { label: "Cancelled", dot: "bg-muted-foreground/40", pulse: false },
-};
-
 /** A session is "active" (still holding the backend open) while queued/running/
  *  awaiting-input; terminal once done/error/cancelled. */
 function isActiveStatus(status: SessionHandle["status"]): boolean {
@@ -225,64 +176,33 @@ function isActiveStatus(status: SessionHandle["status"]): boolean {
   );
 }
 
-/** Pulsing status dot (ping ring + solid core), reused by the Running section
- *  rows and the active-session indicator on the main thread rows. */
-function StatusDot({ status }: { status: SessionHandle["status"] }) {
-  const s = STATUS_STYLE[status] ?? STATUS_STYLE.running;
+/** Pulsing emerald status dot (ping ring + solid core) for a running/queued
+ *  session on a thread row. */
+function StatusDot() {
   return (
-    <span className="relative flex size-2 shrink-0 items-center justify-center">
-      {s.pulse && (
-        <span
-          className={cn(
-            "absolute inline-flex size-2 animate-ping rounded-full opacity-75",
-            s.dot,
-          )}
-        />
-      )}
-      <span className={cn("relative inline-flex size-2 rounded-full", s.dot)} />
+    <span
+      aria-label="Running"
+      className="relative flex size-2 shrink-0 items-center justify-center"
+    >
+      <span className="absolute inline-flex size-2 animate-ping rounded-full bg-emerald-500 opacity-75" />
+      <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
     </span>
   );
 }
 
-/** Static "completed" ring for a finished-but-unviewed thread — a hollow ring
- *  (NOT the pulse) so it reads as "there's a result waiting" rather than "still
- *  working". Disappears once the session is marked viewed. */
-function CompletedRing() {
+/** Static hollow "completed" ring for a terminal thread. Blue = an unread
+ *  result waiting; gray = the session is still within the retention window but
+ *  the user has already seen it. Reads as "there's a result" rather than "still
+ *  working" (that's the pulse). */
+function CompletedRing({ viewed }: { viewed: boolean }) {
   return (
     <span
-      aria-label="Completed"
-      className="size-2 shrink-0 rounded-full border-[1.5px] border-emerald-500"
+      aria-label={viewed ? "Viewed" : "Unread response"}
+      className={cn(
+        "size-2 shrink-0 rounded-full border-[1.5px]",
+        viewed ? "border-muted-foreground/50" : "border-blue-500",
+      )}
     />
-  );
-}
-
-function SessionRow({
-  session,
-  active,
-}: {
-  session: SessionHandle;
-  active: boolean;
-}) {
-  const s = STATUS_STYLE[session.status] ?? STATUS_STYLE.running;
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        asChild
-        isActive={active}
-        tooltip={s.label}
-        className="h-9"
-      >
-        {/* session_id is the thread id — clicking rejoins that thread (which
-            reconnects to the live stream, see useSessionReconnect). */}
-        <Link href={`/chat/${session.session_id}`}>
-          <StatusDot status={session.status} />
-          <span className="truncate">{session.agent_id || session.session_id}</span>
-          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-            {s.label}
-          </span>
-        </Link>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
   );
 }
 
@@ -301,10 +221,12 @@ function ThreadRow({
   const del = useDeleteThread();
   const markViewed = useMarkViewed();
 
-  // A joined session is either active (pulse) or terminal. The completed ring
-  // only shows for a terminal run the user hasn't opened yet.
+  // A joined session is either active (pulse) or terminal. Terminal sessions
+  // still present in useSessions() (i.e. within the retention window) show a
+  // ring: blue if the user hasn't opened it yet, gray once viewed.
   const activeSession = session && isActiveStatus(session.status);
-  const unviewed = session && !activeSession && !session.viewed;
+  const terminal = session && !activeSession;
+  const unviewed = Boolean(terminal && !session.viewed);
 
   // Mark viewed the moment the user opens a finished-but-unviewed thread. Firing
   // on `active && unviewed` covers both navigating into /chat/{id} and the
@@ -333,14 +255,21 @@ function ThreadRow({
       <SidebarMenuButton asChild isActive={active} className="h-9">
         <Link href={`/chat/${id}`}>
           <span className="truncate">{title}</span>
-          {activeSession && (
+          {/* Single status icon per row. Priority: running/queued (green pulse)
+              > awaiting-input (exclamation) > terminal unread (blue ring) >
+              terminal viewed (gray ring) > none. */}
+          {session && (
             <span className="ml-auto mr-0.5">
-              <StatusDot status={session.status} />
-            </span>
-          )}
-          {unviewed && (
-            <span className="ml-auto mr-0.5">
-              <CompletedRing />
+              {session.status === "awaiting-input" ? (
+                <CircleAlertIcon
+                  aria-label="Awaiting your input"
+                  className="size-3.5 text-amber-500"
+                />
+              ) : activeSession ? (
+                <StatusDot />
+              ) : (
+                <CompletedRing viewed={!unviewed} />
+              )}
             </span>
           )}
         </Link>
