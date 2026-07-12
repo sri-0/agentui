@@ -46,7 +46,7 @@ export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       selectedModel: null,
-      selectedAgentId: null,
+      selectedAgentId: "auto",
       reasoningEffort: "off",
       temporary: false,
       sidepanel: null,
@@ -81,6 +81,22 @@ export const useUiStore = create<UiState>()(
     }),
     {
       name: "agentui-ui",
+      // Bumped to 1 so existing users (who have a persisted agent, or the old
+      // `null` default) get migrated onto the new "auto" default and actually
+      // SEE Auto selected. Only selectedAgentId is touched; other prefs pass
+      // through untouched.
+      version: 1,
+      migrate: (persisted) => {
+        const s = (persisted ?? {}) as {
+          selectedModel?: string | null;
+          reasoningEffort?: ReasoningEffort;
+        };
+        return {
+          selectedModel: s.selectedModel ?? null,
+          selectedAgentId: "auto",
+          reasoningEffort: s.reasoningEffort ?? "off",
+        };
+      },
       // only persist durable preferences, not ephemeral panel/sidebar state
       partialize: (s) => ({
         selectedModel: s.selectedModel,
