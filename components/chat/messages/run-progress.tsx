@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAgents } from "@/lib/api/agents";
 import type { ChatMessage } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
-import { BotIcon, Check, ChevronDownIcon } from "lucide-react";
+import { Ban, BotIcon, Check, ChevronDownIcon } from "lucide-react";
 import { memo } from "react";
 
 /** Signature of the run-level (orchestrator) progress — changes only when a new
@@ -48,10 +48,14 @@ export const RunProgress = memo(function RunProgress({
   message,
   streaming,
   isLast,
+  stopped = false,
 }: {
   message: ChatMessage;
   streaming: boolean;
   isLast: boolean;
+  /** This turn was aborted by the user (Stop). Show a "Stopped" badge instead of
+   *  a false green "Completed" — the run didn't finish, it was cancelled. */
+  stopped?: boolean;
 }) {
   const { data: agents = [] } = useAgents();
 
@@ -91,6 +95,11 @@ export const RunProgress = memo(function RunProgress({
             {working ? (
               <>
                 <PulseDot /> Running · {totalSteps} steps
+              </>
+            ) : stopped ? (
+              <>
+                <Ban className="text-amber-500" /> Stopped · {totalSteps} step
+                {totalSteps === 1 ? "" : "s"}
               </>
             ) : (
               <>

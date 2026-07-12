@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/resizable";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useModels } from "@/lib/api/models";
+import { cancelSession } from "@/lib/api/sessions";
 import { useThreadMessages } from "@/lib/api/threads";
 import { collectArtifacts } from "@/lib/chat/artifacts";
 import { fromHistory } from "@/lib/chat/from-history";
@@ -22,8 +23,16 @@ import { takePendingMessage } from "@/lib/chat/pending";
 import type { ChatMessage } from "@/lib/chat/types";
 import { Button } from "@/components/ui/button";
 import { useUiStore } from "@/stores/ui-store";
+import { useQueryClient } from "@tanstack/react-query";
 import { FileTextIcon, LoaderIcon, MessageCircleDashedIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { Composer } from "./composer/composer";
 import { ThreadUsageRing } from "./composer/thread-usage-ring";
@@ -78,6 +87,30 @@ export function ThreadChat({
       initialMessages,
     });
   const buildBody = useRequestBody(threadId, isTemporary);
+  const queryClient = useQueryClient();
+
+  // Whether the CURRENT (last) turn was stopped by the user. Aborting the AI-SDK
+  // stream drops `status` back to "ready", which reads identically to a natural
+  // finish — so without this flag the run-progress badge would flip to a false
+  // green "Completed". Cleared whenever a new turn starts (send / resend).
+  const [stopped, setStopped] = useState(false);
+
+  // Stop = abort the client stream AND cancel the server-side run. The run
+  // executes in the background decoupled from the connection, so `stop()` alone
+  // leaves it executing and the session `running` forever. Persisted threads own
+  // a server session keyed by their thread id (session_id === thread id);
+  // temporary chats have no server session to cancel.
+  const handleStop = useCallback(() => {
+    stop();
+    setStopped(true);
+    if (!isTemporary) {
+      void cancelSession(threadId).finally(() => {
+        // Surface the `cancelled` status in the sidebar immediately rather than
+        // waiting for useSessions' 5s refetchInterval.
+        queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      });
+    }
+  }, [stop, isTemporary, threadId, queryClient]);
 
   // HITL: approve/deny a tool interrupt, then merge the backend continuation
   // (tool result + final answer) back into the conversation.
@@ -120,6 +153,7 @@ export function ThreadChat({
   const onSubmit = useCallback(
     (message: PromptInputMessage) => {
       if (!message.text.trim() && (message.files?.length ?? 0) === 0) return;
+      setStopped(false);
       sendMessage(
         { text: message.text, files: message.files },
         { body: buildBody({ hasFiles: (message.files?.length ?? 0) > 0 }) },
@@ -169,7 +203,11 @@ export function ThreadChat({
 
           <Conversation className="flex-1">
             <ConversationContent className="px-4 py-6">
-              <MessageList messages={messages} status={status} />
+              <MessageList
+                messages={messages}
+                status={status}
+                stopped={stopped}
+              />
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
@@ -180,7 +218,7 @@ export function ThreadChat({
               <Composer
                 onSubmit={onSubmit}
                 status={status}
-                onStop={stop}
+                onStop={handleStop}
                 contextSlot={contextSlot}
               />
               <p className="mt-2 text-center text-xs text-muted-foreground">

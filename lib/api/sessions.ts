@@ -30,6 +30,29 @@ function unwrap<T>(res: ListResponse<T> | T[]): T[] {
   return Array.isArray(res) ? res : (res.data ?? []);
 }
 
+/**
+ * Cancel a still-running server-side run. A run executes in the background,
+ * decoupled from the client stream, so aborting the AI-SDK stream alone leaves
+ * the server run executing (and the session `running`) indefinitely. The Stop
+ * button MUST also hit this so the backend transitions `running → cancelled`.
+ *
+ * Best-effort / idempotent: a 404 means the run already settled (done/cancelled),
+ * which is a no-op for us. `apiFetch` sends the X-User-ID identity header so the
+ * cancel is scoped to the current user, matching the run's owner.
+ */
+export async function cancelSession(sessionId: string): Promise<void> {
+  try {
+    await apiFetch(`/v1/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+      method: "POST",
+    });
+  } catch (err) {
+    // Already settled (no active run) — nothing to cancel. Swallow so a Stop
+    // click never surfaces an error for a race we don't care about.
+    if (err instanceof ApiError && err.status === 404) return;
+    throw err;
+  }
+}
+
 /** List the user's runs (running + recently finished). */
 export function useSessions() {
   return useQuery({

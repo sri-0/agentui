@@ -27,9 +27,13 @@ type Part = ChatMessage["parts"][number];
 export function MessageList({
   messages,
   status,
+  stopped = false,
 }: {
   messages: ChatMessage[];
   status: ChatStatus;
+  /** The last turn was aborted by the user (Stop). Reflected as a "Stopped"
+   *  run-progress badge instead of a false green "Completed". */
+  stopped?: boolean;
 }) {
   const last = messages[messages.length - 1];
   const waiting =
@@ -37,14 +41,18 @@ export function MessageList({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      {messages.map((message, index) => (
-        <MessageItem
-          key={message.id}
-          message={message}
-          streaming={status === "streaming"}
-          isLast={index === messages.length - 1}
-        />
-      ))}
+      {messages.map((message, index) => {
+        const isLast = index === messages.length - 1;
+        return (
+          <MessageItem
+            key={message.id}
+            message={message}
+            streaming={status === "streaming"}
+            isLast={isLast}
+            stopped={stopped && isLast}
+          />
+        );
+      })}
       {waiting && (
         <div className="flex">
           <ThinkingIndicator />
@@ -61,10 +69,12 @@ const MessageItem = memo(function MessageItem({
   message,
   streaming,
   isLast,
+  stopped = false,
 }: {
   message: ChatMessage;
   streaming: boolean;
   isLast: boolean;
+  stopped?: boolean;
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const { data: agents = [] } = useAgents();
@@ -131,6 +141,7 @@ const MessageItem = memo(function MessageItem({
               message={message}
               streaming={streaming}
               isLast={isLast}
+              stopped={stopped}
             />
             {!isSwarm && (
               <AgentCards message={message} streaming={streaming && isLast} />
