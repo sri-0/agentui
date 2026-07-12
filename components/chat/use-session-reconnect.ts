@@ -14,21 +14,107 @@ type SetMessages = (
   arg: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
 ) => void;
 
+type Parts = ChatMessage["parts"];
+
+/** A tool result whose `tool-input-*` frames predate the tail attach point —
+ *  held out of the tail stream and applied onto the folded base part instead. */
+type OrphanOutput = { output?: unknown; errorText?: string };
+
+/**
+ * Splice the live TAIL of an in-progress turn onto its folded base. `base` is
+ * the turn as the history fetch delivered it (folded up to the reported
+ * head_seq); `tail` is the same deterministic message id rebuilt from ONLY the
+ * events after that seq. Rules:
+ *
+ * - In-place data parts with stable ids ("tasks", "usage", artifact ids,
+ *   `agent-step` ids) re-emitted in the tail supersede their base copy — drop
+ *   the base one so e.g. the task board doesn't render twice. Same for a
+ *   dynamic-tool part re-surfaced in the tail (e.g. a HITL resume).
+ * - A tool RESULT arriving in the tail for a call made before the attach point
+ *   (an "orphan output") is applied onto the base's folded tool part.
+ * - A text/reasoning part split across the fold/tail boundary is coalesced so
+ *   the answer doesn't render as two markdown blocks mid-sentence.
+ */
+function mergeTailParts(
+  base: Parts,
+  tail: Parts,
+  orphanOutputs: Map<string, OrphanOutput>,
+): Parts {
+  if (tail.length === 0 && orphanOutputs.size === 0) return base;
+
+  const superseded = new Set<string>();
+  const supersededTools = new Set<string>();
+  for (const p of tail) {
+    const id = (p as { id?: unknown }).id;
+    if (typeof id === "string" && p.type.startsWith("data-")) {
+      superseded.add(`${p.type}:${id}`);
+    }
+    if (p.type === "dynamic-tool") supersededTools.add(p.toolCallId);
+  }
+  let kept =
+    superseded.size || supersededTools.size
+      ? base.filter((p) => {
+          if (p.type === "dynamic-tool" && supersededTools.has(p.toolCallId))
+            return false;
+          const id = (p as { id?: unknown }).id;
+          return !(typeof id === "string" && superseded.has(`${p.type}:${id}`));
+        })
+      : base.slice();
+
+  if (orphanOutputs.size) {
+    kept = kept.map((p) => {
+      if (p.type !== "dynamic-tool") return p;
+      const res = orphanOutputs.get(p.toolCallId);
+      if (!res) return p;
+      return res.errorText != null
+        ? { ...p, state: "output-error", errorText: res.errorText }
+        : { ...p, state: "output-available", output: res.output };
+    }) as Parts;
+  }
+
+  let rest = tail;
+  const last = kept[kept.length - 1];
+  const first = rest[0];
+  if (
+    last &&
+    first &&
+    last.type === first.type &&
+    (last.type === "text" || last.type === "reasoning")
+  ) {
+    kept[kept.length - 1] = {
+      ...last,
+      text:
+        ((last as { text?: string }).text ?? "") +
+        ((first as { text?: string }).text ?? ""),
+    } as Parts[number];
+    rest = rest.slice(1);
+  }
+  return [...kept, ...rest];
+}
+
 /**
  * Rejoin a still-running server-side session (Phase 01). Runs execute in the
  * background decoupled from the connection, so when a thread view loads (or the
  * client dropped mid-run) and the backend reports the session as
  * `running`/`awaiting-input`, we attach to `GET /v1/sessions/{id}/stream` and
- * merge the replay-then-live AI-SDK stream into the chat by upserting messages
- * on `id` — the same merge shape used by the HITL resume.
+ * merge the live stream into the chat by upserting messages on their
+ * deterministic ids — the same merge shape used by the HITL resume.
  *
- * Hybrid rebuild: finished turns are seeded from persisted history (fromHistory
- * in ThreadView), and this hook attaches at `after = start_seq - 1` — the
- * session handle's first sequence for the in-progress run — so the backend
- * replays exactly the current turn's events, not the whole session log. The
- * backend stamps the deterministic `{session}:{turn}:assistant` message id on
- * the replayed start frame, so the upsert below is a true idempotent replace
- * against both the live-streamed and the reloaded rendering of the same turn.
+ * TAIL-ONLY attach: the thread history fetch is session-aware — while a run is
+ * active, `GET /v1/threads/{id}/messages` already returns the in-progress
+ * assistant turn FULLY FOLDED (projected server-side from the event log) plus
+ * the head seq it folded up to (`liveHeadSeq`, threaded in by ThreadView from
+ * the same snapshot that seeded `initialMessages`). So the thread paints
+ * instantly from the fetch, and this hook attaches the live stream at
+ * `after = liveHeadSeq`: only NEW events stream in, spliced onto the folded
+ * base via mergeTailParts. No full-run delta replay on the client. When the
+ * fetch reported no live head (e.g. the run started between fetch and attach),
+ * we fall back to replaying the current turn from `start_seq - 1` — the
+ * deterministic message ids make that an idempotent replace.
+ *
+ * Merges are THROTTLED (~50ms, matching the primary transport's
+ * `experimental_throttle`) so a burst of tail chunks batches into a few
+ * setMessages calls instead of one per chunk.
  *
  * Only attaches when the client is NOT already streaming this thread (so we
  * never double up on the primary transport), and once per session id. Crucially,
@@ -42,6 +128,7 @@ export function useSessionReconnect(
   threadId: string,
   status: ChatStatus,
   setMessages: SetMessages,
+  liveHeadSeq?: number,
 ): { reconnecting: boolean } {
   // The user's live-session list (already polled for the sidebar) is the source
   // of truth for "which threads have an ACTIVE run". Gate the per-thread status
@@ -91,11 +178,15 @@ export function useSessionReconnect(
   const primaryOwnedRef = useRef(false);
   if (primaryBusy) primaryOwnedRef.current = true;
 
-  // Replay only the in-progress run: its first event-log seq is start_seq, so
-  // `after = start_seq - 1` skips every already-persisted turn (those are
-  // seeded from history). Falls back to a full replay (after=0) if the handle
-  // predates the field — harmless, since the deterministic message ids make the
-  // replay an idempotent replace.
+  // Captured ONCE at mount: the Chat instance seeds initialMessages exactly once
+  // (from the same history snapshot this head seq came with), so attaching at
+  // the captured value keeps fetch + tail gap-free by construction even if a
+  // later background refetch reports a newer head.
+  const headSeqRef = useRef(liveHeadSeq);
+
+  // Fallback when the history fetch carried no live head: replay only the
+  // in-progress run — its first event-log seq is start_seq, so
+  // `after = start_seq - 1` skips every already-persisted turn.
   const startSeq = session?.start_seq;
 
   useEffect(() => {
@@ -104,10 +195,13 @@ export function useSessionReconnect(
     attachedRef.current = true;
     const controller = new AbortController();
     setReconnecting(true);
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     (async () => {
       try {
-        const after = Math.max(0, (startSeq ?? 1) - 1);
+        const headSeq = headSeqRef.current;
+        const tailOnly = headSeq != null;
+        const after = tailOnly ? headSeq : Math.max(0, (startSeq ?? 1) - 1);
         const res = await fetch(sessionStreamUrl(threadId, after), {
           headers: {
             Accept: "text/event-stream",
@@ -117,20 +211,92 @@ export function useSessionReconnect(
         });
         if (!res.ok || !res.body) return;
 
-        for await (const msg of readUIMessageStream<ChatMessage>({
-          stream: sseToChunkStream(res.body),
-        })) {
+        // In tail mode the stream re-opens the SAME deterministic message id but
+        // carries only the events after headSeq — so remember each id's folded
+        // base parts (as fetched) and splice the growing tail onto them.
+        //
+        // A tail can also carry a tool RESULT whose `tool-input-*` frames came
+        // before the attach point. The AI-SDK message reader treats such an
+        // orphan `tool-output-available` as a hard error and silently ENDS the
+        // stream (dropping everything after it, including the final answer), so
+        // hold those chunks out of the stream and apply them onto the folded
+        // base tool part in the merge instead.
+        const baseParts = new Map<string, Parts>();
+        const orphanOutputs = new Map<string, OrphanOutput>();
+        const seenToolInputs = new Set<string>();
+        let chunks = sseToChunkStream(res.body);
+        if (tailOnly) {
+          chunks = chunks.pipeThrough(
+            new TransformStream({
+              transform(chunk, controller) {
+                const c = chunk as {
+                  type?: string;
+                  toolCallId?: string;
+                  output?: unknown;
+                  errorText?: string;
+                };
+                if (
+                  (c.type === "tool-input-start" ||
+                    c.type === "tool-input-available") &&
+                  c.toolCallId
+                ) {
+                  seenToolInputs.add(c.toolCallId);
+                } else if (
+                  (c.type === "tool-output-available" ||
+                    c.type === "tool-output-error") &&
+                  c.toolCallId &&
+                  !seenToolInputs.has(c.toolCallId)
+                ) {
+                  orphanOutputs.set(c.toolCallId, {
+                    output: c.output,
+                    errorText: c.errorText,
+                  });
+                  return;
+                }
+                controller.enqueue(chunk);
+              },
+            }),
+          );
+        }
+        let pending: ChatMessage | null = null;
+        const flush = () => {
+          timer = null;
+          const msg = pending;
+          if (!msg) return;
+          pending = null;
           setMessages((prev) => {
             const idx = prev.findIndex((m) => m.id === msg.id);
             if (idx === -1) return [...prev, msg];
             const copy = prev.slice();
-            copy[idx] = msg;
+            if (tailOnly) {
+              let base = baseParts.get(msg.id);
+              if (!base) {
+                base = prev[idx].parts;
+                baseParts.set(msg.id, base);
+              }
+              copy[idx] = {
+                ...msg,
+                parts: mergeTailParts(base, msg.parts, orphanOutputs),
+              };
+            } else {
+              copy[idx] = msg;
+            }
             return copy;
           });
+        };
+
+        for await (const msg of readUIMessageStream<ChatMessage>({
+          stream: chunks,
+        })) {
+          pending = msg;
+          if (timer == null) timer = setTimeout(flush, 50);
         }
+        if (timer != null) clearTimeout(timer);
+        flush(); // final state, applied unconditionally
       } catch {
         /* aborted or network drop — leave what we merged so far */
       } finally {
+        if (timer != null) clearTimeout(timer);
         setReconnecting(false);
       }
     })();
