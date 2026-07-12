@@ -1,6 +1,5 @@
 "use client";
 
-import { MessageResponse } from "@/components/ai-elements/message";
 import { Badge } from "@/components/ui/badge";
 import { formatDuration } from "@/lib/dayjs";
 import { cn } from "@/lib/utils";
@@ -31,61 +30,6 @@ function agentCardsKey(message: ChatMessage): string {
   }
   return `${[...seen].sort().join(",")}|${lifecycle}|${prog}`;
 }
-
-/** Concatenated live text length for one agent — used to memoize the inline
- *  preview so it re-renders on THAT child's tokens only (not the whole list). */
-function agentTextLen(message: ChatMessage, agent: string): number {
-  let n = 0;
-  for (const p of message.parts) {
-    if (
-      p.type === "data-agent-delta" &&
-      p.data.agent === agent &&
-      p.data.kind === "text"
-    )
-      n += p.data.delta.length;
-  }
-  return n;
-}
-
-/**
- * A compact LIVE preview of one sub-agent's streamed answer, rendered with the
- * SAME Streamdown component (`MessageResponse`) as the main thread and side
- * panel — so inline swarm output looks "no different to the other stream".
- * Memoized on the agent's own accumulated text length so a token for child A
- * doesn't re-render child B's preview. Only mounted for still-working children;
- * the finished output lives in the side panel / task board.
- */
-const AgentLivePreview = memo(
-  function AgentLivePreview({
-    message,
-    agent,
-  }: {
-    message: ChatMessage;
-    agent: string;
-  }) {
-    let text = "";
-    for (const p of message.parts) {
-      if (
-        p.type === "data-agent-delta" &&
-        p.data.agent === agent &&
-        p.data.kind === "text"
-      )
-        text += p.data.delta;
-    }
-    if (!text) return null;
-    // Tail-clip: show the most recent output so the card stays compact while the
-    // full transcript remains one click away in the side panel.
-    const preview = text.length > 600 ? `…${text.slice(-600)}` : text;
-    return (
-      <div className="ml-1 max-h-40 overflow-hidden border-l border-muted pl-3.5 text-xs text-muted-foreground [&_*]:text-xs">
-        <MessageResponse>{preview}</MessageResponse>
-      </div>
-    );
-  },
-  (a, b) =>
-    a.agent === b.agent &&
-    agentTextLen(a.message, a.agent) === agentTextLen(b.message, b.agent),
-);
 
 type Step = {
   label: string;
@@ -265,10 +209,6 @@ export const AgentCards = memo(function AgentCards({
             </Badge>
             <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
           </button>
-
-          {a.status === "working" && (
-            <AgentLivePreview message={message} agent={a.agent} />
-          )}
 
           {a.steps.length > 0 && (
             <ul className="ml-1 space-y-1.5 border-l border-muted pl-3.5 text-xs">
