@@ -101,9 +101,14 @@ export type ChatDataParts = {
   artifact: {
     id: string;
     title: string;
-    kind: "markdown" | "code" | "html" | "json" | "csv";
+    kind: "markdown" | "code" | "html" | "json" | "csv" | "file";
     content: string;
     language?: string;
+    /** file-kind only: remote binary served with Content-Disposition attachment */
+    url?: string;
+    mime?: string;
+    filename?: string;
+    size?: number;
   };
   /** usage + context-window metering for the context circle / usage panel */
   usage: {
