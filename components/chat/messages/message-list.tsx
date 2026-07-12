@@ -6,7 +6,6 @@ import {
   MessageResponse,
 } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
-import { useAgents } from "@/lib/api/agents";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
 import type { ChatStatus } from "ai";
@@ -23,6 +22,12 @@ import { RunProgress } from "./run-progress";
 import { ToolCard } from "./tool-card";
 
 type Part = ChatMessage["parts"][number];
+
+/** Swarm orchestration tools whose raw generic tool cards are noise in the
+ *  transcript — their state is surfaced by the TaskBar (`data-task-list`) and the
+ *  sub-agent cards, so the raw cards are hidden. The TaskBar reads the separate
+ *  `data-task-list` part, NOT these tool calls, so hiding them is safe. */
+const HIDDEN_TOOL_CARDS = new Set(["task", "task_join", "todowrite"]);
 
 export function MessageList({
   messages,
@@ -77,16 +82,7 @@ const MessageItem = memo(function MessageItem({
   stopped?: boolean;
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
-  const { data: agents = [] } = useAgents();
   const isUser = message.role === "user";
-
-  // Is this a swarm/coordinator run? Determine it from the AGENT TYPE (known
-  // from message metadata on the first token) so we never flash a sub-agent
-  // card before the first task board arrives. Fall back to a task-list part.
-  const agentType = agents.find(
-    (a) => a.id === message.metadata?.agentId,
-  )?.type;
-  let isSwarm = agentType === "swarm" || agentType === "coordinator";
 
   // Single pass over parts: classify the renderable ones, find text +
   // interrupts. Avoids several O(n) scans and — critically — never builds React
@@ -106,6 +102,9 @@ const MessageItem = memo(function MessageItem({
         // (from its paired `data-tool-interrupt`). Skip its raw tool card so we
         // don't ALSO show a generic approve/deny card for the same interrupt.
         if (part.toolName === "question") break;
+        // Swarm orchestration tools render via the TaskBar / sub-agent cards,
+        // not as raw generic tool cards.
+        if (HIDDEN_TOOL_CARDS.has(part.toolName)) break;
         renderable.push({ part, i });
         break;
       case "reasoning":
@@ -119,9 +118,6 @@ const MessageItem = memo(function MessageItem({
         if (isQuestionInterrupt(part.data)) renderable.push({ part, i });
         else interrupts.set(part.data.toolCallId, part);
         break;
-      case "data-task-list":
-        isSwarm = true;
-        break;
     }
   });
   const showActions = !isUser && hasText && !(streaming && isLast);
@@ -133,8 +129,10 @@ const MessageItem = memo(function MessageItem({
       >
         {/* Top-level run progress ("Analyzing…") renders for ALL agents — for a
             swarm it's the activity indicator while the coordinator plans, before
-            the task board appears. Swarms suppress the per-worker cards (their
-            work shows in the central task list); pipeline agents keep them. */}
+            the task board appears. Sub-agent cards render for every multi-agent
+            run (swarm included): they surface each child's LIVE streamed output
+            inline (via Streamdown) so swarm workers are visible mid-run, not just
+            through a manual side-panel click. */}
         {!isUser && (
           <>
             <RunProgress
@@ -143,9 +141,7 @@ const MessageItem = memo(function MessageItem({
               isLast={isLast}
               stopped={stopped}
             />
-            {!isSwarm && (
-              <AgentCards message={message} streaming={streaming && isLast} />
-            )}
+            <AgentCards message={message} streaming={streaming && isLast} />
           </>
         )}
 

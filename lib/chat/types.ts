@@ -84,7 +84,14 @@ export type ChatDataParts = {
     tasks: {
       id: string;
       title: string;
-      status: "pending" | "in_progress" | "completed" | "cancelled";
+      // "running" is the backend's in-progress state for swarm children
+      // (task.go); it is normalized alongside "in_progress" for the UI.
+      status:
+        | "pending"
+        | "in_progress"
+        | "running"
+        | "completed"
+        | "cancelled";
       priority?: "high" | "medium" | "low";
       /** owning sub-agent (worker) for swarm/coordinator boards */
       agent?: string;
