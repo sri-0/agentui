@@ -6,6 +6,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { useEffect } from "react";
+
 import { apiFetch } from "./client";
 import type { ListResponse, Thread, ThreadMessage } from "./types";
 
@@ -38,10 +40,19 @@ export function useThreads() {
 }
 
 export function useThreadMessages(threadId: string | null) {
-  return useQuery({
+  const qc = useQueryClient();
+  const query = useQuery({
     queryKey: ["thread-messages", threadId],
     enabled: Boolean(threadId),
     retry: false,
+    // Tool parts are persisted asynchronously as a run finishes. A thread opened
+    // (or reloaded) in the window right after a run completes could load a
+    // messages doc that hasn't yet grown its tool parts — leaving tool cards
+    // missing until the next manual reload. The backend now flushes parts
+    // synchronously before reporting done, but keep the client robust: refetch
+    // when the tab regains focus so returning to a just-finished thread always
+    // picks up the persisted parts.
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       try {
         const res = await apiFetch<
@@ -53,6 +64,20 @@ export function useThreadMessages(threadId: string | null) {
       }
     },
   });
+
+  // One-shot delayed refetch shortly after opening a thread: cheap belt-and-
+  // braces for the "opened exactly as the run finished" race — we re-pull once
+  // (not a tight interval) so any parts persisted in the last moment appear
+  // without the user reloading. Keyed on threadId so it fires once per open.
+  useEffect(() => {
+    if (!threadId) return;
+    const t = setTimeout(() => {
+      qc.invalidateQueries({ queryKey: ["thread-messages", threadId] });
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [threadId, qc]);
+
+  return query;
 }
 
 export function useCreateThread() {

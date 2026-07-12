@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, apiFetch } from "./client";
 import type { ListResponse } from "./types";
@@ -22,6 +22,14 @@ export interface SessionHandle {
     | "done"
     | "error"
     | "cancelled";
+  /**
+   * True once the user has opened this thread after it finished. The backend
+   * defaults it to false for a terminal (done/error/cancelled) run and treats
+   * running/queued/awaiting-input as effectively not-unviewed. The sidebar shows
+   * a "completed" ring only for terminal && !viewed, so the ring clears the
+   * moment the user opens the thread (see markViewed).
+   */
+  viewed: boolean;
   started_at: string;
   updated_at: string;
 }
@@ -104,5 +112,33 @@ export function useSessionStatus(
         return null;
       }
     },
+  });
+}
+
+/**
+ * Mark a finished thread as viewed when the user opens it, clearing the
+ * "completed" ring in the sidebar. `POST /v1/sessions/{id}/viewed` is
+ * ownership-checked (404 = not the owner / no such session), which we swallow:
+ * there is nothing for the UI to do about it and the caller only fires this for
+ * the user's own terminal session. `apiFetch` sends X-User-ID so the mark is
+ * scoped to the current user. On success we invalidate ["sessions"] so the ring
+ * disappears immediately rather than waiting for useSessions' 5s poll.
+ */
+export function useMarkViewed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      try {
+        await apiFetch(
+          `/v1/sessions/${encodeURIComponent(sessionId)}/viewed`,
+          { method: "POST" },
+        );
+      } catch (err) {
+        // Not owner / no active session — nothing actionable, swallow.
+        if (err instanceof ApiError && err.status === 404) return;
+        throw err;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sessions"] }),
   });
 }

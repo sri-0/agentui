@@ -16,7 +16,11 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { type SessionHandle, useSessions } from "@/lib/api/sessions";
+import {
+  type SessionHandle,
+  useMarkViewed,
+  useSessions,
+} from "@/lib/api/sessions";
 import { useDeleteThread, useThreads } from "@/lib/api/threads";
 import { groupThreads, threadTitle } from "@/lib/group-threads";
 import { cn } from "@/lib/utils";
@@ -32,14 +36,25 @@ import {
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export function AppSidebar() {
   const { data: threads = [], isLoading } = useThreads();
+  const { data: sessions = [] } = useSessions();
   const groups = groupThreads(threads);
   const params = useParams();
   const activeId = params?.threadId as string | undefined;
   const requestNewChat = useUiStore((s) => s.requestNewChat);
+
+  // Join the thread list to the session list by session_id === thread.id. Build
+  // the lookup ONCE per sessions change (not a find() per row) so the status
+  // pulse / completed-ring indicators don't turn the ~5s sessions poll into a
+  // per-row re-render storm.
+  const sessionByThread = useMemo(() => {
+    const map = new Map<string, SessionHandle>();
+    for (const s of sessions) map.set(s.session_id, s);
+    return map;
+  }, [sessions]);
 
   return (
     <Sidebar collapsible="icon">
@@ -132,6 +147,7 @@ export function AppSidebar() {
                       id={t.id}
                       title={threadTitle(t)}
                       active={t.id === activeId}
+                      session={sessionByThread.get(t.id)}
                     />
                   ))}
                 </SidebarMenu>
@@ -199,6 +215,47 @@ const STATUS_STYLE: Record<
   cancelled: { label: "Cancelled", dot: "bg-muted-foreground/40", pulse: false },
 };
 
+/** A session is "active" (still holding the backend open) while queued/running/
+ *  awaiting-input; terminal once done/error/cancelled. */
+function isActiveStatus(status: SessionHandle["status"]): boolean {
+  return (
+    status === "running" ||
+    status === "awaiting-input" ||
+    status === "queued"
+  );
+}
+
+/** Pulsing status dot (ping ring + solid core), reused by the Running section
+ *  rows and the active-session indicator on the main thread rows. */
+function StatusDot({ status }: { status: SessionHandle["status"] }) {
+  const s = STATUS_STYLE[status] ?? STATUS_STYLE.running;
+  return (
+    <span className="relative flex size-2 shrink-0 items-center justify-center">
+      {s.pulse && (
+        <span
+          className={cn(
+            "absolute inline-flex size-2 animate-ping rounded-full opacity-75",
+            s.dot,
+          )}
+        />
+      )}
+      <span className={cn("relative inline-flex size-2 rounded-full", s.dot)} />
+    </span>
+  );
+}
+
+/** Static "completed" ring for a finished-but-unviewed thread — a hollow ring
+ *  (NOT the pulse) so it reads as "there's a result waiting" rather than "still
+ *  working". Disappears once the session is marked viewed. */
+function CompletedRing() {
+  return (
+    <span
+      aria-label="Completed"
+      className="size-2 shrink-0 rounded-full border-[1.5px] border-emerald-500"
+    />
+  );
+}
+
 function SessionRow({
   session,
   active,
@@ -218,17 +275,7 @@ function SessionRow({
         {/* session_id is the thread id — clicking rejoins that thread (which
             reconnects to the live stream, see useSessionReconnect). */}
         <Link href={`/chat/${session.session_id}`}>
-          <span className="relative flex size-2 shrink-0 items-center justify-center">
-            {s.pulse && (
-              <span
-                className={cn(
-                  "absolute inline-flex size-2 animate-ping rounded-full opacity-75",
-                  s.dot,
-                )}
-              />
-            )}
-            <span className={cn("relative inline-flex size-2 rounded-full", s.dot)} />
-          </span>
+          <StatusDot status={session.status} />
           <span className="truncate">{session.agent_id || session.session_id}</span>
           <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
             {s.label}
@@ -243,19 +290,59 @@ function ThreadRow({
   id,
   title,
   active,
+  session,
 }: {
   id: string;
   title: string;
   active: boolean;
+  session?: SessionHandle;
 }) {
   const router = useRouter();
   const del = useDeleteThread();
+  const markViewed = useMarkViewed();
+
+  // A joined session is either active (pulse) or terminal. The completed ring
+  // only shows for a terminal run the user hasn't opened yet.
+  const activeSession = session && isActiveStatus(session.status);
+  const unviewed = session && !activeSession && !session.viewed;
+
+  // Mark viewed the moment the user opens a finished-but-unviewed thread. Firing
+  // on `active && unviewed` covers both navigating into /chat/{id} and the
+  // active thread changing; the mutation invalidates ["sessions"] so the ring
+  // clears immediately. There's a brief window between the POST and the sessions
+  // cache refetch where `unviewed` is still true — a `viewedRef` latch (reset
+  // whenever this row goes inactive) keeps us from re-POSTing during it.
+  const shouldMarkViewed = Boolean(active && unviewed);
+  const mutate = markViewed.mutate;
+  const viewedRef = useRef(false);
+  useEffect(() => {
+    // Reset the latch whenever the row goes inactive so a later re-open re-marks
+    // (e.g. a NEW terminal run on the same thread the user opens again).
+    if (!active) {
+      viewedRef.current = false;
+      return;
+    }
+    if (shouldMarkViewed && !viewedRef.current) {
+      viewedRef.current = true;
+      mutate(id);
+    }
+  }, [active, shouldMarkViewed, id, mutate]);
 
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={active} className="h-9">
         <Link href={`/chat/${id}`}>
           <span className="truncate">{title}</span>
+          {activeSession && (
+            <span className="ml-auto mr-0.5">
+              <StatusDot status={session.status} />
+            </span>
+          )}
+          {unviewed && (
+            <span className="ml-auto mr-0.5">
+              <CompletedRing />
+            </span>
+          )}
         </Link>
       </SidebarMenuButton>
       <SidebarMenuAction
