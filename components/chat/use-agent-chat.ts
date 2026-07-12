@@ -4,6 +4,7 @@ import { Chat, useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useMemo } from "react";
 
+import { getUserId } from "@/lib/api/client";
 import { chatUrl } from "@/lib/chat/api";
 import type { ChatMessage, ChatRequestBody } from "@/lib/chat/types";
 
@@ -28,9 +29,14 @@ export function useAgentChat({
           // these snake_case fields. The per-send camelCase `body` (from
           // useRequestBody) is mapped to snake_case here; `messages` stays as
           // AI SDK UIMessages (the Go side converts them).
-          prepareSendMessagesRequest: ({ messages, body }) => {
+          prepareSendMessagesRequest: ({ messages, body, headers }) => {
             const b = (body ?? {}) as Partial<ChatRequestBody>;
             return {
+              // Identity seam: the backend keys ALL per-user state (sessions,
+              // resume, memory) by X-User-ID. The chat stream MUST carry the
+              // same id as the REST apiFetch calls, or the stream runs as a
+              // different backend user and session/resume matching breaks.
+              headers: { ...headers, "X-User-ID": getUserId() },
               body: {
                 messages,
                 agent_id: b.agentId,

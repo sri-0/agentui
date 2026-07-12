@@ -16,8 +16,10 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { type SessionHandle, useSessions } from "@/lib/api/sessions";
 import { useDeleteThread, useThreads } from "@/lib/api/threads";
 import { groupThreads, threadTitle } from "@/lib/group-threads";
+import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import {
   MoonIcon,
@@ -86,6 +88,8 @@ export function AppSidebar() {
 
         <SidebarSeparator className="mx-0 my-1 group-data-[collapsible=icon]:hidden" />
 
+        <RunningSessions activeId={activeId} />
+
         <div className="group-data-[collapsible=icon]:hidden">
           {isLoading && (
             <SidebarGroup className="px-0">
@@ -144,6 +148,94 @@ export function AppSidebar() {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+/** Live "Running" section: sessions the backend still holds open (queued /
+ *  running / awaiting-input) plus recently finished ones, so the user can leave
+ *  and rejoin a running swarm. Degrades to nothing if /v1/sessions is empty or
+ *  errors (the hook try/catches to []). */
+function RunningSessions({ activeId }: { activeId?: string }) {
+  const { data: sessions = [] } = useSessions();
+  // Surface the interesting ones first; hide fully-idle noise when there's
+  // nothing live to show.
+  const live = sessions.filter(
+    (s) =>
+      s.status === "running" ||
+      s.status === "awaiting-input" ||
+      s.status === "queued",
+  );
+  if (live.length === 0) return null;
+
+  return (
+    <SidebarGroup className="px-0 group-data-[collapsible=icon]:hidden">
+      <SidebarGroupLabel className="px-2 text-xs font-semibold text-sidebar-foreground/65">
+        Running
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-0.5">
+          {live.map((s) => (
+            <SessionRow
+              key={s.session_id}
+              session={s}
+              active={s.session_id === activeId}
+            />
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+const STATUS_STYLE: Record<
+  SessionHandle["status"],
+  { label: string; dot: string; pulse: boolean }
+> = {
+  queued: { label: "Queued", dot: "bg-amber-500", pulse: true },
+  running: { label: "Running", dot: "bg-emerald-500", pulse: true },
+  "awaiting-input": { label: "Needs input", dot: "bg-blue-500", pulse: true },
+  done: { label: "Done", dot: "bg-muted-foreground/40", pulse: false },
+  error: { label: "Error", dot: "bg-destructive", pulse: false },
+  cancelled: { label: "Cancelled", dot: "bg-muted-foreground/40", pulse: false },
+};
+
+function SessionRow({
+  session,
+  active,
+}: {
+  session: SessionHandle;
+  active: boolean;
+}) {
+  const s = STATUS_STYLE[session.status] ?? STATUS_STYLE.running;
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        isActive={active}
+        tooltip={s.label}
+        className="h-9"
+      >
+        {/* session_id is the thread id — clicking rejoins that thread (which
+            reconnects to the live stream, see useSessionReconnect). */}
+        <Link href={`/chat/${session.session_id}`}>
+          <span className="relative flex size-2 shrink-0 items-center justify-center">
+            {s.pulse && (
+              <span
+                className={cn(
+                  "absolute inline-flex size-2 animate-ping rounded-full opacity-75",
+                  s.dot,
+                )}
+              />
+            )}
+            <span className={cn("relative inline-flex size-2 rounded-full", s.dot)} />
+          </span>
+          <span className="truncate">{session.agent_id || session.session_id}</span>
+          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+            {s.label}
+          </span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 

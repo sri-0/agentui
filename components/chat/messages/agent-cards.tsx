@@ -44,6 +44,19 @@ type AgentState = {
   durationMs?: number;
 };
 
+/** Swarm children are keyed `"<type>#<id>"` (W3): the base type identifies the
+ *  KIND, the id disambiguates multiple instances of that kind. Show the type as
+ *  the primary label and a short instance suffix so N children of one type are
+ *  visually distinct cards (they already ARE distinct — keyed by the full
+ *  `type#id` string — this only makes the label readable). */
+function agentLabel(agent: string): { name: string; instance?: string } {
+  const hash = agent.indexOf("#");
+  if (hash === -1) return { name: agent };
+  const type = agent.slice(0, hash);
+  const id = agent.slice(hash + 1);
+  return { name: type, instance: id.length > 8 ? id.slice(0, 8) : id };
+}
+
 /**
  * Cards for SUB-agents (agents that stream their own output — multi-agent runs).
  * The card shows whatever PROGRESS the backend emits for that agent (tool runs,
@@ -153,7 +166,19 @@ export const AgentCards = memo(function AgentCards({
               <BotIcon className="size-4" />
             </span>
             <span className="flex-1 truncate text-sm font-medium">
-              {a.agent}
+              {(() => {
+                const { name, instance } = agentLabel(a.agent);
+                return (
+                  <>
+                    {name}
+                    {instance && (
+                      <span className="ml-1 font-mono text-[11px] text-muted-foreground">
+                        #{instance}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
             </span>
             <Badge
               variant="secondary"
