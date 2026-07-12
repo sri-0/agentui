@@ -1,0 +1,157 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { ApiError, apiFetch } from "./client";
+import type { ListResponse } from "./types";
+
+/**
+ * A server-side run (Phase 01). Runs execute in the background decoupled from the
+ * connection, so a session can be `running` with no client attached; the UI uses
+ * this to show still-running sessions and let the user rejoin them via
+ * sessionStreamUrl(id, afterSeq).
+ */
+export interface SessionHandle {
+  session_id: string;
+  user_id: string;
+  agent_id: string;
+  status:
+    | "queued"
+    | "running"
+    | "awaiting-input"
+    | "done"
+    | "error"
+    | "cancelled";
+  /**
+   * True once the user has opened this thread after it finished. The backend
+   * defaults it to false for a terminal (done/error/cancelled) run and treats
+   * running/queued/awaiting-input as effectively not-unviewed. The sidebar shows
+   * a "completed" ring only for terminal && !viewed, so the ring clears the
+   * moment the user opens the thread (see markViewed).
+   */
+  viewed: boolean;
+  /**
+   * First event-log sequence THIS run writes. A reconnecting client attaches at
+   * `after = start_seq - 1` so the backend replays exactly the in-progress
+   * turn's events (not the whole session log) before going live.
+   */
+  start_seq: number;
+  /**
+   * 0-based assistant turn this run writes. The backend derives it from the
+   * same projection that keys persisted messages, so the run's live stream,
+   * its replay, and the reloaded history all share one message id
+   * (`{session_id}:{turn}:assistant`).
+   */
+  turn: number;
+  started_at: string;
+  updated_at: string;
+}
+
+function unwrap<T>(res: ListResponse<T> | T[]): T[] {
+  return Array.isArray(res) ? res : (res.data ?? []);
+}
+
+/**
+ * Cancel a still-running server-side run. A run executes in the background,
+ * decoupled from the client stream, so aborting the AI-SDK stream alone leaves
+ * the server run executing (and the session `running`) indefinitely. The Stop
+ * button MUST also hit this so the backend transitions `running → cancelled`.
+ *
+ * Best-effort / idempotent: a 404 means the run already settled (done/cancelled),
+ * which is a no-op for us. `apiFetch` sends the X-User-ID identity header so the
+ * cancel is scoped to the current user, matching the run's owner.
+ */
+export async function cancelSession(sessionId: string): Promise<void> {
+  try {
+    await apiFetch(`/v1/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+      method: "POST",
+    });
+  } catch (err) {
+    // Already settled (no active run) — nothing to cancel. Swallow so a Stop
+    // click never surfaces an error for a race we don't care about.
+    if (err instanceof ApiError && err.status === 404) return;
+    throw err;
+  }
+}
+
+/** List the user's runs (running + recently finished). */
+export function useSessions() {
+  return useQuery({
+    queryKey: ["sessions"],
+    retry: false,
+    refetchInterval: 5000, // surface live status changes
+    queryFn: async () => {
+      try {
+        const res = await apiFetch<
+          ListResponse<SessionHandle> | SessionHandle[]
+        >("/v1/sessions");
+        return unwrap(res);
+      } catch {
+        return [] as SessionHandle[];
+      }
+    },
+  });
+}
+
+/**
+ * Status of a single session (cheap polling / decide whether to attach).
+ *
+ * `enabled` lets the caller gate the probe: `GET /v1/sessions/{id}` returns 404
+ * for a settled thread with no ACTIVE run, which the browser logs as a console
+ * 404 on every load. Callers that already know a thread is settled (e.g. it's
+ * absent from the user's live `/v1/sessions` list) should pass `enabled: false`
+ * so we never fire the pointless request. A 404 still resolves to `null` (no
+ * active session) rather than an app-level error, so a stale gate is harmless.
+ */
+export function useSessionStatus(
+  sessionId: string | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["session-status", sessionId],
+    enabled: Boolean(sessionId) && enabled,
+    retry: false,
+    queryFn: async () => {
+      if (!sessionId) return null;
+      try {
+        return await apiFetch<SessionHandle>(
+          `/v1/sessions/${encodeURIComponent(sessionId)}`,
+        );
+      } catch (err) {
+        // 404 = "no active run for this id" — the normal settled-thread case.
+        // Resolve to null quietly; genuine errors also degrade to "nothing to
+        // reconnect to" since there's nothing actionable for the UI to do.
+        if (err instanceof ApiError && err.status === 404) return null;
+        return null;
+      }
+    },
+  });
+}
+
+/**
+ * Mark a finished thread as viewed when the user opens it, clearing the
+ * "completed" ring in the sidebar. `POST /v1/sessions/{id}/viewed` is
+ * ownership-checked (404 = not the owner / no such session), which we swallow:
+ * there is nothing for the UI to do about it and the caller only fires this for
+ * the user's own terminal session. `apiFetch` sends X-User-ID so the mark is
+ * scoped to the current user. On success we invalidate ["sessions"] so the ring
+ * disappears immediately rather than waiting for useSessions' 5s poll.
+ */
+export function useMarkViewed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      try {
+        await apiFetch(
+          `/v1/sessions/${encodeURIComponent(sessionId)}/viewed`,
+          { method: "POST" },
+        );
+      } catch (err) {
+        // Not owner / no active session — nothing actionable, swallow.
+        if (err instanceof ApiError && err.status === 404) return;
+        throw err;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sessions"] }),
+  });
+}

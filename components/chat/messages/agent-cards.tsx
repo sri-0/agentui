@@ -12,7 +12,7 @@ import {
   ChevronRightIcon,
   LoaderIcon,
 } from "lucide-react";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 
 /** Signature of sub-agent state shown on the cards: which agents exist, their
  *  lifecycle/duration, and progress steps — but NOT per-token deltas (the card
@@ -43,6 +43,19 @@ type AgentState = {
   steps: Step[];
   durationMs?: number;
 };
+
+/** Swarm children are keyed `"<type>#<id>"` (W3): the base type identifies the
+ *  KIND, the id disambiguates multiple instances of that kind. Show the type as
+ *  the primary label and a short instance suffix so N children of one type are
+ *  visually distinct cards (they already ARE distinct — keyed by the full
+ *  `type#id` string — this only makes the label readable). */
+function agentLabel(agent: string): { name: string; instance?: string } {
+  const hash = agent.indexOf("#");
+  if (hash === -1) return { name: agent };
+  const type = agent.slice(0, hash);
+  const id = agent.slice(hash + 1);
+  return { name: type, instance: id.length > 8 ? id.slice(0, 8) : id };
+}
 
 /**
  * Cards for SUB-agents (agents that stream their own output — multi-agent runs).
@@ -120,26 +133,37 @@ export const AgentCards = memo(function AgentCards({
   message: ChatMessage;
   streaming: boolean;
 }) {
-  const agents = collectAgents(message, streaming);
+  // The comparator below already blocks per-token re-renders, but a real event
+  // still re-renders this card — memoize the O(parts) scan on the same cheap
+  // content signature so a swarm turn with thousands of delta parts is only
+  // rescanned when the signature actually changes.
+  const cardsKey = agentCardsKey(message);
+  const agents = useMemo(
+    () => collectAgents(message, streaming),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cardsKey is the content signature of message
+    [cardsKey, streaming],
+  );
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   if (agents.length === 0) return null;
 
   return (
     <div className="flex w-full flex-col gap-2">
       {agents.map((a) => (
-        <button
-          type="button"
+        <div
           key={a.agent}
-          onClick={() =>
-            openSidepanel({
-              kind: "agent",
-              agent: a.agent,
-              messageId: message.id,
-            })
-          }
-          className="group flex w-full flex-col gap-2.5 rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
+          className="group flex w-full flex-col gap-2.5 rounded-xl border bg-card p-3 text-left transition-colors hover:border-primary/40"
         >
-          <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() =>
+              openSidepanel({
+                kind: "agent",
+                agent: a.agent,
+                messageId: message.id,
+              })
+            }
+            className="-m-1 flex items-center gap-2.5 rounded-lg p-1 text-left transition-colors hover:bg-accent/30"
+          >
             <span
               className={cn(
                 "flex size-7 shrink-0 items-center justify-center rounded-lg",
@@ -153,7 +177,19 @@ export const AgentCards = memo(function AgentCards({
               <BotIcon className="size-4" />
             </span>
             <span className="flex-1 truncate text-sm font-medium">
-              {a.agent}
+              {(() => {
+                const { name, instance } = agentLabel(a.agent);
+                return (
+                  <>
+                    {name}
+                    {instance && (
+                      <span className="ml-1 font-mono text-[11px] text-muted-foreground">
+                        #{instance}
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
             </span>
             <Badge
               variant="secondary"
@@ -181,7 +217,7 @@ export const AgentCards = memo(function AgentCards({
               )}
             </Badge>
             <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-          </div>
+          </button>
 
           {a.steps.length > 0 && (
             <ul className="ml-1 space-y-1.5 border-l border-muted pl-3.5 text-xs">
@@ -217,8 +253,13 @@ export const AgentCards = memo(function AgentCards({
               ))}
             </ul>
           )}
-        </button>
+        </div>
       ))}
     </div>
   );
-});
+},
+// Content-signature comparator (AGENTS.md §8): re-render on real sub-agent
+// events (agent seen / lifecycle / progress), never on per-token deltas.
+(a, b) =>
+  a.streaming === b.streaming &&
+  agentCardsKey(a.message) === agentCardsKey(b.message));

@@ -36,6 +36,20 @@ const MIME: Record<string, string> = {
 
 /** Download the artifact as a file (csv → .csv opens in Excel, etc.). */
 export function downloadArtifact(a: ArtifactData) {
+  // file-kind artifacts point at a remote binary (office docs) served with
+  // Content-Disposition: attachment — a direct anchor click downloads it, so
+  // there's no local Blob to build.
+  if (a.kind === "file" || a.url) {
+    if (!a.url) return;
+    const el = document.createElement("a");
+    el.href = a.url;
+    if (a.filename) el.download = a.filename;
+    el.rel = "noopener";
+    document.body.appendChild(el);
+    el.click();
+    el.remove();
+    return;
+  }
   const ext = a.kind === "code" ? (a.language ?? "txt") : (EXT[a.kind] ?? "txt");
   const blob = new Blob([a.content], { type: MIME[a.kind] ?? "text/plain" });
   const url = URL.createObjectURL(blob);

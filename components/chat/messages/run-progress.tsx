@@ -10,8 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { useAgents } from "@/lib/api/agents";
 import type { ChatMessage } from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
-import { BotIcon, Check, ChevronDownIcon } from "lucide-react";
-import { memo } from "react";
+import { Ban, BotIcon, Check, ChevronDownIcon } from "lucide-react";
+import { memo, useMemo } from "react";
 
 /** Signature of the run-level (orchestrator) progress — changes only when a new
  *  progress phase arrives, not on output tokens. */
@@ -48,30 +48,41 @@ export const RunProgress = memo(function RunProgress({
   message,
   streaming,
   isLast,
+  stopped = false,
 }: {
   message: ChatMessage;
   streaming: boolean;
   isLast: boolean;
+  /** This turn was aborted by the user (Stop). Show a "Stopped" badge instead of
+   *  a false green "Completed" — the run didn't finish, it was cancelled. */
+  stopped?: boolean;
 }) {
   const { data: agents = [] } = useAgents();
 
-  // Top-level orchestrator progress only — per-agent steps (which carry an
-  // `agent`) render inside that sub-agent's card instead.
-  const rawSteps = message.parts
-    .filter((p) => p.type === "data-agent-progress" && !p.data.agent)
-    .map((p) => (p.type === "data-agent-progress" ? p.data.message : ""))
-    .filter(Boolean);
+  // The comparator below blocks per-token re-renders; memoize the O(parts) scan
+  // on the same content signature so a real event doesn't rescan a swarm turn's
+  // thousands of delta parts either.
+  const progressKey = runProgressKey(message);
+  const { steps, totalSteps } = useMemo(() => {
+    // Top-level orchestrator progress only — per-agent steps (which carry an
+    // `agent`) render inside that sub-agent's card instead.
+    const rawSteps = message.parts
+      .filter((p) => p.type === "data-agent-progress" && !p.data.agent)
+      .map((p) => (p.type === "data-agent-progress" ? p.data.message : ""))
+      .filter(Boolean);
 
-  if (rawSteps.length === 0) return null;
+    // Collapse consecutive identical steps into one with a count (opencode-style).
+    const steps: { message: string; count: number }[] = [];
+    for (const m of rawSteps) {
+      const last = steps[steps.length - 1];
+      if (last && last.message === m) last.count++;
+      else steps.push({ message: m, count: 1 });
+    }
+    return { steps, totalSteps: rawSteps.length };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- progressKey is the content signature of message
+  }, [progressKey]);
 
-  // Collapse consecutive identical steps into one with a count (opencode-style).
-  const steps: { message: string; count: number }[] = [];
-  for (const m of rawSteps) {
-    const last = steps[steps.length - 1];
-    if (last && last.message === m) last.count++;
-    else steps.push({ message: m, count: 1 });
-  }
-  const totalSteps = rawSteps.length;
+  if (totalSteps === 0) return null;
 
   const working = streaming && isLast;
   const agentId = message.metadata?.agentId;
@@ -91,6 +102,11 @@ export const RunProgress = memo(function RunProgress({
             {working ? (
               <>
                 <PulseDot /> Running · {totalSteps} steps
+              </>
+            ) : stopped ? (
+              <>
+                <Ban className="text-amber-500" /> Stopped · {totalSteps} step
+                {totalSteps === 1 ? "" : "s"}
               </>
             ) : (
               <>
@@ -128,4 +144,11 @@ export const RunProgress = memo(function RunProgress({
       </TaskContent>
     </Task>
   );
-});
+},
+// Content-signature comparator (AGENTS.md §8): re-render when a new run-level
+// progress phase arrives (or the run/turn state flips), never on output tokens.
+(a, b) =>
+  a.streaming === b.streaming &&
+  a.isLast === b.isLast &&
+  a.stopped === b.stopped &&
+  runProgressKey(a.message) === runProgressKey(b.message));

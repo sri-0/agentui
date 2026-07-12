@@ -6,6 +6,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { useEffect } from "react";
+
 import { apiFetch } from "./client";
 import type { ListResponse, Thread, ThreadMessage } from "./types";
 
@@ -17,6 +19,11 @@ export function useThreads() {
   return useQuery({
     queryKey: ["threads"],
     retry: false,
+    // The title of a freshly-created thread is generated ASYNC by the backend a
+    // few seconds after the run finishes. A modest poll (mirrors useSessions)
+    // lets the new thread AND its generated title converge live without a
+    // reload; the invalidate-on-finish in useAgentChat handles immediacy.
+    refetchInterval: 5000,
     queryFn: async () => {
       // Thread persistence needs OpenSearch/Valkey; if it's down the backend
       // returns 500. Degrade gracefully to an empty list rather than erroring.
@@ -32,22 +39,67 @@ export function useThreads() {
   });
 }
 
+/**
+ * Live-session info attached to a thread-history response while the backend
+ * coordinator has an ACTIVE run for the thread. The history already contains
+ * the in-progress assistant turn FULLY FOLDED up to `head_seq`; a client that
+ * wants to keep streaming attaches the session stream at `after = head_seq`
+ * (tail only — no replay of what the fetch already delivered).
+ */
+export interface ThreadLiveInfo {
+  head_seq: number;
+  turn: number;
+  status: string;
+}
+
+export interface ThreadHistory {
+  messages: ThreadMessage[];
+  live?: ThreadLiveInfo;
+}
+
 export function useThreadMessages(threadId: string | null) {
-  return useQuery({
+  const qc = useQueryClient();
+  const query = useQuery({
     queryKey: ["thread-messages", threadId],
     enabled: Boolean(threadId),
     retry: false,
-    queryFn: async () => {
+    // Tool parts are persisted asynchronously as a run finishes. A thread opened
+    // (or reloaded) in the window right after a run completes could load a
+    // messages doc that hasn't yet grown its tool parts — leaving tool cards
+    // missing until the next manual reload. The backend now flushes parts
+    // synchronously before reporting done, but keep the client robust: refetch
+    // when the tab regains focus so returning to a just-finished thread always
+    // picks up the persisted parts.
+    refetchOnWindowFocus: true,
+    queryFn: async (): Promise<ThreadHistory> => {
       try {
         const res = await apiFetch<
-          ListResponse<ThreadMessage> | ThreadMessage[]
+          | (ListResponse<ThreadMessage> & { live?: ThreadLiveInfo })
+          | ThreadMessage[]
         >(`/v1/threads/${threadId}/messages`);
-        return unwrap(res);
+        // Settled threads keep the plain-array wire shape; a thread with an
+        // ACTIVE session comes wrapped with the folded live turn + head seq.
+        if (Array.isArray(res)) return { messages: res };
+        return { messages: res.data ?? [], live: res.live };
       } catch {
-        return [] as ThreadMessage[];
+        return { messages: [] };
       }
     },
   });
+
+  // One-shot delayed refetch shortly after opening a thread: cheap belt-and-
+  // braces for the "opened exactly as the run finished" race — we re-pull once
+  // (not a tight interval) so any parts persisted in the last moment appear
+  // without the user reloading. Keyed on threadId so it fires once per open.
+  useEffect(() => {
+    if (!threadId) return;
+    const t = setTimeout(() => {
+      qc.invalidateQueries({ queryKey: ["thread-messages", threadId] });
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [threadId, qc]);
+
+  return query;
 }
 
 export function useCreateThread() {

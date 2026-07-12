@@ -9,49 +9,44 @@ import {
   ContextTrigger,
 } from "@/components/ai-elements/context";
 import { useModels } from "@/lib/api/models";
-import type { ChatMessage } from "@/lib/chat/types";
-import { deriveRichUsage } from "@/lib/chat/usage";
+import type { RichUsage } from "@/lib/chat/usage";
 import { useUiStore } from "@/stores/ui-store";
-import { type Chat, useChat } from "@ai-sdk/react";
 import { memo } from "react";
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact" });
 
 /**
- * Live token-usage control in the composer — the AI Elements `Context` popover
+ * Token-usage control in the composer — the AI Elements `Context` popover
  * (percent ring trigger + hover breakdown of input/output tokens).
- * Subscribes to the SAME chat instance (passed in) so it re-renders on streaming
- * updates IN ISOLATION — the composer shell stays memoized during streaming.
- * Clicking the trigger opens the full usage side panel.
- * See AGENTS.md "Thread & chat-stream performance".
+ * Reads the usage captured ONCE at stream completion (`lastUsage`, from
+ * useAgentChat) rather than subscribing to per-chunk messages, so it re-renders
+ * once per completed turn instead of ~20x/sec while streaming. The denominator
+ * (`contextWindow`) is resolved LIVE from the selected model, so switching model
+ * updates the ring without a stale window. Clicking the trigger opens the full
+ * usage side panel. See AGENTS.md "Thread & chat-stream performance".
  */
 export function ThreadUsageRing({
-  chat,
+  lastUsage,
   onOpenUsage,
 }: {
-  chat: Chat<ChatMessage>;
+  lastUsage: RichUsage | null;
   onOpenUsage: () => void;
 }) {
-  const { messages } = useChat<ChatMessage>({ chat });
   const { data: models = [] } = useModels();
   const selectedModel = useUiStore((s) => s.selectedModel);
   const contextWindow =
     models.find((m) => m.id === selectedModel)?.context_length ?? 128_000;
 
-  const u = deriveRichUsage(messages, contextWindow);
-
-  // This component re-renders on EVERY throttled chunk (its useChat
-  // subscription). Pass only primitive usage numbers down to a memoized shell so
-  // the Radix popover subtree bails when those numbers are unchanged — during
-  // sub-agent streaming `deriveRichUsage` is now stable (deltas excluded), so the
-  // ring stops re-rendering per frame. See AGENTS.md "Thread & chat-stream perf".
+  // Raw token totals only (from lastUsage); the window comes from the live model.
+  // The memoized shell bails unless a totals number or the window changes, so no
+  // re-render happens during streaming (lastUsage updates only at onFinish).
   return (
     <UsageContextShell
-      total={u.totalTokens}
-      window={u.contextWindow}
-      input={u.inputTokens}
-      output={u.outputTokens}
-      reasoning={u.reasoningTokens}
+      total={lastUsage?.totalTokens ?? 0}
+      window={contextWindow}
+      input={lastUsage?.inputTokens ?? 0}
+      output={lastUsage?.outputTokens ?? 0}
+      reasoning={lastUsage?.reasoningTokens ?? 0}
       onOpenUsage={onOpenUsage}
     />
   );

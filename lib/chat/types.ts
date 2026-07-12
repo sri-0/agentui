@@ -1,6 +1,21 @@
 import type { UIMessage } from "ai";
 
 /**
+ * A single question emitted by the `question` tool (Phase 05, opencode schema).
+ * The agent pauses the run until the user answers; the answer round-trips through
+ * the HITL resume endpoint as selected option LABELS.
+ */
+export type Question = {
+  question: string;
+  header: string;
+  options: { label: string; description?: string }[];
+  /** allow selecting more than one option (checkboxes vs. single-select) */
+  multiple?: boolean;
+  /** allow a free-text answer in addition to / instead of the options (default true) */
+  custom?: boolean;
+};
+
+/**
  * Per-message metadata carried alongside the parts.
  */
 export type ChatMetadata = {
@@ -54,13 +69,29 @@ export type ChatDataParts = {
     details?: unknown;
     threadId?: string;
     resolved?: "approved" | "denied";
+    /** Structured questions when `toolName === "question"` (Phase 05). Rendered
+     *  as an interactive form instead of the generic approve/deny card. May also
+     *  be carried inside `details` — the renderer accepts either. */
+    questions?: Question[];
+    /** After a question card is submitted: the selected option labels per
+     *  question (`answers[i]` = labels chosen for question i) for the settled view. */
+    answers?: string[][];
+    /** After submit: the free-text answer, if the user typed one. */
+    answerText?: string;
   };
   /** todo/task list snapshot from the `todowrite` tool (keyed, replaces prior) */
   "task-list": {
     tasks: {
       id: string;
       title: string;
-      status: "pending" | "in_progress" | "completed" | "cancelled";
+      // "running" is the backend's in-progress state for swarm children
+      // (task.go); it is normalized alongside "in_progress" for the UI.
+      status:
+        | "pending"
+        | "in_progress"
+        | "running"
+        | "completed"
+        | "cancelled";
       priority?: "high" | "medium" | "low";
       /** owning sub-agent (worker) for swarm/coordinator boards */
       agent?: string;
@@ -70,9 +101,14 @@ export type ChatDataParts = {
   artifact: {
     id: string;
     title: string;
-    kind: "markdown" | "code" | "html" | "json" | "csv";
+    kind: "markdown" | "code" | "html" | "json" | "csv" | "file";
     content: string;
     language?: string;
+    /** file-kind only: remote binary served with Content-Disposition attachment */
+    url?: string;
+    mime?: string;
+    filename?: string;
+    size?: number;
   };
   /** usage + context-window metering for the context circle / usage panel */
   usage: {
