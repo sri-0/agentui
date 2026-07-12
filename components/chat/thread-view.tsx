@@ -40,6 +40,10 @@ import { InterruptContext } from "./interrupt-context";
 import { useInterruptResolver } from "./use-interrupt-resolver";
 import { ConversationSkeleton } from "./loading";
 import { MessageList } from "./messages/message-list";
+import {
+  isQuestionInterrupt,
+  QuestionCard,
+} from "./messages/question-card";
 import { TaskBar } from "./task-bar";
 import { useAgentChat } from "./use-agent-chat";
 import { useRequestBody } from "./use-request-body";
@@ -126,6 +130,30 @@ export function ThreadChat({
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
   const panelOpen = Boolean(sidepanel);
+  const skippedQuestions = useUiStore((s) => s.skippedQuestions);
+
+  // Newest UNRESOLVED, NON-SKIPPED question interrupt across the thread. When
+  // present it REPLACES the composer (ChatGPT-style): the user answers the
+  // question in the footer slot instead of typing. Skipping a question adds its
+  // toolCallId to `skippedQuestions` so it drops out of `activeQuestion` and the
+  // composer returns — the backend run stays awaiting-input either way.
+  const activeQuestion = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const parts = messages[i].parts;
+      for (let j = parts.length - 1; j >= 0; j--) {
+        const p = parts[j];
+        if (
+          p.type === "data-tool-interrupt" &&
+          isQuestionInterrupt(p.data) &&
+          !p.data.resolved &&
+          !skippedQuestions.has(p.data.toolCallId)
+        ) {
+          return p.data;
+        }
+      }
+    }
+    return null;
+  }, [messages, skippedQuestions]);
   const sideDefault =
     sidepanel?.kind === "artifact" ? 48 : sidepanel?.kind === "agent" ? 42 : 34;
   const { data: models = [] } = useModels();
@@ -207,6 +235,7 @@ export function ThreadChat({
                 messages={messages}
                 status={status}
                 stopped={stopped}
+                activeQuestionId={activeQuestion?.toolCallId}
               />
             </ConversationContent>
             <ConversationScrollButton />
@@ -218,15 +247,28 @@ export function ThreadChat({
               running={status === "streaming" || status === "submitted"}
             />
             <div className="mx-auto w-full max-w-3xl">
-              <Composer
-                onSubmit={onSubmit}
-                status={status}
-                onStop={handleStop}
-                contextSlot={contextSlot}
-              />
-              <p className="mt-2 text-center text-xs text-muted-foreground">
-                AI can make mistakes. Always validate responses.
-              </p>
+              {activeQuestion ? (
+                // A question is pending → the composer is REPLACED by the
+                // interactive question panel (ChatGPT-style). Answering resumes
+                // the run; "Dismiss" skips it locally and the composer returns.
+                <QuestionCard
+                  key={activeQuestion.toolCallId}
+                  interrupt={activeQuestion}
+                  variant="composer"
+                />
+              ) : (
+                <>
+                  <Composer
+                    onSubmit={onSubmit}
+                    status={status}
+                    onStop={handleStop}
+                    contextSlot={contextSlot}
+                  />
+                  <p className="mt-2 text-center text-xs text-muted-foreground">
+                    AI can make mistakes. Always validate responses.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
