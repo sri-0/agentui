@@ -183,16 +183,33 @@ const MessageItem = memo(function MessageItem({
                 <MessageResponse key={i}>{part.text}</MessageResponse>
               ) : null;
 
-            case "reasoning":
+            case "reasoning": {
+              const isReasoningStreaming =
+                streaming && isLast && idx === renderable.length - 1;
+              // Persisted timing (unix-ms of first/last reasoning delta) →
+              // duration in seconds, so a reloaded collapse shows the real
+              // "Thought for N seconds". While still streaming live we leave it
+              // undefined so <Reasoning> uses its own client-side timer.
+              const timing = part as { startedMs?: number; endedMs?: number };
+              const reasoningDuration =
+                !isReasoningStreaming &&
+                typeof timing.startedMs === "number" &&
+                typeof timing.endedMs === "number" &&
+                timing.endedMs >= timing.startedMs
+                  ? Math.max(
+                      1,
+                      Math.ceil((timing.endedMs - timing.startedMs) / 1000)
+                    )
+                  : undefined;
               return (
                 <MessageReasoning
                   key={i}
                   text={part.text}
-                  isStreaming={
-                    streaming && isLast && idx === renderable.length - 1
-                  }
+                  isStreaming={isReasoningStreaming}
+                  duration={reasoningDuration}
                 />
               );
+            }
 
             case "dynamic-tool": {
               const ip = interrupts.get(part.toolCallId);
