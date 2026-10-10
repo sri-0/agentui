@@ -31,7 +31,7 @@ import {
   NetworkIcon,
   SparklesIcon,
 } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 export const AgentSelector = memo(function AgentSelector() {
   const [open, setOpen] = useState(false);
@@ -43,6 +43,11 @@ export const AgentSelector = memo(function AgentSelector() {
 
   const isAuto = selectedAgentId === "auto";
   const current = agents.find((a) => a.id === selectedAgentId);
+
+  // A persisted selection the backend no longer serves falls back to Auto.
+  useEffect(() => {
+    if (agents.length > 0 && selectedAgentId !== null && !isAuto && !current) setAgent("auto");
+  }, [agents, selectedAgentId, isAuto, current, setAgent]);
 
   // Agents drive tool calls — only offer the picker when the model supports them.
   if (!modelSupportsTools(model)) return null;
@@ -147,13 +152,13 @@ export const AgentSelector = memo(function AgentSelector() {
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="flex items-center gap-1.5 truncate text-sm">
                       {a.name}
-                      {a.sub_agents && a.sub_agents.length > 0 && (
+                      {a.subagents && a.subagents.length > 0 && (
                         <Badge
                           variant="secondary"
                           className="gap-1 rounded px-1 py-0 text-[9px]"
                         >
                           <NetworkIcon className="size-2.5" />
-                          {a.sub_agents.length}
+                          {a.subagents.length}
                         </Badge>
                       )}
                     </span>

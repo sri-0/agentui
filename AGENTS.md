@@ -6,22 +6,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # AGENTS.md — `agentui`
 
-The web frontend for the **`agentic`** Go backend (`~/code/agentic`). A Next.js 16
+The web frontend for the **`agentlite`** Go backend (`~/code/agentlite`). A Next.js 16
 App Router app that renders a corporate, multi-agent LLM chat: streaming
-markdown answers, per-sub-agent activity cards, reasoning, tool calls,
-human-in-the-loop approvals, task lists, artifacts, and a live context-usage ring.
+markdown answers, per-sub-agent cards that open the child's live thread,
+reasoning, tool calls, human-in-the-loop approvals and questions, task lists,
+artifacts, and a live context-usage ring.
 
-- **Stack**: Next.js `16.2.9` (App Router) · React `19.2.4` · Vercel **AI SDK v6**
-  (`ai@6`, `@ai-sdk/react@3`) · TanStack Query `5` · Zustand `5` · Tailwind v4 ·
-  shadcn (style `radix-nova`) · streamdown (markdown) · `@xyflow/react`, `rive`,
-  `motion` (graph/animation, mostly latent).
-- **Backend contract**: the browser talks **directly** to the Go backend, which
-  emits a **native AI SDK v6 UI Message Stream** when `?format=aisdk` is set.
-  There is **no Next.js translation proxy** — `useChat`'s `DefaultChatTransport`
-  POSTs straight to Go.
+- **Stack**: Next.js `16.2.9` (App Router) · React `19.2.4` · `@ag-ui/core`
+  (event types) · TanStack Query `5` · Zustand `5` · Tailwind v4 · shadcn
+  (style `radix-nova`) · AI Elements + streamdown (rendering) · `ai` as a
+  **types-only** dependency (the AI SDK part shapes the AI Elements components
+  take) · `@xyflow/react`, `rive`, `motion` (graph/animation, mostly latent).
+- **Backend contract**: the browser talks **directly** to the Go backend: REST
+  for threads/agents/models and one **WebSocket** (`/v1/agent/chat?v=1`) that
+  streams **AG-UI** events for every open thread. There is no Next.js proxy and
+  no AI SDK runtime: `lib/chat/reduce.ts` folds the events into the view model.
 
-> Read alongside `~/code/agentic/AGENTS.md` (§5 wire protocol, §7 HITL). The
-> `data-*` part shapes there are the source of truth for `lib/chat/types.ts`.
+> Read alongside `~/code/agentlite/docs/PLAN.md` (§3.3 events, §3.4 transport,
+> Appendix B reducer table). That document is the source of truth for the
+> events `lib/chat/reduce.ts` understands.
 
 ---
 
@@ -29,15 +32,15 @@ human-in-the-loop approvals, task lists, artifacts, and a live context-usage rin
 
 ```bash
 pnpm install
-cp .env.example .env.local       # set backend URLs (see §3)
+cp .env.example .env.local       # NEXT_PUBLIC_API_URL (see §3)
 pnpm dev                         # http://localhost:3000
 pnpm build && pnpm start
 pnpm lint
 ```
 
-Requires the Go backend running (default `:8000` for REST, the streaming URL is
-configured separately — see §3). Without it, thread/message queries degrade to
-empty lists and the composer can't stream.
+Requires the agentlite backend running (default `:8000`). Without it the thread
+list query errors (the sidebar shows no conversations), opening a thread shows
+the fetch error above the composer, and the socket keeps retrying with backoff.
 
 ---
 
@@ -50,7 +53,7 @@ app/
   globals.css             # Tailwind v4 @theme, OKLCH tokens, .ai-gradient/.ai-glow helpers
   (app)/
     layout.tsx            # app shell: SidebarProvider + AppSidebar + SidebarInset
-    chat/page.tsx         # <LandingView> — centered composer for new/ephemeral chats
+    chat/page.tsx         # <LandingView> — centered composer for new/temporary chats
     chat/[threadId]/page.tsx   # <ThreadView> — awaits params (Next 16), renders the chat
 ```
 
@@ -58,29 +61,27 @@ app/
   `'use client'`.
 - **No `app/api/*` routes** — all network calls go directly to the Go backend.
 - Landing flow: typing on `/chat` creates a thread id (`nanoid`) and navigates to
-  `/chat/[threadId]`; pending text is carried via `lib/chat/pending.ts`.
+  `/chat/[threadId]`; pending text is carried via `lib/chat/pending.ts` and sent
+  once the (empty) history has loaded.
 
 ```
 components/
   providers.tsx               # QueryClientProvider + ThemeProvider + single TooltipProvider
   chat/
-    use-agent-chat.ts         # owns the Chat instance (see §5)
-    use-interrupt-resolver.ts # HITL resume logic (see §6)
-    use-request-body.ts       # builds the request body from store selections
-    interrupt-context.ts      # passes the resolver down to ToolCard
+    use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx, temporary-toggle.tsx
     composer/                 # composer, model-selector, agent-selector,
                               #   reasoning-effort-selector, thread-usage-ring, attachments
-    messages/                 # message-list, tool-card, agent-cards, run-progress,
-                              #   message-reasoning, message-actions, message-meta
-  right-panel/                # right-panel, agent-view, artifact-view, usage-view, model-view, csv
-  sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older)
+    messages/                 # message-list (+ pipeline step cards), tool-card, question-card,
+                              #   agent-card, message-reasoning, message-actions, message-meta
+  right-panel/                # right-panel, agent-view (child thread), artifact-view, usage-view, model-view, csv
+  sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
 
 lib/
-  chat/  api.ts (chatUrl/resumeUrl) · types.ts (ChatMessage/ChatDataParts) ·
-         sse-to-chunks.ts · from-history.ts · pending.ts · usage.ts · artifacts.ts
+  chat/  socket.ts (WebSocket) · reduce.ts (AG-UI events → view model) · store.ts (zustand threads) ·
+         types.ts (ChatMessage/parts) · pending.ts · usage.ts · artifacts.ts · tasks.ts
   api/   client.ts (apiFetch) · agents.ts · models.ts · threads.ts · types.ts
   providers.ts · group-threads.ts · dayjs.ts · utils.ts
 stores/ ui-store.ts            # Zustand UI state
@@ -94,188 +95,195 @@ plans/  00–06 + agent-ui-redesign.md   # design docs (see §9)
 
 | Var | Default | Used by |
 |---|---|---|
-| `NEXT_PUBLIC_BACKEND_URL` | `http://localhost:8000` | browser REST calls (`lib/api/client.ts`) |
-| `NEXT_PUBLIC_AGENTIC_URL` | `http://localhost:8011` | streaming chat + resume (`lib/chat/api.ts`) |
-| `BACKEND_URL` | `http://localhost:8000` | reserved for server-side use |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | REST (`lib/api/client.ts`) and the WebSocket (`lib/chat/socket.ts`, `http` → `ws`) |
 
-> The streaming URL (`NEXT_PUBLIC_AGENTIC_URL`) is **separate** from the REST URL
-> in code, even though both point at the same Go server in practice. `.env.example`
-> currently only lists the REST vars — set `NEXT_PUBLIC_AGENTIC_URL` too if your
-> backend isn't on `:8011`.
+REST (TanStack Query / `apiFetch` in `lib/api/*`):
+- `GET /v1/agents` → `{data: [{id, name, description, kind, mode, model, tools?, subagents?, system_prompt}]}`
+- `GET /v1/models`
+- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, created_at, updated_at, run_status?}]}`,
+  polled every 5 s; `run_status` (`queued | running | awaiting_input`) drives the sidebar dots
+- `GET /v1/threads/{id}/messages` → `{data: [{id, thread_id, role, seq, created_at, text, events}], cursor}`;
+  `events` are the AG-UI events of that turn, `cursor` is the log id to `subscribe{after}` from (`""` when idle)
+- `DELETE /v1/threads/{id}`
 
-REST endpoints consumed directly (TanStack Query in `lib/api/*`):
-`GET /v1/agents`, `GET /v1/models`, `GET|POST|PUT|DELETE /v1/threads[/{id}]`,
-`GET /v1/threads/{id}/messages`.
+WebSocket `GET /v1/agent/chat?v=1` (`lib/chat/socket.ts`), one per tab:
+- client → server: `run{threadId, message:{id, content}, agentId?, model?}`,
+  `run{threadId, resume:[{interruptId, status:"resolved", payload}]}`,
+  `subscribe{threadId, after?}`, `unsubscribe{threadId}`, `cancel{threadId}`
+- server → client: `event{threadId, seq, event}`, `idle{threadId}` (no active run),
+  `error{threadId, code, message}`
+- a subscription ends at the segment's `RUN_FINISHED`/`RUN_ERROR`; a new `run` or
+  `subscribe` for the same thread replaces the old one.
 
-Streaming endpoints (`lib/chat/api.ts`):
-- `chatUrl()` → `${AGENTIC_URL}/v1/chat/completions?format=aisdk`
-- `resumeUrl()` → `${AGENTIC_URL}/v1/agent/resume?format=aisdk`
+There is no identity header and no temporary mode: every thread is persisted.
+
+---
+
+## 4. The view model (`lib/chat/types.ts`, `lib/chat/reduce.ts`)
+
+`reduce(thread, event)` is a pure function over `@ag-ui/core` events producing
+`ThreadState = {messages, status, interrupts, cursor, loaded}`. Messages keep AI
+SDK part shapes so the AI Elements components render them unchanged:
+
+| AG-UI event | Part / state change |
+|---|---|
+| `RUN_STARTED{metadata:{turnId, agentId, model, createdAt}}` | opens the assistant message `id = turnId` (or continues it after a resume); status `streaming` |
+| `STEP_STARTED/FINISHED{stepName}` | `step-start{agent, done}` marker |
+| `TEXT_MESSAGE_START/CONTENT/END{messageId, role}` | `text` part keyed by `messageId` (`role: "user"` is the user turn; it replaces the composer's optimistic copy) |
+| `REASONING_MESSAGE_START/CONTENT/END` + `REASONING_END` | `reasoning` part; `durationMs` from the timestamps |
+| `TOOL_CALL_START/ARGS/END`, `TOOL_CALL_RESULT` | `dynamic-tool` part: `input-streaming → input-available → output-available \| output-error` (`{error}` results) |
+| `ACTIVITY_SNAPSHOT{activityType, messageId, content}` | upserts `data-agent` / `data-task-list` / `data-artifact` by `messageId` |
+| `SUBAGENT_FINISHED/ERROR{subagentRunId}` | status of the matching `data-agent` card |
+| `CUSTOM{name:"approval", value:{toolCallId, approved, justification}}` | tool part `approval-responded` or `output-denied`, with `approval.reason` |
+| `RUN_FINISHED{outcome, usage, metadata:{durationMs}}` | status `idle`, or `awaiting_input` with `interrupts` (a `confirmation` interrupt puts its tool part in `approval-requested`); usage + duration into `metadata` |
+| `RUN_ERROR{message}` | status `error` |
+
+Per-message `metadata`: `{agentId, model, createdAt, durationMs, usage:{inputTokens, outputTokens}, cancelled?, error?}`.
+Data part payloads: `data-agent` is the backend's agent activity
+(`subagentRunId, childThreadId, name, description?, status, startedAt, durationMs?, error?, progress?, log?, text?`),
+`data-task-list` is `{tasks:[{id, title, status}]}`, `data-artifact` is `{id, title, kind, content, language?, url?, …}`.
 
 ---
 
-## 4. The wire contract (`lib/chat/types.ts`)
+## 4a. Event → part → component
 
-The chat message type is an AI SDK `UIMessage` parameterized with our metadata
-and custom data parts:
-
-```ts
-export type ChatMessage = UIMessage<ChatMetadata, ChatDataParts>;
-```
-
-Native AI SDK parts (`text`, `reasoning`, `dynamic-tool`) arrive as built-in part
-types. **Custom** UI data arrives as `data-*` parts (`part.type === "data-<key>"`):
-
-| `data-*` part | Payload (summary) | Rendered by |
-|---|---|---|
-| `agent-step` | `{agent, step, status: "started"\|"done", durationMs?}` | `AgentCards` |
-| `agent-delta` | `{agent, step, kind: "reasoning"\|"text", delta}` | `AgentCards` / `AgentView` |
-| `agent-progress` | `{phase, message, agent?}` | `RunProgress` (run-level) / agent card |
-| `tool-interrupt` | `{toolCallId, toolName, prompt, details?, threadId?, resolved?}` | `ToolCard` (HITL) |
-| `task-list` | `{tasks: [{id,title,status,priority?,agent?}]}` | `TaskBar` |
-| `artifact` | `{id, title, kind: markdown\|code\|html\|json\|csv, content, language?}` | inline button → `ArtifactView` |
-| `usage` | `{promptTokens, completionTokens, totalTokens, contextUsed, contextWindow, breakdown?}` | `ThreadUsageRing` / `UsageView` |
-
-**Persistence semantics**: `agent-progress` is transient; `agent-step`,
-`agent-delta`, `task-list`, `artifact`, `usage` persist. Parts re-emitted with the
-**same `id`** replace the prior value (e.g. live task-list snapshots, artifact
-updates). Keep these shapes aligned with the backend's `aisdk` encoder
-(`agentic/internal/stream/aisdk`).
-
----
+Every AG-UI event the backend emits, what the reducer makes of it and which
+component renders the resulting part is tabled in the backend repo at
+`agentlite/docs/AG-UI-RENDERING.md`, next to the encoder that emits them.
+`reduce.ts` is the only place events are interpreted; components only read
+parts. Keep that document current when the encoder or the reducer changes.
 
 ## 5. Chat architecture
 
 ```
-useAgentChat (owns the Chat instance, keyed by thread id)
-  └─ ThreadChat  (re-renders per throttled chunk; children mostly bail)
+lib/chat/socket.ts   one WebSocket; per-thread subscriptions + last seq; jittered-backoff reconnect
+                     re-subscribes every open thread from its last seq
+lib/chat/store.ts    zustand: threads[threadId] = ThreadState; frames are reduced as they arrive and
+                     published once per animation frame
+use-thread.ts        useThread(threadId) → {messages, status, interrupts, loaded, error, send, approve, answer, stop};
+                     opens the thread on mount, unsubscribes on unmount
+  └─ ThreadChat  (re-renders once per published frame; children mostly bail)
        ├─ ThreadHeader (memo)
-       ├─ MessageList  ← the intended re-render: streams parts
-       │     ├─ text          → MessageResponse (streamdown)
-       │     ├─ reasoning      → MessageReasoning
-       │     ├─ dynamic-tool   → ToolCard (+ HITL overlay)
-       │     ├─ data-agent-*   → AgentCards (per sub-agent)
-       │     ├─ data-agent-progress (no agent) → RunProgress
-       │     └─ data-artifact  → inline button → right panel
-       ├─ TaskBar (memo)  ← from data-task-list
-       └─ Composer (memo) + ThreadUsageRing (self-subscribes for live tokens)
-  └─ RightPanel (sidepanel: agent / artifact / usage / model views)
+       ├─ MessageList  ← the intended re-render
+       │     └─ MessageItem (memo on the message ref — the reducer shares untouched messages)
+       │           ├─ text          → MessageResponse (streamdown)
+       │           ├─ reasoning     → MessageReasoning
+       │           ├─ dynamic-tool  → ToolCard (approvals) / QuestionCard (the `question` tool)
+       │           ├─ data-agent    → AgentCard → side panel opens the child thread
+       │           ├─ data-artifact → inline button → right panel
+       │           └─ step-start    → pipeline stages collapse into StepCards; the last stage is the answer
+       ├─ TaskBar (memo)  ← latest data-task-list
+       └─ Composer (memo) + ThreadUsageRing (self-subscribes to the thread)
+  └─ RightPanel (agent = AgentView(useThread(childThreadId)) / artifact / usage / model / agent-details)
 ```
 
-- **`useAgentChat`** (`components/chat/use-agent-chat.ts`) constructs **one**
-  `new Chat<ChatMessage>({ id, messages, transport })` per thread and returns
-  `{ ...useChat({ chat, experimental_throttle: 50 }), chat }`. The transport is a
-  `DefaultChatTransport` whose `prepareSendMessagesRequest` maps camelCase store
-  fields → the snake_case body the Go backend expects:
-  `{ messages, agent_id, model, thread_id, use_rag, temporary, reasoning_effort }`.
-- Secondary subscribers (usage ring, side-panel agent view) call
-  `useChat({ chat })` to read the **same** instance — `useChat` does **not** share
-  a `Chat` by id, so the single owner pattern is mandatory.
-- **Sub-agent rendering**: `AgentCards` groups `agent-delta`/`agent-step` by agent
-  name; a card renders only for agents that streamed their own output (the
-  `output_agent`'s text is in the main thread and has no card). Clicking a card
-  opens `RightPanel` (`kind: "agent"`), which reconstructs that agent's full
-  reasoning + text stream in `AgentView`.
-- **Loading history**: `useThreadMessages(threadId)` seeds initial messages via
-  `lib/chat/from-history.ts`.
+- **Opening a thread** = `GET /v1/threads/{id}/messages`, fold every message's
+  events with `reduce`, then `subscribe{after: cursor}`. A reload mid-answer
+  therefore shows the folded partial turn and streams only the tail.
+- **Sending** appends an optimistic user message and sends `run`; the backend's
+  `TEXT_MESSAGE_*` for the same message id replaces it. `agentId` comes from the
+  UI store (`"auto"` → omitted so the backend's default agent routes; `null` →
+  the bare-model `chat` agent); `model` is the selected model.
+- **Sub-agents** are threads: the parent's `data-agent` card carries
+  `childThreadId`, and the side panel renders it with the same `MessageList`.
+- **Pipelines**: a message whose `step-start` markers name agents other than
+  `metadata.agentId` renders every stage but the last as a collapsible card.
 
 ---
 
-## 6. Human-in-the-loop (HITL)
+## 6. Human-in-the-loop (approvals and questions)
 
-1. During streaming the backend emits a `data-tool-interrupt` part and the tool
-   part enters `state === "approval-requested"`. `ToolCard`
-   (`components/chat/messages/tool-card.tsx`) shows an amber card with the tool
-   params and **Approve / Deny** buttons.
-2. Clicking calls `resolveInterrupt(toolCallId, action)` from
-   `useInterruptResolver` (provided via `InterruptContext`). It:
-   - finds the most recent message with a pending tool call (robust to id reuse),
-   - records the decision on the part immediately (instant visual flip),
-   - `POST`s `resumeUrl()` with `{ thread_id, action }`,
-   - reads the resume SSE via `sseToChunkStream()` (`lib/chat/sse-to-chunks.ts`) +
-     `readUIMessageStream()` and merges the continuation back into the message.
+Both pause the run with `RUN_FINISHED{outcome:{type:"interrupt", interrupts}}`
+(thread status `awaiting_input`; the composer shows Stop) and continue it with a
+`run{resume}` frame. The continuation starts with `RUN_STARTED` for the same
+`turnId`, so it folds into the same assistant message.
 
-Maps to backend `POST /v1/agent/resume` (`agentic/internal/handler/resume.go`).
+- **Approval** (`reason: "confirmation"`): the tool part enters
+  `approval-requested` with `approval.id` = the interrupt id. `ToolCard` shows
+  Approve / Deny and a justification field and calls
+  `approve(interruptId, approved, justification)` → `payload: {approved, justification}`.
+  The backend echoes the decision as `CUSTOM approval`; a denied call ends as
+  `output-denied`.
+- **Question** (`reason: "input_required"`, the `question` tool): `QuestionCard`
+  reads `part.input.questions` and calls `answer(toolCallId, {answers, text})`
+  with `interruptId` = the tool call id. The answers come back as the tool's
+  output and the card becomes a read-only recap.
 
 ---
 
 ## 7. State management
 
-- **Zustand** (`stores/ui-store.ts`): `selectedModel`, `selectedAgentId`,
+- **Zustand UI store** (`stores/ui-store.ts`): `selectedModel`, `selectedAgentId`,
   `reasoningEffort`, `temporary`, `sidepanel`, `sidebarOpen`, `newChatNonce`.
   Model/agent/effort are **persisted to localStorage**; the rest are ephemeral.
-- **TanStack Query** (`lib/api/*`) for all non-streaming reads: keys `['agents']`,
-  `['models']`, `['threads']`, `['thread-messages', id]`. Agents/models cached
-  5 min; threads/messages degrade to `[]` on backend error. Thread mutations
-  invalidate `['threads']`.
-- **Chat state** lives entirely in the AI SDK `Chat`/`useChat` instance — no Redux
-  or chat context.
+- **Zustand chat store** (`lib/chat/store.ts`): `threads[threadId]` for every
+  thread opened in this tab (main view and side panel alike) and `connected`.
+  Only `useThread` and `ThreadUsageRing` read it.
+- **TanStack Query** (`lib/api/*`) for REST: keys `['agents']`, `['models']`
+  (cached 5 min) and `['threads']` (polled every 5 s). Deleting a thread
+  invalidates `['threads']`.
 
 ---
 
 ## 8. Thread & chat-stream performance (FPS) — REQUIRED reading before touching the chat UI
 
-The chat thread streams tokens at ~20fps (throttled). Every careless re-render in
-that path multiplies across hundreds of frames and tanks FPS. This spec is the
-contract for keeping the thread smooth. **If you change anything under
-`components/chat/`, conform to this and re-measure with React Scan.**
+The chat thread re-renders once per animation frame while a run streams. Every
+careless re-render in that path multiplies across hundreds of frames and tanks
+FPS. This spec is the contract for keeping the thread smooth. **If you change
+anything under `components/chat/`, conform to this and re-measure with React Scan.**
 
 ### The one rule
 
 > During streaming, the ONLY things that should do real render work are the
 > **streaming output itself** (the changed text/reasoning part) and the **live
 > usage ring**. The header, composer, selectors, task bar, and *settled* message
-> cards (reasoning, tool, agent-progress, sub-agent) must NOT re-render per token.
+> cards (reasoning, tool, question, sub-agent) must NOT re-render per frame.
 
 ### Why it's hard (the mechanism)
 
-`useChat` (in `ThreadChat`) subscribes to the chat's **messages** store via
-`useSyncExternalStore`, so it re-renders on **every throttled chunk**. Its whole
-subtree is in the blast radius. You cannot avoid `ThreadChat` re-rendering; you
-make its children **bail** via `memo` + stable props, and you isolate live data
-(usage) to the leaf that needs it.
+`useThread` (in `ThreadChat`) selects the thread from the chat store, which
+publishes once per animation frame, so `ThreadChat` re-renders on **every
+published frame** and its whole subtree is in the blast radius. You cannot avoid
+`ThreadChat` re-rendering; you make its children **bail** via `memo` + stable
+props, and you isolate live data (usage) to the leaf that needs it.
 
-Key SDK facts (verified against `@ai-sdk/react@3`):
-- `useChat` does **not** share a `Chat` by `id` — each call makes a new one.
-  `useAgentChat` therefore **owns** one `Chat` instance and returns it (`chat`);
-  secondary subscribers use `useChat({ chat })` to read the SAME instance.
-- `useChat({ chat })`'s `sendMessage`/`stop`/`chat` are stable refs (bound to the
-  instance) — safe as `useCallback`/`useMemo` deps and memoized-component props.
-- `experimental_throttle: 50` on `useChat` batches updates to ~20fps. Keep it.
+Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
+- The reducer **shares structure**: a frame replaces only the message and part
+  it touched. Settled messages and parts keep their object identity, so a `memo`
+  on the message or part ref is exact.
+- `send`/`approve`/`answer`/`stop` from `useThread` are `useCallback`'d on the
+  thread id — safe as deps and memoized-component props.
+- Frames are batched with `requestAnimationFrame`; a burst of tokens is one render.
 
 ### Architecture (current, keep it this way)
 
-- **`useAgentChat`** owns the `Chat` instance (`new Chat`, keyed by thread id) +
-  `experimental_throttle`. Returns `{ ...helpers, chat }`.
-- **`ThreadChat`** re-renders per chunk but does ~nothing: header + composer are
-  memoized and bail; `MessageList` is the intended re-render (stream output).
+- **`ThreadChat`** re-renders per frame but does ~nothing: header + composer are
+  memoized and bail; `MessageList` is the intended re-render.
   - Handlers passed to the composer are `useCallback`'d (`onSubmit`, `onOpenUsage`);
-    `onStop`/`sendMessage` are already stable from the hook.
+    `stop` is already stable from the hook.
   - **Live usage is decoupled**: `Composer` takes a `contextSlot` ReactNode, not a
-    `usage` prop. `ThreadChat` passes a `useMemo`'d `<ThreadUsageRing chat={chat} …/>`.
-    The ring self-subscribes via `useChat({ chat })` and re-renders alone for the
-    live token count — the composer stays memoized.
+    `usage` prop. `ThreadChat` passes a `useMemo`'d `<ThreadUsageRing threadId …/>`.
+    The ring self-subscribes to the chat store and re-renders alone for the live
+    token count — the composer stays memoized.
 - **`Composer`, `ThreadHeader`, `AgentSelector`, `ModelSelector`,
   `ReasoningEffortSelector`, `AttachmentButton`, `TaskBar`** are all `memo`'d.
-- **In-message cards** are `memo`'d with **content-signature comparators** so they
-  update on new *events* but not on tokens:
-  - `RunProgress` → `runProgressKey` (run-level progress phases).
-  - `AgentCards` → `agentCardsKey` (agents seen + lifecycle/duration + progress;
-    NOT per-delta — cards show steps/status, not streamed text).
-  - `ToolCard` → `part.state` + `toolName` + `output` + `interrupt.resolved`.
+- **`MessageItem`** is `memo`'d on the message ref: only the message the frame
+  touched re-renders. Inside it:
+  - `ToolCard`, `QuestionCard`, `AgentCard` → `memo` on the part/data ref (the
+    reducer replaces it only on a real event for that call or agent).
   - `MessageReasoning` → primitive `text`/`isStreaming` (default shallow memo).
   - `MessageResponse` (Streamdown) → already memoized on `children`.
+  - `TaskBar` → `taskSignature` (task ids + statuses).
 
 ### Rules for new code
 
-1. **Never pass a per-token-changing prop into a memoized shell component.** Live
-   values (usage, token counts, anything derived from `messages` each chunk) must
-   be read by a dedicated leaf that self-subscribes (`useChat({ chat })`), not
-   threaded through the composer/header.
-2. **New message-part renderers must be memoized** with a comparator keyed on a
-   cheap **signature of that part's own data** — never the whole `message`. The
-   signature must change when a real event arrives and stay equal across tokens.
-   Append-only data parts (unique ids) → count/keys; in-place data parts (stable
-   id, e.g. `data-agent-step`, `data-task-list`) → include status/content.
+1. **Never pass a per-frame-changing prop into a memoized shell component.** Live
+   values (usage, token counts, anything derived from `messages` each frame) must
+   be read by a dedicated leaf that selects from the chat store, not threaded
+   through the composer/header.
+2. **New message-part renderers must be memoized** on the part itself (its ref is
+   stable until the reducer replaces it) or on a cheap signature of its own data —
+   never the whole `message`.
 3. **Callbacks crossing into memoized components must be `useCallback`'d**;
    element props (`contextSlot`) must be `useMemo`'d. A new closure every render
    defeats the memo.
@@ -283,7 +291,8 @@ Key SDK facts (verified against `@ai-sdk/react@3`):
    Never wrap an individual tooltip in its own `TooltipProvider` (it re-renders a
    provider per instance — see the 304× `TooltipProvider` regression).
 5. **Heavy popovers/lists** (e.g. the model list) render only when `open`.
-6. **Keep `experimental_throttle`.** Removing it un-throttles the whole subtree.
+6. **Keep the animation-frame batching** in `lib/chat/store.ts`. Publishing per
+   event un-throttles the whole subtree.
 
 ### How to diagnose (React Scan)
 
@@ -335,12 +344,12 @@ before large changes:
   parts, transient vs persistent data parts, keyed-part replacement, multi-agent
   rendering, usage ring.
 - **02-backend-changes** — backend TODOs (reasoning deltas, usage tokens,
-  task-list, artifacts, upload, auth). Several are now implemented in the `aisdk`
-  encoder; verify against `agentic` before assuming a gap.
+  task-list, artifacts, upload, auth). Written against the old `agentic`
+  backend; verify against `agentlite` before assuming a gap.
 - **03-frontend-build** — file map, milestones, env vars, data-fetching conventions.
 - **04-wire-protocol-decision** — the decision to have the backend emit a **native
-  AI SDK stream** (Option B) rather than a hybrid + proxy adapter. This is the
-  current architecture.
+  AI SDK stream** (Option B) rather than a hybrid + proxy adapter. **Superseded**:
+  the backend now streams AG-UI over a WebSocket and the browser reduces it (§3–5).
 - **05-unified-agent-progress** — proposed (not built) cleanup to collapse
   `agent-delta`/`agent-step`/`agent-progress` into one source.
 - **06-auto-router-classifier** — proposed "Auto" agent that classifies and routes
@@ -352,16 +361,18 @@ before large changes:
 
 ## 11. Conventions & gotchas
 
-- **Direct-to-backend, no proxy.** Don't add an `app/api/chat` route; the
-  transport hits Go directly. Auth/CORS is handled by the backend (permissive).
-- **Keep `lib/chat/types.ts` in sync** with the backend `aisdk` encoder. A new
-  backend `data-*` event needs a `ChatDataParts` entry and a renderer.
-- **camelCase store → snake_case body** happens once, in
-  `use-agent-chat.ts`'s `prepareSendMessagesRequest`.
-- **`useChat` instance ownership**: only `useAgentChat` may call `new Chat`;
-  everyone else passes `{ chat }`.
-- **Temporary chats** (`temporary: true`) are never persisted server-side and
-  reset on a new-chat nonce.
+- **Direct-to-backend, no proxy.** Don't add an `app/api/chat` route; REST and
+  the socket hit Go directly. CORS is handled by the backend (permissive).
+- **Keep `lib/chat/reduce.ts` in sync with `agentlite/docs/PLAN.md`.** A new
+  AG-UI event or activity type needs a reducer case, a part type in
+  `lib/chat/types.ts` and a renderer in `message-list.tsx`.
+- **`ai` is types-only.** The backend speaks AG-UI; don't import runtime code
+  from `ai` or add `@ai-sdk/react` back.
+- **One socket per tab** (`lib/chat/socket.ts`). Open threads through
+  `useThread`; never subscribe by hand.
+- **Temporary chats** run in place on `/chat` (no route, reset on the new-chat
+  nonce) but the backend has no temporary mode, so they are persisted like any
+  other thread.
 - Next 16: dynamic route params are **async** — `await params` in
   `chat/[threadId]/page.tsx`. Re-read `node_modules/next/dist/docs/` before using
   unfamiliar APIs (see top banner).

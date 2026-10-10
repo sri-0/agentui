@@ -1,6 +1,6 @@
-import type { ChatDataParts, ChatMessage } from "./types";
+import type { Artifact, ChatMessage } from "./types";
 
-export type ArtifactData = ChatDataParts["artifact"];
+export type ArtifactData = Artifact;
 
 export type ArtifactSummary = {
   id: string;

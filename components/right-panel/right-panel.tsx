@@ -1,18 +1,5 @@
 "use client";
 
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-} from "@/components/ai-elements/conversation";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -27,19 +14,14 @@ import {
   downloadArtifact,
   findArtifact,
 } from "@/lib/chat/artifacts";
-import { formatDuration } from "@/lib/dayjs";
+import { useChatStore } from "@/lib/chat/store";
 import type { ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
-import { BotIcon, ChevronRightIcon, DownloadIcon, XIcon } from "lucide-react";
+import { BotIcon, DownloadIcon, XIcon } from "lucide-react";
 
-import {
-  AgentStatusBadge,
-  AgentView,
-  agentDurationMs,
-  deriveAgentStatus,
-  findAgentMessage,
-} from "./agent-view";
 import { AgentDetailsView } from "./agent-details-view";
+import { ConnectorDetailsView } from "./connector-details-view";
+import { AgentStatusBadge, AgentView } from "./agent-view";
 import { ArtifactView } from "./artifact-view";
 import { ModelView } from "./model-view";
 import { UsageView } from "./usage-view";
@@ -53,87 +35,31 @@ export function RightPanel({
 }) {
   const sidepanel = useUiStore((s) => s.sidepanel);
   const close = useUiStore((s) => s.closeSidepanel);
-  const openSidepanel = useUiStore((s) => s.openSidepanel);
   const { data: agentList = [] } = useAgents();
+  const childStatus = useChatStore((s) =>
+    sidepanel?.kind === "agent" ? s.threads[sidepanel.threadId]?.status : undefined,
+  );
 
   if (!sidepanel) return null;
-
-  // Breadcrumb root (the top-level pipeline) for the sub-agent panel.
-  const agentMessage =
-    sidepanel.kind === "agent"
-      ? findAgentMessage(messages, sidepanel.messageId, sidepanel.agent)
-      : undefined;
-  const rootId = agentMessage?.metadata?.agentId;
-  const rootName =
-    agentList.find((a) => a.id === rootId)?.name ?? rootId ?? "Agent";
-  const agentDuration =
-    sidepanel.kind === "agent"
-      ? agentDurationMs(agentMessage, sidepanel.agent)
-      : undefined;
 
   return (
     <aside className="flex h-full flex-col border-l bg-card/30">
       <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-5">
         {sidepanel.kind === "agent" ? (
-          <nav className="flex min-w-0 items-center gap-1.5">
+          <div className="flex min-w-0 items-center gap-1.5">
             <BotIcon className="size-4 shrink-0 text-muted-foreground" />
-            <span className="truncate text-sm text-muted-foreground">
-              {rootName}
-            </span>
-            <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/70" />
-            <span className="truncate text-sm font-semibold">
-              {sidepanel.agent}
-            </span>
-            <AgentStatusBadge
-              status={deriveAgentStatus(agentMessage, sidepanel.agent)}
-              className="ml-1 shrink-0"
-            />
-            {agentDuration != null && (
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {formatDuration(agentDuration)}
-              </span>
+            <span className="truncate text-sm font-semibold">{sidepanel.name}</span>
+            {childStatus && (
+              <AgentStatusBadge status={childStatus} className="ml-1 shrink-0" />
             )}
-          </nav>
+          </div>
         ) : sidepanel.kind === "agent-details" ? (
-          <Breadcrumb className="min-w-0">
-            <BreadcrumbList className="flex-nowrap text-sm">
-              <BreadcrumbItem className="min-w-0">
-                <BotIcon className="size-4 shrink-0 text-muted-foreground" />
-                {sidepanel.subAgent ? (
-                  <BreadcrumbLink asChild>
-                    <button
-                      type="button"
-                      className="truncate font-medium"
-                      onClick={() =>
-                        openSidepanel({
-                          kind: "agent-details",
-                          agentId: sidepanel.agentId,
-                        })
-                      }
-                    >
-                      {agentList.find((a) => a.id === sidepanel.agentId)?.name ??
-                        "Agent"}
-                    </button>
-                  </BreadcrumbLink>
-                ) : (
-                  <BreadcrumbPage className="truncate font-semibold">
-                    {agentList.find((a) => a.id === sidepanel.agentId)?.name ??
-                      "Agent"}
-                  </BreadcrumbPage>
-                )}
-              </BreadcrumbItem>
-              {sidepanel.subAgent && (
-                <>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem className="min-w-0">
-                    <BreadcrumbPage className="truncate font-semibold">
-                      {sidepanel.subAgent}
-                    </BreadcrumbPage>
-                  </BreadcrumbItem>
-                </>
-              )}
-            </BreadcrumbList>
-          </Breadcrumb>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <BotIcon className="size-4 shrink-0 text-muted-foreground" />
+            <span className="truncate text-sm font-semibold">
+              {agentList.find((a) => a.id === sidepanel.agentId)?.name ?? "Agent"}
+            </span>
+          </div>
         ) : sidepanel.kind === "artifact" ? (
           <div className="flex min-w-0 items-center gap-3">
             <h2 className="shrink-0 text-sm font-semibold">Artifacts</h2>
@@ -143,6 +69,7 @@ export function RightPanel({
           <h2 className="truncate text-sm font-semibold">
             {sidepanel.kind === "usage" && "Context"}
             {sidepanel.kind === "model" && "Model"}
+            {sidepanel.kind === "connector" && "Connector"}
           </h2>
         )}
         <div className="flex shrink-0 items-center gap-0.5">
@@ -166,18 +93,7 @@ export function RightPanel({
         </div>
       </header>
       {sidepanel.kind === "agent" ? (
-        // Auto-follow the sub-agent's stream (and a scroll-to-bottom button),
-        // identical to the main thread.
-        <Conversation className="flex-1">
-          <ConversationContent className="p-6">
-            <AgentView
-              messages={messages}
-              agent={sidepanel.agent}
-              messageId={sidepanel.messageId}
-            />
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
+        <AgentView key={sidepanel.threadId} threadId={sidepanel.threadId} />
       ) : (
         <div className="flex-1 overflow-y-auto p-6">
           {sidepanel.kind === "usage" && (
@@ -190,10 +106,10 @@ export function RightPanel({
             <ModelView modelId={sidepanel.modelId} />
           )}
           {sidepanel.kind === "agent-details" && (
-            <AgentDetailsView
-              agentId={sidepanel.agentId}
-              subAgent={sidepanel.subAgent}
-            />
+            <AgentDetailsView agentId={sidepanel.agentId} />
+          )}
+          {sidepanel.kind === "connector" && (
+            <ConnectorDetailsView connectorId={sidepanel.connectorId} />
           )}
         </div>
       )}

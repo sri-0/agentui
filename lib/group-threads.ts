@@ -46,6 +46,5 @@ export function groupThreads(threads: Thread[], now?: number): ThreadGroup[] {
 }
 
 export function threadTitle(t: Thread): string {
-  const title = (t.title as string) || (t.name as string) || "";
-  return title.trim() || "New chat";
+  return t.title?.trim() || "New chat";
 }

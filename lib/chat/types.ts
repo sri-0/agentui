@@ -1,138 +1,109 @@
-import type { UIMessage } from "ai";
+import type { Event as AgUiEvent } from "@ag-ui/core";
 
 /**
- * A single question emitted by the `question` tool (Phase 05, opencode schema).
- * The agent pauses the run until the user answers; the answer round-trips through
- * the HITL resume endpoint as selected option LABELS.
+ * The view model the chat renders, built by `lib/chat/reduce.ts` from the AG-UI
+ * events the backend streams and stores. These are our own shapes; nothing
+ * here depends on the AI SDK.
  */
+
+/** One question asked by the `question` tool (its call input). */
 export type Question = {
   question: string;
   header: string;
   options: { label: string; description?: string }[];
-  /** allow selecting more than one option (checkboxes vs. single-select) */
   multiple?: boolean;
-  /** allow a free-text answer in addition to / instead of the options (default true) */
-  custom?: boolean;
 };
 
-/**
- * Per-message metadata carried alongside the parts.
- */
+/** Per-turn metadata, from RUN_STARTED and RUN_FINISHED. */
 export type ChatMetadata = {
-  threadId?: string;
-  /** model id selected for this message */
-  model?: string;
-  /** agent id, if this message was produced by an agent */
   agentId?: string;
-  /** wall-clock time the response took to stream, in ms */
-  durationMs?: number;
+  model?: string;
   createdAt?: number;
+  durationMs?: number;
+  usage?: { inputTokens: number; outputTokens: number };
+  cancelled?: boolean;
+  error?: string;
 };
 
-/**
- * Custom data parts emitted by the Go backend's AI SDK v6 stream.
- * Each key becomes a `data-<key>` part type on the wire and in `message.parts`.
- *
- * Native parts (`text`, `reasoning`, `tool-*`) are NOT listed here — they use the
- * AI SDK's built-in part types so the AI Elements components work out of the box.
- */
-export type ChatDataParts = {
-  /** sub-agent lifecycle (started/done) for the multi-agent cards.
-   *  durationMs is set on the `done` step (how long the sub-agent ran). */
-  "agent-step": {
-    agent: string;
-    step: number;
-    status: "started" | "done";
-    durationMs?: number;
-  };
-  /**
-   * Sub-agent streamed output as an INCREMENTAL delta (one token chunk), split by
-   * kind so the side panel can render reasoning separately from the answer. Each
-   * is a distinct part (unique id) so the wire stays O(n) — the client
-   * concatenates a given agent's deltas (per kind) to reconstruct its output.
-   */
-  "agent-delta": {
-    agent: string;
-    step: number;
-    kind: "reasoning" | "text";
-    delta: string;
-  };
-  /** transient status line ("Analyzing…") — not persisted */
-  "agent-progress": { phase: string; message: string; agent?: string };
-  /** human-in-the-loop tool confirmation. The tool part itself enters the
-   *  native `approval-requested` state; this side-channel carries the backend
-   *  threadId (no native slot) and records the user's decision for the badge. */
-  "tool-interrupt": {
-    toolCallId: string;
-    toolName: string;
-    prompt: string;
-    details?: unknown;
-    threadId?: string;
-    resolved?: "approved" | "denied";
-    /** Structured questions when `toolName === "question"` (Phase 05). Rendered
-     *  as an interactive form instead of the generic approve/deny card. May also
-     *  be carried inside `details` — the renderer accepts either. */
-    questions?: Question[];
-    /** After a question card is submitted: the selected option labels per
-     *  question (`answers[i]` = labels chosen for question i) for the settled view. */
-    answers?: string[][];
-    /** After submit: the free-text answer, if the user typed one. */
-    answerText?: string;
-  };
-  /** todo/task list snapshot from the `todowrite` tool (keyed, replaces prior) */
-  "task-list": {
-    tasks: {
-      id: string;
-      title: string;
-      // "running" is the backend's in-progress state for swarm children
-      // (task.go); it is normalized alongside "in_progress" for the UI.
-      status:
-        | "pending"
-        | "in_progress"
-        | "running"
-        | "completed"
-        | "cancelled";
-      priority?: "high" | "medium" | "low";
-      /** owning sub-agent (worker) for swarm/coordinator boards */
-      agent?: string;
-    }[];
-  };
-  /** artifact pushed to the right sidepanel (keyed by id, re-emit to update) */
-  artifact: {
-    id: string;
-    title: string;
-    kind: "markdown" | "code" | "html" | "json" | "csv" | "file";
-    content: string;
-    language?: string;
-    /** file-kind only: remote binary served with Content-Disposition attachment */
-    url?: string;
-    mime?: string;
-    filename?: string;
-    size?: number;
-  };
-  /** usage + context-window metering for the context circle / usage panel */
-  usage: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-    contextUsed: number;
-    contextWindow: number;
-    breakdown?: { label: string; tokens: number }[];
-  };
+/** The parent's view of a sub-agent (the `agent` activity), keyed by run id. */
+export type AgentCard = {
+  subagentRunId: string;
+  childThreadId: string;
+  name: string;
+  description?: string;
+  parentToolCallId: string;
+  status: "running" | "done" | "error";
+  startedAt: number;
+  durationMs?: number;
+  error?: string;
+  progress?: string;
+  log?: { at: number; message: string }[];
+  text?: string;
 };
 
-export type ChatMessage = UIMessage<ChatMetadata, ChatDataParts>;
+export type Task = { id: string; title: string; status: string };
 
-/**
- * Extra fields the client sends alongside `messages`. Held in camelCase here and
- * at the call sites; mapped to the Go backend's snake_case keys in the transport's
- * prepareSendMessagesRequest (see components/chat/use-agent-chat.ts).
- */
-export type ChatRequestBody = {
-  agentId?: string;
-  model?: string;
-  threadId?: string;
-  useRag?: boolean;
-  temporary?: boolean;
-  reasoningEffort?: "off" | "low" | "medium" | "high";
+export type Artifact = {
+  id: string;
+  title: string;
+  kind: "markdown" | "code" | "html" | "json" | "csv" | "file";
+  content: string;
+  language?: string;
+  url?: string;
+  mime?: string;
+  filename?: string;
+  size?: number;
 };
+
+export type TextPart = { type: "text"; id: string; text: string; done: boolean };
+
+export type ReasoningPart = {
+  type: "reasoning";
+  id: string;
+  text: string;
+  done: boolean;
+  startedAt?: number;
+  durationMs?: number;
+};
+
+/** Where a tool call is: running (args streaming or executing), finished, or
+ *  held for the user's approval. */
+export type ToolState = "running" | "done" | "error" | "approval" | "denied";
+
+export type ToolPart = {
+  type: "tool";
+  toolCallId: string;
+  toolName: string;
+  state: ToolState;
+  /** JSON of the arguments while they stream in. */
+  argsText?: string;
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+  /** The pending or decided confirmation. */
+  approval?: { id: string; approved?: boolean; reason?: string };
+  /** What the backend asks the user to confirm. */
+  prompt?: string;
+  /** Event timestamps: when the call was announced and how long until its result. */
+  startedAt?: number;
+  durationMs?: number;
+};
+
+/** A model call by the named agent; a pipeline has one per stage. */
+export type StepPart = { type: "step-start"; agent: string; done: boolean };
+
+export type DataPart =
+  | { type: "data-agent"; id: string; data: AgentCard }
+  | { type: "data-task-list"; id: string; data: { tasks: Task[] } }
+  | { type: "data-artifact"; id: string; data: Artifact };
+
+export type ChatPart = TextPart | ReasoningPart | ToolPart | StepPart | DataPart;
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  parts: ChatPart[];
+  metadata?: ChatMetadata;
+};
+
+export type { AgUiEvent };

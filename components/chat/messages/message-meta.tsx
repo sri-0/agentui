@@ -17,7 +17,7 @@ function useModelInfo(message: ChatMessage) {
   const agent = meta.agentId
     ? agents.find((a) => a.id === meta.agentId)
     : undefined;
-  const modelId = meta.model ?? agent?.model;
+  const modelId = meta.model;
   const modelName = modelId
     ? (models.find((m) => m.id === modelId)?.name ?? modelId)
     : undefined;

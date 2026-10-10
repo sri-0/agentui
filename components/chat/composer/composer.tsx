@@ -13,11 +13,11 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
-import type { ChatStatus } from "ai";
 import { PaperclipIcon } from "lucide-react";
 import { memo, type ReactNode } from "react";
 
 import { AgentSelector } from "./agent-selector";
+import { ConnectorSelector } from "./connector-selector";
 import {
   AttachmentDropOverlay,
   AttachmentList,
@@ -26,6 +26,9 @@ import {
 } from "./attachments";
 import { ModelSelector } from "./model-selector";
 import { ReasoningEffortSelector } from "./reasoning-effort-selector";
+
+/** What the submit button shows; the names the AI Elements input uses. */
+export type ComposerStatus = "ready" | "submitted" | "streaming" | "error";
 
 const AttachmentButton = memo(function AttachmentButton() {
   const attachments = usePromptInputAttachments();
@@ -49,7 +52,7 @@ export const Composer = memo(function Composer({
   glow = true,
 }: {
   onSubmit: (message: PromptInputMessage) => void;
-  status: ChatStatus;
+  status: ComposerStatus;
   onStop: () => void;
   // The live token-usage ring, rendered self-subscribing so the composer itself
   // doesn't take a per-token `usage` prop (which would defeat this memo).
@@ -98,6 +101,7 @@ export const Composer = memo(function Composer({
             <AttachmentButton />
             <ModelSelector />
             <AgentSelector />
+            <ConnectorSelector />
             <ReasoningEffortSelector />
           </PromptInputTools>
           <div className="flex items-center gap-2">

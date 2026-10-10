@@ -5,65 +5,62 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { Task, TaskContent, TaskTrigger } from "@/components/ai-elements/task";
 import { Button } from "@/components/ui/button";
-import type { ChatMessage } from "@/lib/chat/types";
+import { REASON_INPUT_REQUIRED, type ThreadStatus } from "@/lib/chat/reduce";
+import type { ChatMessage, ChatPart } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
-import type { ChatStatus } from "ai";
-import { FileIcon, FileTextIcon, HelpCircleIcon } from "lucide-react";
-import { memo } from "react";
+import type { Interrupt } from "@ag-ui/core";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  FileIcon,
+  FileTextIcon,
+  LoaderIcon,
+} from "lucide-react";
+import { memo, type ReactNode } from "react";
 
 import { ThinkingIndicator } from "../loading";
-import { AgentCards } from "./agent-cards";
+import { AgentCard } from "./agent-card";
 import { MessageActions } from "./message-actions";
 import { MessageMeta } from "./message-meta";
 import { MessageReasoning } from "./message-reasoning";
-import { isQuestionInterrupt, QuestionCard } from "./question-card";
-import { RunProgress } from "./run-progress";
-import { ToolCard } from "./tool-card";
-
-type Part = ChatMessage["parts"][number];
-
-/** Swarm orchestration tools whose raw generic tool cards are noise in the
- *  transcript — their state is surfaced by the TaskBar (`data-task-list`) and the
- *  sub-agent cards, so the raw cards are hidden. The TaskBar reads the separate
- *  `data-task-list` part, NOT these tool calls, so hiding them is safe. */
-const HIDDEN_TOOL_CARDS = new Set(["task", "task_join", "todowrite"]);
+import { QuestionCard, type Answer } from "./question-card";
+import { ToolLine, type Approve } from "./tool-line";
 
 export function MessageList({
   messages,
   status,
-  stopped = false,
-  activeQuestionId,
+  interrupts,
+  approve,
+  answer,
 }: {
   messages: ChatMessage[];
-  status: ChatStatus;
-  /** The last turn was aborted by the user (Stop). Reflected as a "Stopped"
-   *  run-progress badge instead of a false green "Completed". */
-  stopped?: boolean;
-  /** toolCallId of the question interrupt currently shown in the composer slot.
-   *  That one is NOT rendered inline here (it lives in the footer) to avoid a
-   *  double render. */
-  activeQuestionId?: string;
+  status: ThreadStatus;
+  interrupts: Interrupt[];
+  approve: Approve;
+  answer: Answer;
 }) {
-  const last = messages[messages.length - 1];
+  const pendingQuestionId = interrupts.find(
+    (i) => i.reason === REASON_INPUT_REQUIRED,
+  )?.toolCallId;
+  const last = messages.at(-1);
   const waiting =
-    status === "submitted" || (status === "streaming" && last?.role === "user");
+    status === "streaming" &&
+    (!last || last.role === "user" || !last.parts.some(isVisible));
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      {messages.map((message, index) => {
-        const isLast = index === messages.length - 1;
-        return (
-          <MessageItem
-            key={message.id}
-            message={message}
-            streaming={status === "streaming"}
-            isLast={isLast}
-            stopped={stopped && isLast}
-            activeQuestionId={activeQuestionId}
-          />
-        );
-      })}
+      {messages.map((message, index) => (
+        <MessageItem
+          key={message.id}
+          message={message}
+          streaming={status === "streaming" && index === messages.length - 1}
+          pendingQuestionId={pendingQuestionId}
+          approve={approve}
+          answer={answer}
+        />
+      ))}
       {waiting && (
         <div className="flex">
           <ThinkingIndicator />
@@ -73,200 +70,140 @@ export function MessageList({
   );
 }
 
-// Memoized so a streaming token only re-renders the streaming (last) message —
-// completed messages keep a stable object ref and skip the whole subtree
-// (Streamdown, AgentCards/collectAgents, RunProgress).
+const isVisible = (p: ChatPart) =>
+  p.type !== "step-start" && !(p.type === "text" && !p.text);
+
+const partKey = (p: ChatPart, i: number) =>
+  p.type === "tool" ? p.toolCallId : ("id" in p && p.id) || i;
+
+type Stage = { agent?: string; done: boolean; parts: ChatPart[] };
+
+/** Group a message's parts into stages: consecutive steps (model calls) by
+ *  the same agent are one stage, so a pipeline shows one card per agent. */
+function groupStages(parts: ChatPart[]): Stage[] {
+  const stages: Stage[] = [];
+  for (const p of parts) {
+    const last = stages.at(-1);
+    if (p.type === "step-start") {
+      if (last?.agent === p.agent) last.done = p.done;
+      else stages.push({ agent: p.agent, done: p.done, parts: [] });
+    } else if (!last) {
+      stages.push({ done: true, parts: [p] });
+    } else {
+      last.parts.push(p);
+    }
+  }
+  return stages;
+}
+
+// Memoized so a streaming frame only re-renders the message that changed:
+// the reducer shares untouched messages, so settled ones keep their ref.
 const MessageItem = memo(function MessageItem({
   message,
   streaming,
-  isLast,
-  stopped = false,
-  activeQuestionId,
+  pendingQuestionId,
+  approve,
+  answer,
 }: {
   message: ChatMessage;
+  /** This is the last message and the thread is streaming. */
   streaming: boolean;
-  isLast: boolean;
-  stopped?: boolean;
-  /** The question currently shown in the composer slot — not rendered inline. */
-  activeQuestionId?: string;
+  /** The `question` call the run is waiting on, if any. */
+  pendingQuestionId?: string;
+  approve: Approve;
+  answer: Answer;
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
-  const skippedQuestions = useUiStore((s) => s.skippedQuestions);
-  const unskipQuestion = useUiStore((s) => s.unskipQuestion);
   const isUser = message.role === "user";
+  const hasText = message.parts.some((p) => p.type === "text" && p.text);
+  const showActions = !isUser && hasText && !streaming;
 
-  // Single pass over parts: classify the renderable ones, find text +
-  // interrupts. Avoids several O(n) scans and — critically — never builds React
-  // elements for the thousands of `data-agent-delta` parts (consumed by the
-  // TaskBar / AgentView).
-  let hasText = false;
-  const interrupts = new Map<string, Part>();
-  const renderable: { part: Part; i: number }[] = [];
-  // toolCallIds of question interrupts on THIS message the user has skipped but
-  // not yet answered — surfaced as a "Skipped Questions" reopen button.
-  const skippedIds: string[] = [];
-  message.parts.forEach((part, i) => {
+  // A pipeline runs other agents as stages before the output agent answers:
+  // those stages collapse into cards and the last stage is the answer.
+  const stages = groupStages(message.parts);
+  const pipeline =
+    stages.length > 1 &&
+    stages.some((s) => s.agent && s.agent !== message.metadata?.agentId);
+
+  const render = (part: ChatPart, i: number): ReactNode => {
+    const key = partKey(part, i);
     switch (part.type) {
       case "text":
-        if (part.text) hasText = true;
-        renderable.push({ part, i });
-        break;
-      case "dynamic-tool":
-        // The `question` tool renders exclusively as the interactive QuestionCard
-        // (from its paired `data-tool-interrupt`). Skip its raw tool card so we
-        // don't ALSO show a generic approve/deny card for the same interrupt.
-        if (part.toolName === "question") break;
-        // Swarm orchestration tools render via the TaskBar / sub-agent cards,
-        // not as raw generic tool cards.
-        if (HIDDEN_TOOL_CARDS.has(part.toolName)) break;
-        renderable.push({ part, i });
-        break;
+        return part.text ? (
+          <MessageResponse key={key}>{part.text}</MessageResponse>
+        ) : null;
       case "reasoning":
+        return (
+          <MessageReasoning
+            key={key}
+            text={part.text}
+            isStreaming={!part.done}
+            duration={
+              part.durationMs != null
+                ? Math.max(1, Math.ceil(part.durationMs / 1000))
+                : undefined
+            }
+          />
+        );
+      case "tool":
+        return part.toolName === "question" ? (
+          <QuestionCard
+            key={key}
+            part={part}
+            pending={part.toolCallId === pendingQuestionId}
+            onAnswer={answer}
+          />
+        ) : (
+          <ToolLine key={key} part={part} onApprove={approve} />
+        );
+      case "data-agent":
+        return <AgentCard key={key} data={part.data} />;
       case "data-artifact":
-        renderable.push({ part, i });
-        break;
-      case "data-tool-interrupt":
-        // Question interrupts render as their own interactive form (no paired
-        // dynamic-tool part is required); approve/deny interrupts stay a
-        // side-channel merged into the matching tool card.
-        if (isQuestionInterrupt(part.data)) {
-          const id = part.data.toolCallId;
-          // SETTLED (answered) questions render inline as transcript history.
-          // An UNRESOLVED question is either shown in the composer slot (active)
-          // or, if skipped, represented by the "Skipped Questions" button below
-          // — so it is NOT rendered inline here (avoids a double render).
-          if (part.data.resolved) {
-            renderable.push({ part, i });
-          } else if (id === activeQuestionId) {
-            // shown in the composer slot; skip inline
-          } else if (skippedQuestions.has(id)) {
-            skippedIds.push(id);
-          } else {
-            // unresolved, not-yet-active (e.g. reconnect edge) — render inline
-            renderable.push({ part, i });
-          }
-        } else {
-          interrupts.set(part.data.toolCallId, part);
-        }
-        break;
+        return (
+          <Button
+            key={key}
+            variant="outline"
+            size="sm"
+            className="my-1 w-fit gap-2"
+            onClick={() =>
+              openSidepanel({ kind: "artifact", artifactId: part.data.id })
+            }
+          >
+            {part.data.kind === "file" ? (
+              <FileIcon className="size-4" />
+            ) : (
+              <FileTextIcon className="size-4" />
+            )}
+            {part.data.title}
+          </Button>
+        );
+      default:
+        return null;
     }
-  });
-  const showActions = !isUser && hasText && !(streaming && isLast);
+  };
 
   return (
     <Message from={message.role}>
       <MessageContent
         className={isUser ? undefined : "w-full max-w-full min-w-0"}
       >
-        {/* Top-level run progress ("Analyzing…") renders for ALL agents — for a
-            swarm it's the activity indicator while the coordinator plans, before
-            the task board appears. Sub-agent cards render for every multi-agent
-            run (swarm included): they surface each child's LIVE streamed output
-            inline (via Streamdown) so swarm workers are visible mid-run, not just
-            through a manual side-panel click. */}
-        {!isUser && (
-          <>
-            <RunProgress
-              message={message}
-              streaming={streaming}
-              isLast={isLast}
-              stopped={stopped}
-            />
-            <AgentCards message={message} streaming={streaming && isLast} />
-          </>
+        {pipeline
+          ? stages.map((stage, si) =>
+              si === stages.length - 1 ? (
+                stage.parts.map(render)
+              ) : (
+                <StageCard key={si} agent={stage.agent ?? "stage"} done={stage.done}>
+                  {stage.parts.map(render)}
+                </StageCard>
+              ),
+            )
+          : message.parts.map(render)}
+
+        {message.metadata?.cancelled && (
+          <p className="text-xs text-muted-foreground">Stopped.</p>
         )}
-
-        {renderable.map(({ part, i }, idx) => {
-          switch (part.type) {
-            case "text":
-              return part.text ? (
-                <MessageResponse key={i}>{part.text}</MessageResponse>
-              ) : null;
-
-            case "reasoning": {
-              const isReasoningStreaming =
-                streaming && isLast && idx === renderable.length - 1;
-              // Persisted timing (unix-ms of first/last reasoning delta) →
-              // duration in seconds, so a reloaded collapse shows the real
-              // "Thought for N seconds". While still streaming live we leave it
-              // undefined so <Reasoning> uses its own client-side timer.
-              const timing = part as { startedMs?: number; endedMs?: number };
-              const reasoningDuration =
-                !isReasoningStreaming &&
-                typeof timing.startedMs === "number" &&
-                typeof timing.endedMs === "number" &&
-                timing.endedMs >= timing.startedMs
-                  ? Math.max(
-                      1,
-                      Math.ceil((timing.endedMs - timing.startedMs) / 1000)
-                    )
-                  : undefined;
-              return (
-                <MessageReasoning
-                  key={i}
-                  text={part.text}
-                  isStreaming={isReasoningStreaming}
-                  duration={reasoningDuration}
-                />
-              );
-            }
-
-            case "dynamic-tool": {
-              const ip = interrupts.get(part.toolCallId);
-              return (
-                <ToolCard
-                  key={i}
-                  part={part}
-                  interrupt={
-                    ip?.type === "data-tool-interrupt" ? ip.data : undefined
-                  }
-                />
-              );
-            }
-
-            case "data-tool-interrupt":
-              return <QuestionCard key={i} interrupt={part.data} />;
-
-            case "data-artifact":
-              return (
-                <Button
-                  key={i}
-                  variant="outline"
-                  size="sm"
-                  className="my-1 w-fit gap-2"
-                  onClick={() =>
-                    openSidepanel({
-                      kind: "artifact",
-                      artifactId: part.data.id,
-                    })
-                  }
-                >
-                  {part.data.kind === "file" ? (
-                    <FileIcon className="size-4" />
-                  ) : (
-                    <FileTextIcon className="size-4" />
-                  )}
-                  {part.data.title}
-                </Button>
-              );
-
-            default:
-              return null;
-          }
-        })}
-
-        {/* A question the user skipped (Dismiss) but hasn't answered — the run
-            is still awaiting-input. Reopen it into the composer slot to answer. */}
-        {skippedIds.length > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="my-1 w-fit gap-2"
-            onClick={() => skippedIds.forEach((id) => unskipQuestion(id))}
-          >
-            <HelpCircleIcon className="size-4 text-primary" />
-            Skipped Questions
-          </Button>
+        {message.metadata?.error && (
+          <p className="text-xs text-destructive">{message.metadata.error}</p>
         )}
 
         {showActions && (
@@ -284,3 +221,31 @@ const MessageItem = memo(function MessageItem({
     </Message>
   );
 });
+
+/** A collapsible card for one stage of a pipeline. */
+function StageCard({
+  agent,
+  done,
+  children,
+}: {
+  agent: string;
+  done: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Task defaultOpen={!done} className="my-1 rounded-xl border bg-card px-3 py-2">
+      <TaskTrigger title={agent}>
+        <div className="flex w-full cursor-pointer items-center gap-2 text-sm">
+          {done ? (
+            <CheckIcon className="size-4 text-muted-foreground" />
+          ) : (
+            <LoaderIcon className="size-4 animate-spin text-primary" />
+          )}
+          <span className="font-medium">{agent}</span>
+          <ChevronDownIcon className="ml-auto size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+        </div>
+      </TaskTrigger>
+      <TaskContent className="flex flex-col gap-3 pt-2">{children}</TaskContent>
+    </Task>
+  );
+}

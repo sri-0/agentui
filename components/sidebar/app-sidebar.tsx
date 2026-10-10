@@ -16,14 +16,9 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  type SessionHandle,
-  useMarkViewed,
-  useSessions,
-} from "@/lib/api/sessions";
 import { useDeleteThread, useThreads } from "@/lib/api/threads";
+import type { RunStatus } from "@/lib/api/types";
 import { groupThreads, threadTitle } from "@/lib/group-threads";
-import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import {
   CircleAlertIcon,
@@ -37,25 +32,14 @@ import {
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 export function AppSidebar() {
   const { data: threads = [], isLoading } = useThreads();
-  const { data: sessions = [] } = useSessions();
   const groups = groupThreads(threads);
   const params = useParams();
   const activeId = params?.threadId as string | undefined;
   const requestNewChat = useUiStore((s) => s.requestNewChat);
-
-  // Join the thread list to the session list by session_id === thread.id. Build
-  // the lookup ONCE per sessions change (not a find() per row) so the status
-  // pulse / completed-ring indicators don't turn the ~5s sessions poll into a
-  // per-row re-render storm.
-  const sessionByThread = useMemo(() => {
-    const map = new Map<string, SessionHandle>();
-    for (const s of sessions) map.set(s.session_id, s);
-    return map;
-  }, [sessions]);
 
   return (
     <Sidebar collapsible="icon">
@@ -146,7 +130,7 @@ export function AppSidebar() {
                       id={t.id}
                       title={threadTitle(t)}
                       active={t.id === activeId}
-                      session={sessionByThread.get(t.id)}
+                      runStatus={t.run_status}
                     />
                   ))}
                 </SidebarMenu>
@@ -166,18 +150,8 @@ export function AppSidebar() {
   );
 }
 
-/** A session is "active" (still holding the backend open) while queued/running/
- *  awaiting-input; terminal once done/error/cancelled. */
-function isActiveStatus(status: SessionHandle["status"]): boolean {
-  return (
-    status === "running" ||
-    status === "awaiting-input" ||
-    status === "queued"
-  );
-}
-
-/** Pulsing emerald status dot (ping ring + solid core) for a running/queued
- *  session on a thread row. */
+/** Pulsing emerald status dot (ping ring + solid core) for a thread whose run
+ *  is queued or running. */
 function StatusDot() {
   return (
     <span
@@ -190,65 +164,20 @@ function StatusDot() {
   );
 }
 
-/** Static hollow "completed" ring for a terminal thread. Blue = an unread
- *  result waiting; gray = the session is still within the retention window but
- *  the user has already seen it. Reads as "there's a result" rather than "still
- *  working" (that's the pulse). */
-function CompletedRing({ viewed }: { viewed: boolean }) {
-  return (
-    <span
-      aria-label={viewed ? "Viewed" : "Unread response"}
-      className={cn(
-        "size-2.5 shrink-0 rounded-full border-2",
-        viewed ? "border-muted-foreground/50" : "border-blue-500",
-      )}
-    />
-  );
-}
-
 function ThreadRow({
   id,
   title,
   active,
-  session,
+  runStatus,
 }: {
   id: string;
   title: string;
   active: boolean;
-  session?: SessionHandle;
+  /** present while a run owns the thread (from the 5 s thread-list poll) */
+  runStatus?: RunStatus;
 }) {
   const router = useRouter();
   const del = useDeleteThread();
-  const markViewed = useMarkViewed();
-
-  // A joined session is either active (pulse) or terminal. Terminal sessions
-  // still present in useSessions() (i.e. within the retention window) show a
-  // ring: blue if the user hasn't opened it yet, gray once viewed.
-  const activeSession = session && isActiveStatus(session.status);
-  const terminal = session && !activeSession;
-  const unviewed = Boolean(terminal && !session.viewed);
-
-  // Mark viewed the moment the user opens a finished-but-unviewed thread. Firing
-  // on `active && unviewed` covers both navigating into /chat/{id} and the
-  // active thread changing; the mutation invalidates ["sessions"] so the ring
-  // clears immediately. There's a brief window between the POST and the sessions
-  // cache refetch where `unviewed` is still true — a `viewedRef` latch (reset
-  // whenever this row goes inactive) keeps us from re-POSTing during it.
-  const shouldMarkViewed = Boolean(active && unviewed);
-  const mutate = markViewed.mutate;
-  const viewedRef = useRef(false);
-  useEffect(() => {
-    // Reset the latch whenever the row goes inactive so a later re-open re-marks
-    // (e.g. a NEW terminal run on the same thread the user opens again).
-    if (!active) {
-      viewedRef.current = false;
-      return;
-    }
-    if (shouldMarkViewed && !viewedRef.current) {
-      viewedRef.current = true;
-      mutate(id);
-    }
-  }, [active, shouldMarkViewed, id, mutate]);
 
   return (
     <SidebarMenuItem>
@@ -259,20 +188,16 @@ function ThreadRow({
       </SidebarMenuButton>
       {/* Single status icon per row, absolutely positioned in the SAME slot as
           the hover-trash (right-1). Fades out on row hover so the trash cleanly
-          replaces it with zero shift. Priority: running/queued (green pulse) >
-          awaiting-input (exclamation) > terminal unread (blue ring) > terminal
-          viewed (gray ring) > none. */}
-      {session && (
+          replaces it with zero shift. */}
+      {runStatus && (
         <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 transition-opacity group-hover/menu-item:opacity-0">
-          {session.status === "awaiting-input" ? (
+          {runStatus === "awaiting_input" ? (
             <CircleAlertIcon
               aria-label="Awaiting your input"
               className="size-3.5 text-amber-500"
             />
-          ) : activeSession ? (
-            <StatusDot />
           ) : (
-            <CompletedRing viewed={!unviewed} />
+            <StatusDot />
           )}
         </span>
       )}
@@ -291,8 +216,13 @@ function ThreadRow({
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // The theme is only known on the client; render the light variant on the
+  // server so hydration matches.
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const dark = mounted && theme === "dark";
 
   return (

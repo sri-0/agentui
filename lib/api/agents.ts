@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import type { Agent, ListResponse } from "./types";
 
-export function useAgents() {
+export function useAgents(options: { select?: (agents: Agent[]) => Agent[] } = {}) {
   return useQuery({
     queryKey: ["agents"],
     staleTime: 5 * 60_000,
@@ -13,5 +13,6 @@ export function useAgents() {
       const res = await apiFetch<ListResponse<Agent>>("/v1/agents");
       return res.data ?? [];
     },
+    ...options,
   });
 }

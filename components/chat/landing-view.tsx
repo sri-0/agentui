@@ -2,15 +2,15 @@
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { setPendingMessage } from "@/lib/chat/pending";
+import { startThread } from "@/lib/chat/store";
 import { useUiStore } from "@/stores/ui-store";
-import { nanoid } from "nanoid";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Composer } from "./composer/composer";
 import { TemporaryToggle } from "./temporary-toggle";
 import { ThreadChat } from "./thread-view";
+import { runOptions } from "./use-thread";
 
 const noop = () => {};
 
@@ -23,48 +23,37 @@ const SUGGESTIONS = [
 
 export function LandingView() {
   const router = useRouter();
-  const selectedModel = useUiStore((s) => s.selectedModel);
-  const selectedAgentId = useUiStore((s) => s.selectedAgentId);
-  const reasoningEffort = useUiStore((s) => s.reasoningEffort);
   const temporary = useUiStore((s) => s.temporary);
 
-  // A temporary chat runs in-place here (no route / no persistence). A normal
-  // chat navigates to /chat/[id] so it's saved and shareable.
-  const [tempThreadId, setTempThreadId] = useState<string | null>(null);
+  // A temporary chat runs in place here (no route). A normal chat navigates to
+  // /chat/[id] so it's shareable. "New chat" bumps the nonce, which retires an
+  // in-place temporary chat.
   const newChatNonce = useUiStore((s) => s.newChatNonce);
-  useEffect(() => setTempThreadId(null), [newChatNonce]);
+  const [temp, setTemp] = useState<{ id: string; nonce: number } | null>(null);
+  const tempThreadId = temp?.nonce === newChatNonce ? temp.id : null;
 
-  const start = (message: PromptInputMessage) => {
-    if (!message.text.trim() && (message.files?.length ?? 0) === 0) return;
-    const threadId = nanoid();
-    setPendingMessage(threadId, {
-      text: message.text,
-      files: message.files,
-      body: {
-        model: selectedModel ?? undefined,
-        agentId: selectedAgentId ?? undefined,
-        threadId: temporary ? undefined : threadId,
-        temporary,
-        useRag: (message.files?.length ?? 0) > 0,
-        reasoningEffort: reasoningEffort === "off" ? undefined : reasoningEffort,
-      },
-    });
+  const [error, setError] = useState<string | null>(null);
+
+  // The first message starts the run and the server names the thread; the
+  // thread view then opens it and replays the turn from its start.
+  const start = async (message: PromptInputMessage) => {
+    if (!message.text.trim()) return;
+    let threadId: string;
+    try {
+      threadId = (await startThread(message.text, runOptions())).thread_id;
+    } catch (err) {
+      setError((err as Error).message);
+      return;
+    }
     if (temporary) {
-      setTempThreadId(threadId);
+      setTemp({ id: threadId, nonce: newChatNonce });
     } else {
       router.push(`/chat/${threadId}`);
     }
   };
 
   if (tempThreadId) {
-    return (
-      <ThreadChat
-        key={tempThreadId}
-        threadId={tempThreadId}
-        isTemporary
-        initialMessages={[]}
-      />
-    );
+    return <ThreadChat key={tempThreadId} threadId={tempThreadId} isTemporary />;
   }
 
   return (
@@ -82,7 +71,7 @@ export function LandingView() {
             How can I help?
           </h1>
           <p className="mt-3 text-[15px] text-muted-foreground">
-            Choose a model or an agent, then ask anything.
+            {error ?? "Choose a model or an agent, then ask anything."}
           </p>
         </div>
 

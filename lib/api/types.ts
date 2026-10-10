@@ -1,26 +1,19 @@
-/** Shapes returned by the adk-go backend. Kept loose where the backend emits maps. */
+import type { Event as AgUiEvent } from "@ag-ui/core";
+
+/** Shapes returned by the agentlite backend. */
 
 export type Agent = {
   id: string;
   name: string;
-  /** agent type: basic | deep-research | triage | swarm | coordinator | … */
-  type?: string;
   description?: string;
-  system_prompt?: string;
-  model?: string;
-  provider?: string;
+  /** llm | sequential | parallel | loop | graph */
+  kind: string;
+  /** primary | subagent | all */
+  mode: string;
   tools?: string[];
-  sub_agents?: {
-    id: string;
-    name: string;
-    description?: string;
-    system_prompt?: string;
-    model?: string;
-    provider?: string;
-    tools?: string[] | null;
-  }[];
-  keywords?: string[];
-  max_iterations?: number;
+  /** ids of the agents this one dispatches or runs as stages */
+  subagents?: string[];
+  system_prompt?: string;
 };
 
 export type Model = {
@@ -49,27 +42,59 @@ export type Model = {
   };
 };
 
-export type Thread = {
+export type RunStatus = "queued" | "running" | "awaiting_input";
+
+/** A tool group a thread can switch on (connectors.yaml). */
+export type Connector = {
   id: string;
-  title?: string;
-  created_at?: string | number;
-  updated_at?: string | number;
-  // backend may use different keys; keep index access tolerant
-  [key: string]: unknown;
+  name: string;
+  description?: string;
+  /** a lucide icon name */
+  icon?: string;
+  type: "tools" | "mcp";
+  /** mcp: endpoint or command */
+  url?: string;
+  /** mcp: only on the detail endpoint, listed live from the server */
+  tools?: { name: string; description?: string }[];
+  /** mcp, detail endpoint only */
+  status?: "ok" | "unreachable";
+  error?: string;
 };
 
-export type ThreadMessage = {
-  id?: string;
-  role: "user" | "assistant" | "system" | string;
-  content: string;
-  created_at?: string | number;
-  /** model id that generated the message (assistant turns) */
-  model?: string;
-  /** agent id that produced the message, if any */
+/** A queued run, as POST /v1/agent/chat returns it. */
+export type RunStart = {
+  id: string;
+  thread_id: string;
+  agent_id: string;
+  model: string;
+  status: RunStatus;
+  /** log cursor to subscribe from */
+  cursor: string;
+};
+
+export type Thread = {
+  id: string;
+  root_id: string;
+  title?: string;
   agent_id?: string;
-  /** wall-clock duration of the turn, in ms */
-  duration_ms?: number;
-  [key: string]: unknown;
+  model?: string;
+  /** connectors switched on; absent means all */
+  connectors?: string[];
+  created_at?: string | number;
+  updated_at?: string | number;
+  /** present while a run owns the thread */
+  run_status?: RunStatus;
+};
+
+/** One stored turn: the AG-UI events that produced it. */
+export type StoredMessage = {
+  id: string;
+  thread_id: string;
+  role: "user" | "assistant";
+  seq: number;
+  created_at: string;
+  text: string;
+  events: AgUiEvent[];
 };
 
 export type ListResponse<T> = { object: "list"; data: T[] };

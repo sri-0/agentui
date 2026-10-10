@@ -42,12 +42,13 @@ export const ModelSelector = memo(function ModelSelector() {
   const allModels = useMemo(() => groups.flatMap((g) => g.models), [groups]);
   const current = allModels.find((m) => m.id === selectedModel);
 
-  // default to first model once loaded
+  // Default to the first model once loaded; a persisted selection the backend
+  // no longer serves is replaced the same way.
   useEffect(() => {
-    if (!selectedModel && allModels.length > 0) {
+    if (allModels.length > 0 && !current) {
       setModel(allModels[0].id);
     }
-  }, [selectedModel, allModels, setModel]);
+  }, [current, allModels, setModel]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

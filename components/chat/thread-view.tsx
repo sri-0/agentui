@@ -8,6 +8,7 @@ import {
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { RightPanel } from "@/components/right-panel/right-panel";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -15,52 +16,76 @@ import {
 } from "@/components/ui/resizable";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useModels } from "@/lib/api/models";
-import { cancelSession } from "@/lib/api/sessions";
-import { useThreadMessages } from "@/lib/api/threads";
 import { collectArtifacts } from "@/lib/chat/artifacts";
-import { fromHistory } from "@/lib/chat/from-history";
-import { takePendingMessage } from "@/lib/chat/pending";
-import type { ChatMessage } from "@/lib/chat/types";
-import { Button } from "@/components/ui/button";
+import { useChatStore } from "@/lib/chat/store";
 import { useUiStore } from "@/stores/ui-store";
-import { useQueryClient } from "@tanstack/react-query";
 import { FileTextIcon, LoaderIcon, MessageCircleDashedIcon } from "lucide-react";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 
-import { Composer } from "./composer/composer";
+import { Composer, type ComposerStatus } from "./composer/composer";
 import { ThreadUsageRing } from "./composer/thread-usage-ring";
-import { InterruptContext } from "./interrupt-context";
-import { useInterruptResolver } from "./use-interrupt-resolver";
 import { ConversationSkeleton } from "./loading";
 import { MessageList } from "./messages/message-list";
-import {
-  isQuestionInterrupt,
-  QuestionCard,
-} from "./messages/question-card";
 import { TaskBar } from "./task-bar";
-import { useAgentChat } from "./use-agent-chat";
-import { useRequestBody } from "./use-request-body";
-import { useSessionReconnect } from "./use-session-reconnect";
+import { useThread } from "./use-thread";
 
 export function ThreadView({ threadId }: { threadId: string }) {
-  // /chat/[threadId] is always a persisted thread — temporary chats run in-place
-  // on /chat with no route (see LandingView).
-  const history = useThreadMessages(threadId);
+  return <ThreadChat key={threadId} threadId={threadId} isTemporary={false} />;
+}
 
-  // Wait for history — FRESH history, not a stale cache snapshot — before
-  // mounting the chat so initialMessages is correct. `isFetchedAfterMount`
-  // matters on navigate-back to a mid-stream thread: the cached history
-  // predates the in-progress turn (its user message would be missing), and the
-  // Chat instance seeds initialMessages exactly once per mount, so we hold the
-  // skeleton for the one refetch round-trip and seed from current data.
-  if (history.isLoading || !history.isFetchedAfterMount) {
+export function ThreadChat({
+  threadId,
+  isTemporary,
+}: {
+  threadId: string;
+  isTemporary: boolean;
+}) {
+  const { messages, status, interrupts, loaded, error, send, approve, answer, stop } =
+    useThread(threadId);
+  const connected = useChatStore((s) => s.connected);
+  const openSidepanel = useUiStore((s) => s.openSidepanel);
+  const sidepanel = useUiStore((s) => s.sidepanel);
+  const panelOpen = Boolean(sidepanel);
+  const sideDefault =
+    sidepanel?.kind === "artifact" ? 48 : sidepanel?.kind === "agent" ? 42 : 34;
+  const { data: models = [] } = useModels();
+  const selectedModel = useUiStore((s) => s.selectedModel);
+  const contextWindow =
+    models.find((m) => m.id === selectedModel)?.context_length ?? 128_000;
+
+  // Stable handlers keep the memoized Composer and header out of the
+  // per-frame re-render path. See AGENTS.md "Thread & chat-stream performance".
+  const onSubmit = useCallback(
+    (message: PromptInputMessage) => {
+      if (message.text.trim()) send(message.text);
+    },
+    [send],
+  );
+  const onOpenUsage = useCallback(
+    () => openSidepanel({ kind: "usage" }),
+    [openSidepanel],
+  );
+  const contextSlot = useMemo(
+    () => <ThreadUsageRing threadId={threadId} onOpenUsage={onOpenUsage} />,
+    [threadId, onOpenUsage],
+  );
+
+  const artifacts = useMemo(() => collectArtifacts(messages), [messages]);
+  const latestArtifactId = artifacts.at(-1)?.id;
+
+  // Auto-open the artifacts panel the moment a new artifact is generated
+  // during a run: only when latestArtifactId changes, not on thread open and
+  // not when the status alone changes.
+  const seenArtifactRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (seenArtifactRef.current === latestArtifactId) return;
+    seenArtifactRef.current = latestArtifactId;
+    if (status === "streaming" && latestArtifactId) {
+      openSidepanel({ kind: "artifact", artifactId: latestArtifactId });
+    }
+  }, [latestArtifactId, status, openSidepanel]);
+
+  if (!loaded) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
@@ -71,175 +96,16 @@ export function ThreadView({ threadId }: { threadId: string }) {
     );
   }
 
-  return (
-    <ThreadChat
-      key={threadId}
-      threadId={threadId}
-      isTemporary={false}
-      initialMessages={fromHistory(history.data?.messages ?? [])}
-      // Head event-log seq folded into the history above (present only while a
-      // session is ACTIVE). The reconnect hook attaches the live stream at
-      // exactly this seq so only the tail streams in — no full-run replay.
-      liveHeadSeq={history.data?.live?.head_seq}
-    />
-  );
-}
-
-export function ThreadChat({
-  threadId,
-  isTemporary,
-  initialMessages,
-  liveHeadSeq,
-}: {
-  threadId: string;
-  isTemporary: boolean;
-  initialMessages: ChatMessage[];
-  liveHeadSeq?: number;
-}) {
-  const { messages, sendMessage, setMessages, status, stop, lastUsage } =
-    useAgentChat({
-      id: threadId,
-      initialMessages,
-    });
-  const buildBody = useRequestBody(threadId, isTemporary);
-  const queryClient = useQueryClient();
-
-  // Whether the CURRENT (last) turn was stopped by the user. Aborting the AI-SDK
-  // stream drops `status` back to "ready", which reads identically to a natural
-  // finish — so without this flag the run-progress badge would flip to a false
-  // green "Completed". Cleared whenever a new turn starts (send / resend).
-  const [stopped, setStopped] = useState(false);
-
-  // Stop = abort the client stream AND cancel the server-side run. The run
-  // executes in the background decoupled from the connection, so `stop()` alone
-  // leaves it executing and the session `running` forever. Persisted threads own
-  // a server session keyed by their thread id (session_id === thread id);
-  // temporary chats have no server session to cancel.
-  const handleStop = useCallback(() => {
-    stop();
-    setStopped(true);
-    if (!isTemporary) {
-      void cancelSession(threadId).finally(() => {
-        // Surface the `cancelled` status in the sidebar immediately rather than
-        // waiting for useSessions' 5s refetchInterval.
-        queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      });
-    }
-  }, [stop, isTemporary, threadId, queryClient]);
-
-  // HITL: approve/deny a tool interrupt, then merge the backend continuation
-  // (tool result + final answer) back into the conversation.
-  const resolveInterrupt = useInterruptResolver(threadId, messages, setMessages);
-
-  // Rejoin a still-running server-side session on load / after a drop. Persisted
-  // threads only (temporary chats have no server-side session to rejoin).
-  const { reconnecting } = useSessionReconnect(
-    isTemporary ? "" : threadId,
-    status,
-    setMessages,
-    liveHeadSeq,
-  );
-  const openSidepanel = useUiStore((s) => s.openSidepanel);
-  const sidepanel = useUiStore((s) => s.sidepanel);
-  const panelOpen = Boolean(sidepanel);
-  const skippedQuestions = useUiStore((s) => s.skippedQuestions);
-
-  // Newest UNRESOLVED, NON-SKIPPED question interrupt across the thread. When
-  // present it REPLACES the composer (ChatGPT-style): the user answers the
-  // question in the footer slot instead of typing. Skipping a question adds its
-  // toolCallId to `skippedQuestions` so it drops out of `activeQuestion` and the
-  // composer returns — the backend run stays awaiting-input either way.
-  const activeQuestion = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const parts = messages[i].parts;
-      for (let j = parts.length - 1; j >= 0; j--) {
-        const p = parts[j];
-        if (
-          p.type === "data-tool-interrupt" &&
-          isQuestionInterrupt(p.data) &&
-          !p.data.resolved &&
-          !skippedQuestions.has(p.data.toolCallId)
-        ) {
-          return p.data;
-        }
-      }
-    }
-    return null;
-  }, [messages, skippedQuestions]);
-  const sideDefault =
-    sidepanel?.kind === "artifact" ? 48 : sidepanel?.kind === "agent" ? 42 : 34;
-  const { data: models = [] } = useModels();
-  const selectedModel = useUiStore((s) => s.selectedModel);
-  const contextWindow =
-    models.find((m) => m.id === selectedModel)?.context_length ?? 128_000;
-
-  // Kick off the pending first message handed over from the landing screen.
-  const startedRef = useRef(false);
-  useEffect(() => {
-    if (startedRef.current) return;
-    const pending = takePendingMessage(threadId);
-    if (pending) {
-      startedRef.current = true;
-      sendMessage(
-        { text: pending.text, files: pending.files },
-        { body: pending.body },
-      );
-    }
-  }, [threadId, sendMessage]);
-
-  // Stable handlers + a self-subscribing usage ring keep the memoized Composer
-  // and header out of the per-token re-render path. See AGENTS.md
-  // "Thread & chat-stream performance".
-  const onSubmit = useCallback(
-    (message: PromptInputMessage) => {
-      if (!message.text.trim() && (message.files?.length ?? 0) === 0) return;
-      setStopped(false);
-      sendMessage(
-        { text: message.text, files: message.files },
-        { body: buildBody({ hasFiles: (message.files?.length ?? 0) > 0 }) },
-      );
-    },
-    [sendMessage, buildBody],
-  );
-  const onOpenUsage = useCallback(
-    () => openSidepanel({ kind: "usage" }),
-    [openSidepanel],
-  );
-  const contextSlot = useMemo(
-    () => <ThreadUsageRing lastUsage={lastUsage} onOpenUsage={onOpenUsage} />,
-    [lastUsage, onOpenUsage],
-  );
-
-  // collectArtifacts is O(messages×parts) — far too heavy to run on every
-  // throttled streaming chunk of a swarm turn (~7k parts). Key it on a cheap
-  // single-pass artifact-part count: artifact parts are upserted by id (a NEW
-  // part only appears for a new artifact event), so the count changes exactly
-  // when the collection does.
-  let artifactSig = 0;
-  for (const m of messages)
-    for (const p of m.parts) if (p.type === "data-artifact") artifactSig++;
-  const artifacts = useMemo(
-    () => collectArtifacts(messages),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- artifactSig is the content signature of messages
-    [artifactSig],
-  );
-  const latestArtifactId = artifacts.at(-1)?.id;
-
-  // Auto-open the artifacts panel the moment a new artifact is generated during
-  // a stream. Keyed only on latestArtifactId so it fires when a NEW artifact
-  // appears — not on manual thread open (status idle) nor when a fresh turn
-  // starts over an existing artifact (id unchanged). Streaming is read via a ref
-  // so its changes don't trigger the effect.
-  const streamingRef = useRef(false);
-  streamingRef.current = status === "streaming" || status === "submitted";
-  useEffect(() => {
-    if (streamingRef.current && latestArtifactId) {
-      openSidepanel({ kind: "artifact", artifactId: latestArtifactId });
-    }
-  }, [latestArtifactId, openSidepanel]);
+  // While the run waits for an answer or approval the composer shows the
+  // stop button instead of accepting a second message.
+  const composerStatus: ComposerStatus =
+    status === "streaming"
+      ? "streaming"
+      : status === "awaiting_input"
+        ? "submitted"
+        : "ready";
 
   return (
-    <InterruptContext.Provider value={resolveInterrupt}>
     <ResizablePanelGroup
       orientation="horizontal"
       className="flex-1 overflow-hidden"
@@ -250,7 +116,7 @@ export function ThreadChat({
             isTemporary={isTemporary}
             artifactCount={artifacts.length}
             latestArtifactId={latestArtifactId}
-            reconnecting={reconnecting}
+            reconnecting={!connected}
           />
 
           <Conversation className="flex-1">
@@ -258,41 +124,29 @@ export function ThreadChat({
               <MessageList
                 messages={messages}
                 status={status}
-                stopped={stopped}
-                activeQuestionId={activeQuestion?.toolCallId}
+                interrupts={interrupts}
+                approve={approve}
+                answer={answer}
               />
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
 
           <div className="px-4 pb-5 pt-2">
-            <TaskBar
-              messages={messages}
-              running={status === "streaming" || status === "submitted"}
-            />
+            <TaskBar messages={messages} running={status === "streaming"} />
             <div className="mx-auto w-full max-w-3xl">
-              {activeQuestion ? (
-                // A question is pending → the composer is REPLACED by the
-                // interactive question panel (ChatGPT-style). Answering resumes
-                // the run; "Dismiss" skips it locally and the composer returns.
-                <QuestionCard
-                  key={activeQuestion.toolCallId}
-                  interrupt={activeQuestion}
-                  variant="composer"
-                />
-              ) : (
-                <>
-                  <Composer
-                    onSubmit={onSubmit}
-                    status={status}
-                    onStop={handleStop}
-                    contextSlot={contextSlot}
-                  />
-                  <p className="mt-2 text-center text-xs text-muted-foreground">
-                    AI can make mistakes. Always validate responses.
-                  </p>
-                </>
+              {status === "error" && error && (
+                <p className="mb-2 text-center text-xs text-destructive">{error}</p>
               )}
+              <Composer
+                onSubmit={onSubmit}
+                status={composerStatus}
+                onStop={stop}
+                contextSlot={contextSlot}
+              />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                AI can make mistakes. Always validate responses.
+              </p>
             </div>
           </div>
         </div>
@@ -312,7 +166,6 @@ export function ThreadChat({
         </>
       )}
     </ResizablePanelGroup>
-    </InterruptContext.Provider>
   );
 }
 
@@ -326,7 +179,7 @@ const ThreadHeader = memo(function ThreadHeader({
   isTemporary: boolean;
   artifactCount: number;
   latestArtifactId?: string;
-  reconnecting?: boolean;
+  reconnecting: boolean;
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const closeSidepanel = useUiStore((s) => s.closeSidepanel);
@@ -350,7 +203,7 @@ const ThreadHeader = memo(function ThreadHeader({
             variant="secondary"
             className="rounded-full px-2 py-0 text-[10px]"
           >
-            not saved
+            persisted
           </Badge>
         </span>
       )}

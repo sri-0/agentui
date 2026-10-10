@@ -42,10 +42,6 @@ export function UsageView({
           label="Reasoning Tokens"
           value={u.reasoningTokens.toLocaleString()}
         />
-        <Stat
-          label="Cache Tokens"
-          value={u.cacheTokens ? u.cacheTokens.toLocaleString() : dash}
-        />
         <Stat label="User Messages" value={String(u.userMessages)} />
         <Stat label="Assistant Messages" value={String(u.assistantMessages)} />
         <Stat label="Total Cost" value={dash} />

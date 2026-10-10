@@ -1,136 +1,88 @@
 "use client";
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
+import { useChatStore } from "@/lib/chat/store";
+
 import { apiFetch } from "./client";
-import type { ListResponse, Thread, ThreadMessage } from "./types";
+import type { ListResponse, RunStart, StoredMessage, Thread } from "./types";
 
-function unwrap<T>(res: ListResponse<T> | T[]): T[] {
-  return Array.isArray(res) ? res : (res.data ?? []);
-}
-
+/**
+ * The thread list. It is fetched once, refetched when a run this client
+ * watches starts or ends (status, order change), and when the window regains
+ * focus. There is no polling. TanStack dedupes the query across callers.
+ */
 export function useThreads() {
+  const qc = useQueryClient();
+  useEffect(
+    () =>
+      useChatStore.subscribe((s, prev) => {
+        if (s.threads === prev.threads) return;
+        for (const id in s.threads) {
+          const before = prev.threads[id];
+          if (before && before.status !== s.threads[id].status) {
+            void qc.invalidateQueries({ queryKey: ["threads"] });
+            return;
+          }
+        }
+      }),
+    [qc],
+  );
   return useQuery({
     queryKey: ["threads"],
     retry: false,
-    // The title of a freshly-created thread is generated ASYNC by the backend a
-    // few seconds after the run finishes. A modest poll (mirrors useSessions)
-    // lets the new thread AND its generated title converge live without a
-    // reload; the invalidate-on-finish in useAgentChat handles immediacy.
-    refetchInterval: 5000,
+    staleTime: 60_000,
     queryFn: async () => {
-      // Thread persistence needs OpenSearch/Valkey; if it's down the backend
-      // returns 500. Degrade gracefully to an empty list rather than erroring.
-      try {
-        const res = await apiFetch<ListResponse<Thread> | Thread[]>(
-          "/v1/threads",
-        );
-        return unwrap(res);
-      } catch {
-        return [] as Thread[];
-      }
+      const res = await apiFetch<ListResponse<Thread>>("/v1/threads");
+      return res.data;
     },
   });
 }
 
-/**
- * Live-session info attached to a thread-history response while the backend
- * coordinator has an ACTIVE run for the thread. The history already contains
- * the in-progress assistant turn FULLY FOLDED up to `head_seq`; a client that
- * wants to keep streaming attaches the session stream at `after = head_seq`
- * (tail only — no replay of what the fetch already delivered).
- */
-export interface ThreadLiveInfo {
-  head_seq: number;
-  turn: number;
-  status: string;
+/** A thread's stored turns, oldest first, plus the log cursor to subscribe
+ *  from ("" when no run is active). */
+export function fetchMessages(threadId: string) {
+  return apiFetch<ListResponse<StoredMessage> & { cursor: string }>(
+    `/v1/threads/${encodeURIComponent(threadId)}/messages`,
+  );
 }
 
-export interface ThreadHistory {
-  messages: ThreadMessage[];
-  live?: ThreadLiveInfo;
+export function fetchThread(threadId: string) {
+  return apiFetch<Thread>(`/v1/threads/${encodeURIComponent(threadId)}`);
 }
 
-export function useThreadMessages(threadId: string | null) {
-  const qc = useQueryClient();
-  const query = useQuery({
-    queryKey: ["thread-messages", threadId],
-    enabled: Boolean(threadId),
-    retry: false,
-    // Tool parts are persisted asynchronously as a run finishes. A thread opened
-    // (or reloaded) in the window right after a run completes could load a
-    // messages doc that hasn't yet grown its tool parts — leaving tool cards
-    // missing until the next manual reload. The backend now flushes parts
-    // synchronously before reporting done, but keep the client robust: refetch
-    // when the tab regains focus so returning to a just-finished thread always
-    // picks up the persisted parts.
-    refetchOnWindowFocus: true,
-    queryFn: async (): Promise<ThreadHistory> => {
-      try {
-        const res = await apiFetch<
-          | (ListResponse<ThreadMessage> & { live?: ThreadLiveInfo })
-          | ThreadMessage[]
-        >(`/v1/threads/${threadId}/messages`);
-        // Settled threads keep the plain-array wire shape; a thread with an
-        // ACTIVE session comes wrapped with the folded live turn + head seq.
-        if (Array.isArray(res)) return { messages: res };
-        return { messages: res.data ?? [], live: res.live };
-      } catch {
-        return { messages: [] };
-      }
-    },
-  });
-
-  // One-shot delayed refetch shortly after opening a thread: cheap belt-and-
-  // braces for the "opened exactly as the run finished" race — we re-pull once
-  // (not a tight interval) so any parts persisted in the last moment appear
-  // without the user reloading. Keyed on threadId so it fires once per open.
-  useEffect(() => {
-    if (!threadId) return;
-    const t = setTimeout(() => {
-      qc.invalidateQueries({ queryKey: ["thread-messages", threadId] });
-    }, 1200);
-    return () => clearTimeout(t);
-  }, [threadId, qc]);
-
-  return query;
+/** Queue a turn; the run streams on the socket from the returned cursor.
+ *  Without thread_id the server creates the thread and names it on the run. */
+export function startRun(body: {
+  thread_id?: string;
+  messages: { id: string; role: "user"; content: string }[];
+  agent_id?: string;
+  model?: string;
+  connectors?: string[] | null;
+}) {
+  return apiFetch<RunStart>("/v1/agent/chat", { method: "POST", body: JSON.stringify(body) });
 }
 
-export function useCreateThread() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body?: { title?: string }) =>
-      apiFetch<Thread>("/v1/threads", {
-        method: "POST",
-        body: JSON.stringify(body ?? {}),
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["threads"] }),
-  });
+/** Answer a paused run's interrupt: `{approved, justification}` or `{output}`. */
+export function decideInterrupt(threadId: string, interruptId: string, decision: object) {
+  return apiFetch<RunStart>(
+    `/v1/threads/${encodeURIComponent(threadId)}/interrupts/${encodeURIComponent(interruptId)}`,
+    { method: "POST", body: JSON.stringify(decision) },
+  );
 }
 
-export function useRenameThread() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, title }: { id: string; title: string }) =>
-      apiFetch<Thread>(`/v1/threads/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ title }),
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["threads"] }),
-  });
+export function cancelRun(threadId: string) {
+  return apiFetch<void>(`/v1/threads/${encodeURIComponent(threadId)}/cancel`, { method: "POST" });
 }
 
 export function useDeleteThread() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      apiFetch<void>(`/v1/threads/${id}`, { method: "DELETE" }),
+      apiFetch<void>(`/v1/threads/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["threads"] }),
   });
 }
