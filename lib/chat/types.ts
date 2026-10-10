@@ -84,6 +84,8 @@ export type ToolPart = {
   approval?: { id: string; approved?: boolean; reason?: string };
   /** What the backend asks the user to confirm. */
   prompt?: string;
+  /** A sub-agent's request forwarded through this `task` call while it waits. */
+  request?: { subagent: string; childThreadId: string; toolName: string; args: unknown; reason: string };
   /** Event timestamps: when the call was announced and how long until its result. */
   startedAt?: number;
   durationMs?: number;

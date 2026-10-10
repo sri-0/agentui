@@ -136,6 +136,17 @@ const MessageItem = memo(function MessageItem({
           />
         );
       case "tool":
+        // A sub-agent's question, forwarded through its task call, is asked here.
+        if (part.state === "approval" && part.request?.toolName === "question") {
+          return (
+            <QuestionCard
+              key={key}
+              part={{ ...part, toolName: "question", input: part.request.args }}
+              pending
+              onAnswer={answer}
+            />
+          );
+        }
         // The card mounts once the questions (the call's input) have arrived.
         return part.toolName === "question" && part.input != null ? (
           <QuestionCard

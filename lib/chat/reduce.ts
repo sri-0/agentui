@@ -203,7 +203,8 @@ function finish(state: ThreadState, event: RunFinishedEvent): ThreadState {
   // a run that ends without pausing leaves no call waiting.
   for (const i of interrupts) {
     if (i.toolCallId) {
-      next = updatePart(next, isTool(i.toolCallId), (p) => ({ ...p, state: "approval", approval: { id: i.id }, prompt: i.message }));
+      const request = (i.metadata as { request?: ToolPart["request"] } | undefined)?.request;
+      next = updatePart(next, isTool(i.toolCallId), (p) => ({ ...p, state: "approval", approval: { id: i.id }, prompt: i.message, request }));
     }
   }
   if (outcome !== "interrupt") {

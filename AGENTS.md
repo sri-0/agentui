@@ -199,8 +199,11 @@ leaves the part `denied`.
 - **Approval**: `ToolLine` opens, shows the arguments, a justification field and
   Approve / Deny, and calls `approve(interruptId, approved, justification)`. The
   backend echoes the decision as `CUSTOM approval`.
-- **Question** (the `question` tool): `QuestionCard` mounts once the questions
-  (the call's input) have arrived, and calls `answer(interruptId, {answers, text})`.
+- **Question** (the `question` tool, or a sub-agent's question forwarded through
+  its `task` call): the part carries `request: {toolName: "question", args}`;
+  `QuestionCard` renders `request.args.questions` and calls
+  `answer(interruptId, {answers, text})`. A forwarded approval shows on the
+  `task` line as "<sub-agent> wants to run <tool> <args>" with Approve / Deny.
   The answers come back as the tool's output and the card becomes a read-only recap.
 
 ---
