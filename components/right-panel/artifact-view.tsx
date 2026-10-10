@@ -1,5 +1,7 @@
 "use client";
 
+import Papa from "papaparse";
+
 import { MessageResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,8 +11,9 @@ import {
 } from "@/lib/chat/artifacts";
 import type { ChatMessage } from "@/lib/chat/types";
 import { DownloadIcon, ExternalLinkIcon, FileIcon } from "lucide-react";
+import { useMemo } from "react";
 
-import { useParsedCsv } from "./use-csv";
+
 
 export function ArtifactView({
   messages,
@@ -123,10 +126,8 @@ function FileCard({ artifact }: { artifact: ArtifactData }) {
 }
 
 function CsvTable({ content }: { content: string }) {
-  const rows = useParsedCsv(content);
-  if (rows === null) {
-    return <p className="text-sm text-muted-foreground">Parsing spreadsheet…</p>;
-  }
+  // Artifacts are small; papaparse handles them synchronously.
+  const rows = useMemo(() => Papa.parse<string[]>(content, { skipEmptyLines: true }).data, [content]);
   if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground">Empty spreadsheet.</p>;
   }

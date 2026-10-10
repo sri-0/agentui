@@ -49,7 +49,7 @@ export function AgentStatusBadge({
 /** A sub-agent's own thread, live: the same transcript as the main view,
  *  without a composer. */
 export function AgentView({ threadId }: { threadId: string }) {
-  const { messages, status, interrupts, loaded, approve, answer } =
+  const { messages, status, loaded, approve, answer } =
     useThread(threadId);
 
   return (
@@ -63,7 +63,6 @@ export function AgentView({ threadId }: { threadId: string }) {
           <MessageList
             messages={messages}
             status={status}
-            interrupts={interrupts}
             approve={approve}
             answer={answer}
           />

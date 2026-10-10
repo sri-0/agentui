@@ -34,11 +34,6 @@ export function modelSupportsTools(model?: Model): boolean {
   );
 }
 
-/** Whether the model exposes a reasoning-effort control. */
-export function modelSupportsReasoningEffort(model?: Model): boolean {
-  return Boolean(model?.supported_parameters?.includes("reasoning_effort"));
-}
-
 export type ProviderGroup = { providerId: string; providerName: string; models: Model[] };
 
 /** Group models by provider for the grouped selector. */

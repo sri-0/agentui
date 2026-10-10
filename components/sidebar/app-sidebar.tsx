@@ -173,7 +173,7 @@ function ThreadRow({
   id: string;
   title: string;
   active: boolean;
-  /** present while a run owns the thread (from the 5 s thread-list poll) */
+  /** present while a run owns the thread */
   runStatus?: RunStatus;
 }) {
   const router = useRouter();

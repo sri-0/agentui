@@ -24,7 +24,6 @@ const RECONNECT_MAX_MS = 10_000;
 class ChatSocket {
   private ws: WebSocket | null = null;
   private attempts = 0;
-  private queue: string[] = [];
   /** Open subscriptions: thread id → last seq delivered. */
   private subs = new Map<string, string>();
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -36,12 +35,8 @@ class ChatSocket {
     if (typeof window === "undefined") return;
     if (frame.type === "subscribe") this.subs.set(frame.threadId, frame.after ?? "");
     else this.subs.delete(frame.threadId);
-    const raw = JSON.stringify(frame);
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(raw);
-    else {
-      this.queue.push(raw);
-      this.open();
-    }
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(frame));
+    else this.open(); // on open every entry in subs is subscribed
   }
 
   private open() {
@@ -51,25 +46,19 @@ class ChatSocket {
     ws.onopen = () => {
       this.attempts = 0;
       this.onConnected(true);
-      // Frames queued while offline go first; every other open thread then
-      // resumes from the last cursor it received.
-      const queued = this.queue;
-      this.queue = [];
-      const covered = new Set(queued.map((raw) => (JSON.parse(raw) as ClientFrame).threadId));
-      for (const raw of queued) ws.send(raw);
-      for (const [threadId, after] of this.subs) {
-        if (!covered.has(threadId)) ws.send(JSON.stringify({ type: "subscribe", threadId, after }));
-      }
+      // Every followed thread resumes from the last cursor it received.
+      for (const [threadId, after] of this.subs) ws.send(JSON.stringify({ type: "subscribe", threadId, after }));
     };
     ws.onmessage = (m) => {
       const frame = JSON.parse(m.data) as ServerFrame;
-      if (frame.type === "event" && this.subs.has(frame.threadId)) this.subs.set(frame.threadId, frame.seq);
+      if (!this.subs.has(frame.threadId)) return; // still in flight after an unsubscribe
+      if (frame.type === "event") this.subs.set(frame.threadId, frame.seq);
       this.onFrame(frame);
     };
     ws.onclose = () => {
       this.ws = null;
       this.onConnected(false);
-      if (this.subs.size > 0 || this.queue.length > 0) this.scheduleReconnect();
+      if (this.subs.size > 0) this.scheduleReconnect();
     };
     ws.onerror = () => ws.close();
   }

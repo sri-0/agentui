@@ -7,10 +7,9 @@ import {
 } from "@/components/ai-elements/message";
 import { Task, TaskContent, TaskTrigger } from "@/components/ai-elements/task";
 import { Button } from "@/components/ui/button";
-import { REASON_INPUT_REQUIRED, type ThreadStatus } from "@/lib/chat/reduce";
+import type { ThreadStatus } from "@/lib/chat/reduce";
 import type { ChatMessage, ChatPart } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
-import type { Interrupt } from "@ag-ui/core";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -31,19 +30,14 @@ import { ToolLine, type Approve } from "./tool-line";
 export function MessageList({
   messages,
   status,
-  interrupts,
   approve,
   answer,
 }: {
   messages: ChatMessage[];
   status: ThreadStatus;
-  interrupts: Interrupt[];
   approve: Approve;
   answer: Answer;
 }) {
-  const pendingQuestionId = interrupts.find(
-    (i) => i.reason === REASON_INPUT_REQUIRED,
-  )?.toolCallId;
   const last = messages.at(-1);
   const waiting =
     status === "streaming" &&
@@ -56,7 +50,6 @@ export function MessageList({
           key={message.id}
           message={message}
           streaming={status === "streaming" && index === messages.length - 1}
-          pendingQuestionId={pendingQuestionId}
           approve={approve}
           answer={answer}
         />
@@ -101,15 +94,12 @@ function groupStages(parts: ChatPart[]): Stage[] {
 const MessageItem = memo(function MessageItem({
   message,
   streaming,
-  pendingQuestionId,
   approve,
   answer,
 }: {
   message: ChatMessage;
   /** This is the last message and the thread is streaming. */
   streaming: boolean;
-  /** The `question` call the run is waiting on, if any. */
-  pendingQuestionId?: string;
   approve: Approve;
   answer: Answer;
 }) {
@@ -146,11 +136,12 @@ const MessageItem = memo(function MessageItem({
           />
         );
       case "tool":
-        return part.toolName === "question" ? (
+        // The card mounts once the questions (the call's input) have arrived.
+        return part.toolName === "question" && part.input != null ? (
           <QuestionCard
             key={key}
             part={part}
-            pending={part.toolCallId === pendingQuestionId}
+            pending={part.state === "approval"}
             onAnswer={answer}
           />
         ) : (

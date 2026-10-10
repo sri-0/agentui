@@ -136,7 +136,7 @@ export const QuestionCard = memo(function QuestionCard({
       const t = texts[qi]?.trim();
       return t ? [...labels, t] : labels;
     });
-    onAnswer(part.toolCallId, {
+    onAnswer(part.approval?.id ?? part.toolCallId, {
       answers,
       text: texts.map((t) => t.trim()).filter(Boolean).join("\n") || undefined,
     });

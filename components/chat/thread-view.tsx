@@ -16,10 +16,11 @@ import {
 } from "@/components/ui/resizable";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useModels } from "@/lib/api/models";
+import { fetchThread } from "@/lib/api/threads";
 import { collectArtifacts } from "@/lib/chat/artifacts";
 import { useChatStore } from "@/lib/chat/store";
 import { useUiStore } from "@/stores/ui-store";
-import { FileTextIcon, LoaderIcon, MessageCircleDashedIcon } from "lucide-react";
+import { FileTextIcon, LoaderIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 
 import { Composer, type ComposerStatus } from "./composer/composer";
@@ -30,18 +31,20 @@ import { TaskBar } from "./task-bar";
 import { useThread } from "./use-thread";
 
 export function ThreadView({ threadId }: { threadId: string }) {
-  return <ThreadChat key={threadId} threadId={threadId} isTemporary={false} />;
+  return <ThreadChat key={threadId} threadId={threadId} />;
 }
 
-export function ThreadChat({
-  threadId,
-  isTemporary,
-}: {
-  threadId: string;
-  isTemporary: boolean;
-}) {
-  const { messages, status, interrupts, loaded, error, send, approve, answer, stop } =
-    useThread(threadId);
+export function ThreadChat({ threadId }: { threadId: string }) {
+  const { messages, status, loaded, error, send, approve, answer, stop } = useThread(threadId);
+  const closeSidepanel = useUiStore((s) => s.closeSidepanel);
+  const setConnectors = useUiStore((s) => s.setConnectors);
+
+  // This view is keyed by thread: leaving it closes its side panel, and
+  // opening it shows the connectors the thread remembers.
+  useEffect(() => closeSidepanel, [closeSidepanel]);
+  useEffect(() => {
+    fetchThread(threadId).then((t) => setConnectors(t.connectors ?? null), () => {});
+  }, [threadId, setConnectors]);
   const connected = useChatStore((s) => s.connected);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
@@ -73,17 +76,22 @@ export function ThreadChat({
   const artifacts = useMemo(() => collectArtifacts(messages), [messages]);
   const latestArtifactId = artifacts.at(-1)?.id;
 
-  // Auto-open the artifacts panel the moment a new artifact is generated
-  // during a run: only when latestArtifactId changes, not on thread open and
-  // not when the status alone changes.
-  const seenArtifactRef = useRef<string | undefined>(undefined);
+  // Auto-open the artifacts panel when a new artifact arrives during a run:
+  // the latest id seen once history has loaded is the baseline, so reopening
+  // a thread mid-run does not open it.
+  const seenArtifactRef = useRef<string | null | undefined>(null);
   useEffect(() => {
+    if (!loaded) return;
+    if (seenArtifactRef.current === null) {
+      seenArtifactRef.current = latestArtifactId;
+      return;
+    }
     if (seenArtifactRef.current === latestArtifactId) return;
     seenArtifactRef.current = latestArtifactId;
     if (status === "streaming" && latestArtifactId) {
       openSidepanel({ kind: "artifact", artifactId: latestArtifactId });
     }
-  }, [latestArtifactId, status, openSidepanel]);
+  }, [loaded, latestArtifactId, status, openSidepanel]);
 
   if (!loaded) {
     return (
@@ -113,7 +121,6 @@ export function ThreadChat({
       <ResizablePanel id="chat" minSize="40%">
         <div className="flex h-full flex-col overflow-hidden">
           <ThreadHeader
-            isTemporary={isTemporary}
             artifactCount={artifacts.length}
             latestArtifactId={latestArtifactId}
             reconnecting={!connected}
@@ -124,7 +131,6 @@ export function ThreadChat({
               <MessageList
                 messages={messages}
                 status={status}
-                interrupts={interrupts}
                 approve={approve}
                 answer={answer}
               />
@@ -171,12 +177,10 @@ export function ThreadChat({
 
 /** Static thread header — memoized so it never re-renders during streaming. */
 const ThreadHeader = memo(function ThreadHeader({
-  isTemporary,
   artifactCount,
   latestArtifactId,
   reconnecting,
 }: {
-  isTemporary: boolean;
   artifactCount: number;
   latestArtifactId?: string;
   reconnecting: boolean;
@@ -195,20 +199,8 @@ const ThreadHeader = memo(function ThreadHeader({
           Reconnecting…
         </span>
       )}
-      {isTemporary && (
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <MessageCircleDashedIcon className="size-3.5" />
-          Temporary chat
-          <Badge
-            variant="secondary"
-            className="rounded-full px-2 py-0 text-[10px]"
-          >
-            persisted
-          </Badge>
-        </span>
-      )}
       <div className="ml-auto flex items-center gap-2">
-        {artifactCount > 0 && latestArtifactId && (
+        {latestArtifactId && (
           <Button
             variant="ghost"
             size="sm"

@@ -1,9 +1,4 @@
-import {
-  EventType,
-  type Event as AgUiEvent,
-  type Interrupt,
-  type RunFinishedEvent,
-} from "@ag-ui/core";
+import { EventType, type Event as AgUiEvent, type RunFinishedEvent } from "@ag-ui/core";
 
 import type {
   ChatMessage,
@@ -21,26 +16,13 @@ export type ThreadStatus = "idle" | "streaming" | "awaiting_input" | "error";
 export type ThreadState = {
   messages: ChatMessage[];
   status: ThreadStatus;
-  /** Interrupts of the paused run; `approve` / `answer` resolve them. */
-  interrupts: Interrupt[];
-  /** Log id of the last event folded in; the socket resumes from it. */
-  cursor: string;
+  /** A failure to start, resume or reach a run (REST); run errors sit on their message. */
   error?: string;
   /** History has been fetched and folded. */
   loaded: boolean;
 };
 
-export const emptyThread: ThreadState = {
-  messages: [],
-  status: "idle",
-  interrupts: [],
-  cursor: "",
-  loaded: false,
-};
-
-/** Interrupt reasons the backend uses. */
-export const REASON_CONFIRMATION = "confirmation";
-export const REASON_INPUT_REQUIRED = "input_required";
+export const emptyThread: ThreadState = { messages: [], status: "idle", loaded: false };
 
 /** Activity types the backend emits, mapped to their part types. */
 const ACTIVITY_PARTS: Record<string, DataPart["type"]> = {
@@ -70,7 +52,7 @@ export function reduce(state: ThreadState, event: AgUiEvent): ThreadState {
         last?.id === turnId
           ? replaceLast(state.messages, { ...last, metadata: { ...last.metadata, ...metadata } })
           : [...state.messages, { id: turnId, role: "assistant" as const, parts: [], metadata }];
-      return { ...state, messages, status: "streaming", interrupts: [], error: undefined };
+      return { ...state, messages, status: "streaming", error: undefined };
     }
 
     case EventType.STEP_STARTED:
@@ -190,7 +172,6 @@ export function reduce(state: ThreadState, event: AgUiEvent): ThreadState {
       return {
         ...withLast(state, (m) => ({ ...m, metadata: { ...m.metadata, error: event.message } })),
         status: "error",
-        error: event.message,
       };
 
     default:
@@ -218,17 +199,21 @@ function finish(state: ThreadState, event: RunFinishedEvent): ThreadState {
       cancelled: outcome === "cancelled" || undefined,
     },
   }));
+  // Every interrupt names the tool call it holds (an approval or a question);
+  // a run that ends without pausing leaves no call waiting.
   for (const i of interrupts) {
-    if (i.reason === REASON_CONFIRMATION && i.toolCallId) {
-      next = updatePart(next, isTool(i.toolCallId), (p) => ({
-        ...p,
-        state: "approval",
-        approval: { id: i.id },
-        prompt: i.message,
-      }));
+    if (i.toolCallId) {
+      next = updatePart(next, isTool(i.toolCallId), (p) => ({ ...p, state: "approval", approval: { id: i.id }, prompt: i.message }));
     }
   }
-  return { ...next, status: outcome === "interrupt" ? "awaiting_input" : "idle", interrupts };
+  if (outcome !== "interrupt") {
+    next = withLast(next, (m) =>
+      m.parts.some((p) => p.type === "tool" && p.state === "approval")
+        ? { ...m, parts: m.parts.map((p) => (p.type === "tool" && p.state === "approval" ? { ...p, state: "denied" } : p)) }
+        : m,
+    );
+  }
+  return { ...next, status: outcome === "interrupt" ? "awaiting_input" : "idle" };
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

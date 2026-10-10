@@ -1,8 +1,8 @@
+import { EventType, type Event as AgUiEvent } from "@ag-ui/core";
 import { create } from "zustand";
 
 import { ApiError } from "@/lib/api/client";
-import { cancelRun as cancelOverRest, decideInterrupt, fetchMessages, fetchThread, startRun } from "@/lib/api/threads";
-import { useUiStore } from "@/stores/ui-store";
+import { cancelRun as cancelOverRest, decideInterrupt, fetchMessages, startRun } from "@/lib/api/threads";
 
 import { emptyThread, reduce, type ThreadState } from "./reduce";
 import { chatSocket, type ServerFrame } from "./socket";
@@ -43,7 +43,7 @@ chatSocket.onFrame = (f: ServerFrame) => {
   const t = current(f.threadId);
   switch (f.type) {
     case "event":
-      stage(f.threadId, { ...reduce(t, f.event), cursor: f.seq });
+      stage(f.threadId, reduce(t, f.event));
       break;
     case "idle":
       if (t.status === "streaming") stage(f.threadId, { ...t, status: "idle" });
@@ -58,31 +58,32 @@ chatSocket.onConnected = (connected) => useChatStore.setState({ connected });
 /** Per-thread open generation: a newer openThread supersedes one in flight. */
 const opens = new Map<string, number>();
 
-/** Load a thread's history, fold it, follow its live run if there is one,
- *  and show the connectors the thread remembers. */
+/** Load a thread's history, fold it, and follow its live run if there is one. */
 export async function openThread(threadId: string) {
   const gen = (opens.get(threadId) ?? 0) + 1;
   opens.set(threadId, gen);
-  let t: ThreadState;
+  let t: ThreadState = emptyThread;
+  let cursor = "";
   try {
-    const [{ data, cursor }, thread] = await Promise.all([fetchMessages(threadId), fetchThread(threadId)]);
-    t = { ...emptyThread, cursor };
-    for (const m of data) for (const ev of m.events) t = reduce(t, ev);
-    useUiStore.getState().setConnectors(thread.connectors ?? null);
+    const res = await fetchMessages(threadId);
+    cursor = res.cursor;
+    for (const m of res.data) for (const ev of m.events) t = reduce(t, ev);
   } catch (err) {
     t = { ...emptyThread, status: "error", error: (err as Error).message };
   }
   if (opens.get(threadId) !== gen) return;
   // A thread with no history has no run to follow yet.
-  if (t.messages.length > 0 || t.cursor) {
-    chatSocket.send({ type: "subscribe", threadId, after: t.cursor });
+  if (t.messages.length > 0 || cursor) {
+    chatSocket.send({ type: "subscribe", threadId, after: cursor });
   }
   stage(threadId, { ...t, loaded: true });
   publish();
 }
 
+/** Stop following a thread; reopening it refetches rather than showing a stale copy. */
 export function closeThread(threadId: string) {
   chatSocket.send({ type: "unsubscribe", threadId });
+  stage(threadId, { ...current(threadId), loaded: false });
 }
 
 /** Start a thread with its first message; the server names the thread.
@@ -123,15 +124,22 @@ export async function sendMessage(
 
 /** Answer the paused run's interrupt; the continuation streams on the same turn. */
 export async function resumeRun(threadId: string, interruptId: string, decision: object) {
-  stage(threadId, { ...current(threadId), status: "streaming", interrupts: [] });
+  stage(threadId, { ...current(threadId), status: "streaming" });
   await follow(threadId, () => decideInterrupt(threadId, interruptId, decision));
 }
 
+/** Stop the thread's run. A running one reports its own end on the socket;
+ *  a paused one has no live stream, so its end is folded in here, the same
+ *  way the server records it. */
 export async function cancelRun(threadId: string) {
   try {
     await cancelOverRest(threadId);
   } catch (err) {
     if (!(err instanceof ApiError && err.status === 404)) throw err; // already over
+  }
+  const t = current(threadId);
+  if (t.status === "awaiting_input") {
+    stage(threadId, reduce(t, { type: EventType.RUN_FINISHED, threadId, runId: "", outcome: { type: "cancelled" } } as AgUiEvent));
   }
 }
 
