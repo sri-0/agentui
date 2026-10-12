@@ -141,7 +141,9 @@ const MessageItem = memo(function MessageItem({
         if (part.toolName === "question" && part.input != null) {
           return <QuestionCard key={key} part={part} pending={part.state === "approval"} onAnswer={answer} />;
         }
-        const Renderer = part.ui && part.state !== "approval" ? toolRenderers[part.ui] : undefined;
+        // A custom renderer shows a call that runs or succeeded; ToolLine
+        // handles approvals, denials and errors.
+        const Renderer = part.ui && (part.state === "running" || part.state === "done") ? toolRenderers[part.ui] : undefined;
         return Renderer ? <Renderer key={key} part={part} /> : <ToolLine key={key} part={part} onApprove={approve} />;
       }
       case "data-agent":

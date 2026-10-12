@@ -28,7 +28,6 @@ const sourcesPath = (threadId: string) => `/v1/threads/${encodeURIComponent(thre
 export function useThreadSources(threadId: string) {
   return useQuery({
     queryKey: ["sources", threadId],
-    staleTime: 30_000,
     queryFn: async () => (await apiFetch<ListResponse<Source>>(sourcesPath(threadId))).data ?? [],
   });
 }

@@ -20,23 +20,19 @@ export async function apiFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+  const text = await apiText(path, init);
+  // DELETE returns an empty body.
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+/** A response body as text; apiFetch parses it as JSON, artifact bodies are
+ *  used as they are. */
+export async function apiText(path: string, init?: RequestInit): Promise<string> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new ApiError(res.status, text || `Request failed: ${res.status}`);
-  }
-  // DELETE returns an empty body.
-  const text = await res.text();
-  return (text ? JSON.parse(text) : undefined) as T;
-}
-
-/** A response body as text, for content that is not JSON (artifact bodies). */
-export async function apiText(path: string): Promise<string> {
-  const res = await fetch(`${API_URL}${path}`);
   const text = await res.text();
   if (!res.ok) throw new ApiError(res.status, text || `Request failed: ${res.status}`);
   return text;

@@ -84,9 +84,9 @@ export function ThreadChat({ threadId }: { threadId: string }) {
     [threadId, onOpenUsage],
   );
 
-  const announced = useMemo(() => collectArtifacts(messages), [messages]);
-  const artifacts = useArtifacts(threadId, announced);
-  const latestArtifactId = announced.at(-1)?.id;
+  const live = useMemo(() => collectArtifacts(messages), [messages]);
+  const artifacts = useArtifacts(threadId, live);
+  const latestArtifactId = live.at(-1)?.id;
   const { data: sources = [] } = useThreadSources(threadId);
   const citedCount = sources.filter((s) => s.cited_in?.length).length;
 
@@ -114,10 +114,10 @@ export function ThreadChat({ threadId }: { threadId: string }) {
     }
     if (seenArtifactRef.current === latestArtifactId) return;
     seenArtifactRef.current = latestArtifactId;
-    if (status === "streaming" && latestArtifactId) {
+    if (streaming && latestArtifactId) {
       openSidepanel({ kind: "artifact", artifactId: latestArtifactId });
     }
-  }, [loaded, latestArtifactId, status, openSidepanel]);
+  }, [loaded, latestArtifactId, streaming, openSidepanel]);
 
   if (!loaded) {
     return (
@@ -133,7 +133,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   // While the run waits for an answer or approval the composer shows the
   // stop button instead of accepting a second message.
   const composerStatus: ComposerStatus =
-    status === "streaming"
+    streaming
       ? "streaming"
       : status === "awaiting_input"
         ? "submitted"
@@ -165,7 +165,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
           </Conversation>
 
           <div className="px-4 pb-5 pt-2">
-            <TaskBar messages={messages} running={status === "streaming"} />
+            <TaskBar messages={messages} running={streaming} />
             <div className="mx-auto w-full max-w-3xl">
               {status === "error" && error && (
                 <p className="mb-2 text-center text-xs text-destructive">{error}</p>
@@ -251,7 +251,7 @@ function PanelButton({
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const closeSidepanel = useUiStore((s) => s.closeSidepanel);
-  // A boolean selector: the header re-renders only when this panel toggles.
+  // A boolean selector: this button re-renders only when its panel toggles.
   const open = useUiStore((s) =>
     panel === "artifacts"
       ? s.sidepanel?.kind === "artifacts" || s.sidepanel?.kind === "artifact"

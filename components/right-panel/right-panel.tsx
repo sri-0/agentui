@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useAgents } from "@/lib/api/agents";
-import { invalidateArtifactBody, useArtifactBody, useThreadArtifacts } from "@/lib/api/artifacts";
+import { useArtifactBody, useThreadArtifacts } from "@/lib/api/artifacts";
 import { downloadArtifact } from "@/lib/chat/artifacts";
 import { useChatStore } from "@/lib/chat/store";
 import type { Artifact, ChatMessage } from "@/lib/chat/types";
@@ -13,7 +13,7 @@ import { useEffect } from "react";
 
 import { AgentDetailsView } from "./agent-details-view";
 import { AgentStatusBadge, AgentView } from "./agent-view";
-import { ArtifactList, ArtifactView } from "./artifact-view";
+import { ArtifactBody, ArtifactList, EmbeddedPage } from "./artifact-view";
 import { ConnectorDetailsView } from "./connector-details-view";
 import { ModelView } from "./model-view";
 import { SourcesView } from "./sources-view";
@@ -41,12 +41,12 @@ export function RightPanel({
   const artifact = sidepanel?.kind === "artifact" ? artifacts.find((a) => a.id === sidepanel.artifactId) : undefined;
   // An artifact a sub-agent published reaches this thread only through the
   // API: the backend stores it before announcing it, so fetch the list again.
-  const missing = sidepanel?.kind === "artifact" && !artifact;
+  const missingId = sidepanel?.kind === "artifact" && !artifact ? sidepanel.artifactId : undefined;
   const queryClient = useQueryClient();
   const { isFetching } = useThreadArtifacts(threadId);
   useEffect(() => {
-    if (missing) void queryClient.invalidateQueries({ queryKey: ["artifacts", threadId] });
-  }, [missing, threadId, queryClient]);
+    if (missingId) void queryClient.invalidateQueries({ queryKey: ["artifacts", threadId] });
+  }, [missingId, threadId, queryClient]);
 
   if (!sidepanel) return null;
 
@@ -88,7 +88,7 @@ export function RightPanel({
         <AgentView key={sidepanel.threadId} threadId={sidepanel.threadId} />
       ) : artifact?.kind === "url" ? (
         <div className="flex flex-1 flex-col">
-          <ArtifactView threadId={threadId} artifact={artifact} />
+          <EmbeddedPage artifact={artifact} />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-6">
@@ -96,7 +96,7 @@ export function RightPanel({
           {sidepanel.kind === "artifacts" && <ArtifactList artifacts={artifacts} />}
           {sidepanel.kind === "artifact" &&
             (artifact ? (
-              <ArtifactView threadId={threadId} artifact={artifact} />
+              <ArtifactBody threadId={threadId} artifact={artifact} />
             ) : (
               <p className="text-sm text-muted-foreground">
                 {isFetching ? "Looking for the artifact…" : "Artifact not found."}
@@ -130,10 +130,10 @@ function ArtifactActions({ threadId, artifact }: { threadId: string; artifact: A
   const refreshArtifact = useUiStore((s) => s.refreshArtifact);
   const queryClient = useQueryClient();
   const { body } = useArtifactBody(threadId, artifact);
-  const reload = () =>
-    artifact.kind === "url"
-      ? refreshArtifact(artifact.id)
-      : void invalidateArtifactBody(queryClient, threadId, artifact.id);
+  const reload = () => {
+    if (artifact.kind === "url") refreshArtifact(artifact.id);
+    else void queryClient.invalidateQueries({ queryKey: ["artifact-body", threadId, artifact.id] });
+  };
   return (
     <>
       {artifact.content == null && (

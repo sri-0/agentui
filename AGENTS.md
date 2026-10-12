@@ -127,7 +127,7 @@ for reads and admin:
 - `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, created_at, updated_at, run_status?}]}`;
   fetched once, refetched when a run this tab watches starts or ends and on window focus (no polling)
 - `GET /v1/threads/{id}` (its `connectors` set the composer's toggles), `PATCH`, `DELETE`
-- `GET /v1/threads/{id}/artifacts` (the conversation's artefacts, no bodies) and
+- `GET /v1/threads/{id}/artifacts` (the conversation's artifacts, no bodies) and
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
 - `GET /v1/threads/{id}/sources` and `GET /v1/threads/{id}/sources/{n}` (what `[source:n]`
   refers to, fetched when a citation is opened); the list is refetched when a run ends
@@ -185,7 +185,7 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
        │           ├─ tool          → the renderer `toolRenderers[part.ui]` names (SlidesCall), else
        │           │                  ToolLine (one line; approvals open it) / QuestionCard (`question`)
        │           ├─ data-agent    → AgentCard → side panel opens the child thread
-       │           ├─ data-artifact → inline button → the artefact in the right panel
+       │           ├─ data-artifact → inline button → the artifact in the right panel
        │           └─ step-start    → consecutive steps by one agent form a stage; in a pipeline every
        │                              stage but the last collapses into a StageCard
        ├─ TaskBar (memo)  ← latest data-task-list
@@ -203,9 +203,9 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
   same message id replaces the optimistic copy. `agentId` comes from the UI store
   (`"auto"` → omitted so the backend's default `assistant` answers; `null` → the
   bare-model `chat` agent); `model` and `connectors` are the selected ones.
-- **Artefacts and sources** are the conversation's, fetched from the API and merged with
+- **Artifacts and sources** are the conversation's, fetched from the API and merged with
   what the live stream announced (`useArtifacts`). The header shows Artifacts and Sources
-  buttons with counts; a new artefact opens the panel during a run. A `url` artefact (a
+  buttons with counts; a new artifact opens the panel during a run. A `url` artifact (a
   slide deck) is embedded in an iframe; the panel's refresh button, or a tool renderer
   (`refreshArtifact`), reloads it. Citations render as chips; the sources panel lists cited
   sources and, on request, everything tools returned.

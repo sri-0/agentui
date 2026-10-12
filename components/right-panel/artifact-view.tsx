@@ -11,20 +11,10 @@ import { useUiStore } from "@/stores/ui-store";
 import { AppWindowIcon, FileTextIcon } from "lucide-react";
 import { useMemo } from "react";
 
-/** One artifact: a url artifact embeds its page, any other kind renders its
- *  body. */
-export function ArtifactView({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
-  return artifact.kind === "url" ? (
-    <EmbeddedPage artifact={artifact} />
-  ) : (
-    <ArtifactBody threadId={threadId} artifact={artifact} />
-  );
-}
-
 /** A url artifact's page, reloaded whenever its refresh counter is bumped.
  *  Only a page on another origin is embedded: there the sandbox's script
  *  permissions cannot reach this app. */
-function EmbeddedPage({ artifact }: { artifact: Artifact }) {
+export function EmbeddedPage({ artifact }: { artifact: Artifact }) {
   const refresh = useUiStore((s) => s.artifactRefresh[artifact.id] ?? 0);
   if (!embeddable(artifact.url)) {
     return <p className="p-6 text-sm text-muted-foreground">This page cannot be shown here.</p>;
@@ -49,7 +39,8 @@ function embeddable(url?: string): boolean {
   }
 }
 
-function ArtifactBody({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
+/** An artifact's body, rendered by kind. */
+export function ArtifactBody({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
   const { body, error } = useArtifactBody(threadId, artifact);
   if (error) return <p className="text-sm text-destructive">{error.message}</p>;
   if (body == null) return <p className="text-sm text-muted-foreground">Loading…</p>;

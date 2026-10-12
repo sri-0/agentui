@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import type { ToolPart } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
-import { AlertCircleIcon, CheckIcon, LoaderIcon, PresentationIcon } from "lucide-react";
+import { CheckIcon, LoaderIcon, PresentationIcon } from "lucide-react";
 import { memo, useEffect, useRef } from "react";
 
 type Deck = { deck_id?: string; title?: string };
@@ -50,13 +50,10 @@ export const SlidesCall = memo(function SlidesCall({ part }: { part: ToolPart })
       <PresentationIcon className="size-3.5 shrink-0" />
       <span className="shrink-0 text-xs text-foreground">{part.state === "running" ? label.running : label.done}</span>
       {title && <span className="min-w-0 truncate text-xs">{title}</span>}
-      {part.state === "running" && <LoaderIcon className="size-3.5 shrink-0 animate-spin" />}
-      {part.state === "done" && <CheckIcon className="size-3.5 shrink-0 text-emerald-500" />}
-      {part.state === "error" && (
-        <span className="flex min-w-0 items-center gap-1 text-xs text-destructive">
-          <AlertCircleIcon className="size-3.5 shrink-0" />
-          <span className="truncate">{part.errorText}</span>
-        </span>
+      {part.state === "running" ? (
+        <LoaderIcon className="size-3.5 shrink-0 animate-spin" />
+      ) : (
+        <CheckIcon className="size-3.5 shrink-0 text-emerald-500" />
       )}
       {deckId && part.state === "done" && (
         <Button
