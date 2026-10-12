@@ -61,17 +61,6 @@ export type Connector = {
   error?: string;
 };
 
-/** A queued run, as POST /v1/agent/chat returns it. */
-export type RunStart = {
-  id: string;
-  thread_id: string;
-  agent_id: string;
-  model: string;
-  status: RunStatus;
-  /** log cursor to subscribe from */
-  cursor: string;
-};
-
 export type Thread = {
   id: string;
   root_id: string;

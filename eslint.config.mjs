@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored design-sync tooling, not application code.
+    "ds-bundle/**",
+    ".ds-sync/**",
+    ".design-sync/**",
   ]),
 ]);
 

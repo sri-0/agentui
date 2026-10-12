@@ -1,4 +1,4 @@
-import { EventType, type Event as AgUiEvent, type RunFinishedEvent } from "@ag-ui/core";
+import { EventType, type Event as AgUiEvent, type Interrupt, type RunFinishedEvent } from "@ag-ui/core";
 
 import type {
   ChatMessage,
@@ -170,7 +170,7 @@ export function reduce(state: ThreadState, event: AgUiEvent): ThreadState {
 
     case EventType.RUN_ERROR:
       return {
-        ...withLast(state, (m) => ({ ...m, metadata: { ...m.metadata, error: event.message } })),
+        ...withLast(state, (m) => settleOpenParts({ ...m, metadata: { ...m.metadata, error: event.message } })),
         status: "error",
       };
 
@@ -202,19 +202,41 @@ function finish(state: ThreadState, event: RunFinishedEvent): ThreadState {
   // Every interrupt names the tool call it holds (an approval or a question);
   // a run that ends without pausing leaves no call waiting.
   for (const i of interrupts) {
-    if (i.toolCallId) {
-      const request = (i.metadata as { request?: ToolPart["request"] } | undefined)?.request;
-      next = updatePart(next, isTool(i.toolCallId), (p) => ({ ...p, state: "approval", approval: { id: i.id }, prompt: i.message, request }));
-    }
+    if (i.toolCallId) next = updatePart(next, isTool(i.toolCallId), (p) => ({ ...p, ...pausedOn(i) }));
   }
-  if (outcome !== "interrupt") {
-    next = withLast(next, (m) =>
-      m.parts.some((p) => p.type === "tool" && p.state === "approval")
-        ? { ...m, parts: m.parts.map((p) => (p.type === "tool" && p.state === "approval" ? { ...p, state: "denied" } : p)) }
-        : m,
-    );
-  }
+  if (outcome !== "interrupt") next = withLast(next, settleOpenParts);
   return { ...next, status: outcome === "interrupt" ? "awaiting_input" : "idle" };
+}
+
+/** The state a tool part takes while paused on an interrupt. */
+export function pausedOn(i: Interrupt): Pick<ToolPart, "state" | "approval" | "prompt" | "request"> {
+  const request = (i.metadata as { request?: ToolPart["request"] } | undefined)?.request;
+  return { state: "approval", approval: { id: i.id }, prompt: i.message, request };
+}
+
+/** A tool part for an interrupt that is not one of this thread's calls: a
+ *  sub-agent's request shown on its card. */
+export function interruptPart(i: Interrupt): ToolPart {
+  const meta = (i.metadata ?? {}) as { toolName?: string; args?: unknown };
+  return { type: "tool", toolCallId: i.toolCallId ?? i.id, toolName: meta.toolName ?? "tool", input: meta.args, ...pausedOn(i) };
+}
+
+/** When a run ends, nothing in it is still waiting: approvals never answered
+ *  did not run, and sub-agent cards still open lost their parent. */
+function settleOpenParts(m: ChatMessage): ChatMessage {
+  const open = (p: ChatPart) =>
+    (p.type === "tool" && p.state === "approval") ||
+    (p.type === "data-agent" && (p.data.status === "running" || p.data.status === "waiting"));
+  if (!m.parts.some(open)) return m;
+  return {
+    ...m,
+    parts: m.parts.map((p): ChatPart => {
+      if (!open(p)) return p;
+      if (p.type === "tool") return { ...p, state: "denied" };
+      if (p.type === "data-agent") return { ...p, data: { ...p.data, status: "error", error: p.data.error ?? "stopped", interrupts: undefined } };
+      return p;
+    }),
+  };
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

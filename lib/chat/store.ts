@@ -1,11 +1,10 @@
 import { EventType, type Event as AgUiEvent } from "@ag-ui/core";
 import { create } from "zustand";
 
-import { ApiError } from "@/lib/api/client";
-import { cancelRun as cancelOverRest, decideInterrupt, fetchMessages, startRun } from "@/lib/api/threads";
+import { fetchMessages } from "@/lib/api/threads";
 
 import { emptyThread, reduce, type ThreadState } from "./reduce";
-import { chatSocket, type ServerFrame } from "./socket";
+import { chatSocket, SocketError, type Ack, type Decision, type ThreadFrame } from "./socket";
 
 /**
  * Thread state for every open thread. Incoming events are folded as they
@@ -39,7 +38,7 @@ function publish() {
   useChatStore.setState({ threads });
 }
 
-chatSocket.onFrame = (f: ServerFrame) => {
+chatSocket.onFrame = (f: ThreadFrame) => {
   const t = current(f.threadId);
   switch (f.type) {
     case "event":
@@ -86,23 +85,16 @@ export function closeThread(threadId: string) {
   stage(threadId, { ...current(threadId), loaded: false });
 }
 
+type RunOptions = { agentId?: string; model?: string; connectors?: string[] | null };
+
 /** Start a thread with its first message; the server names the thread.
  *  The caller opens it, which replays the turn from its start. */
-export function startThread(text: string, opts: { agentId?: string; model?: string; connectors?: string[] | null }) {
-  return startRun({
-    messages: [{ id: crypto.randomUUID(), role: "user", content: text }],
-    agent_id: opts.agentId,
-    model: opts.model,
-    connectors: opts.connectors,
-  });
+export function startThread(text: string, opts: RunOptions) {
+  return chatSocket.request({ type: "run", messages: [{ id: crypto.randomUUID(), role: "user", content: text }], ...opts });
 }
 
-/** Queue a turn over REST and follow it on the socket. */
-export async function sendMessage(
-  threadId: string,
-  text: string,
-  opts: { agentId?: string; model?: string; connectors?: string[] | null },
-) {
+/** Send a turn and follow it. */
+export async function sendMessage(threadId: string, text: string, opts: RunOptions) {
   const id = crypto.randomUUID();
   const t = current(threadId);
   stage(threadId, {
@@ -111,21 +103,19 @@ export async function sendMessage(
     error: undefined,
     messages: [...t.messages, { id, role: "user", parts: [{ type: "text", id, text, done: true }] }],
   });
-  await follow(threadId, () =>
-    startRun({
-      thread_id: threadId,
-      messages: [{ id, role: "user", content: text }],
-      agent_id: opts.agentId,
-      model: opts.model,
-      connectors: opts.connectors,
-    }),
-  );
+  await follow(threadId, chatSocket.request({ type: "run", threadId, messages: [{ id, role: "user", content: text }], ...opts }));
 }
 
-/** Answer the paused run's interrupt; the continuation streams on the same turn. */
-export async function resumeRun(threadId: string, interruptId: string, decision: object) {
+/** Answer the thread's own paused run; the continuation streams on the same turn. */
+export async function resumeRun(threadId: string, interruptId: string, decision: Decision) {
   stage(threadId, { ...current(threadId), status: "streaming" });
-  await follow(threadId, () => decideInterrupt(threadId, interruptId, decision));
+  await follow(threadId, chatSocket.request({ type: "answer", threadId, interruptId, ...decision }));
+}
+
+/** Answer a sub-agent's request from its card on the parent's thread. The
+ *  sub-agent resumes on its own thread; the card follows it. */
+export function answerSubagent(childThreadId: string, interruptId: string, decision: Decision) {
+  return chatSocket.request({ type: "answer", threadId: childThreadId, interruptId, ...decision });
 }
 
 /** Stop the thread's run. A running one reports its own end on the socket;
@@ -133,9 +123,9 @@ export async function resumeRun(threadId: string, interruptId: string, decision:
  *  way the server records it. */
 export async function cancelRun(threadId: string) {
   try {
-    await cancelOverRest(threadId);
+    await chatSocket.request({ type: "cancel", threadId });
   } catch (err) {
-    if (!(err instanceof ApiError && err.status === 404)) throw err; // already over
+    if (!(err instanceof SocketError && err.code === "not_found")) throw err; // already over
   }
   const t = current(threadId);
   if (t.status === "awaiting_input") {
@@ -143,11 +133,11 @@ export async function cancelRun(threadId: string) {
   }
 }
 
-/** Start or continue a run and subscribe from its cursor; a refusal lands as the thread's error. */
-async function follow(threadId: string, start: () => Promise<{ cursor: string }>) {
+/** Follow a started or resumed run from its ack's cursor; a refusal lands as the thread's error. */
+async function follow(threadId: string, request: Promise<Ack>) {
   try {
-    const { cursor } = await start();
-    chatSocket.send({ type: "subscribe", threadId, after: cursor });
+    const ack = await request;
+    chatSocket.send({ type: "subscribe", threadId, after: ack.seq });
   } catch (err) {
     stage(threadId, { ...current(threadId), status: "error", error: (err as Error).message });
   }

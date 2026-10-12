@@ -136,7 +136,7 @@ const MessageItem = memo(function MessageItem({
           />
         );
       case "tool":
-        // A sub-agent's question, forwarded through its task call, is asked here.
+        // A paused question: the part carries the questions in its request.
         if (part.state === "approval" && part.request?.toolName === "question") {
           return (
             <QuestionCard

@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { useChatStore } from "@/lib/chat/store";
 
 import { apiFetch } from "./client";
-import type { ListResponse, RunStart, StoredMessage, Thread } from "./types";
+import type { ListResponse, StoredMessage, Thread } from "./types";
 
 /**
  * The thread list. It is fetched once, refetched when a run this client
@@ -50,30 +50,6 @@ export function fetchMessages(threadId: string) {
 
 export function fetchThread(threadId: string) {
   return apiFetch<Thread>(`/v1/threads/${encodeURIComponent(threadId)}`);
-}
-
-/** Queue a turn; the run streams on the socket from the returned cursor.
- *  Without thread_id the server creates the thread and names it on the run. */
-export function startRun(body: {
-  thread_id?: string;
-  messages: { id: string; role: "user"; content: string }[];
-  agent_id?: string;
-  model?: string;
-  connectors?: string[] | null;
-}) {
-  return apiFetch<RunStart>("/v1/agent/chat", { method: "POST", body: JSON.stringify(body) });
-}
-
-/** Answer a paused run's interrupt: `{approved, justification}` or `{output}`. */
-export function decideInterrupt(threadId: string, interruptId: string, decision: object) {
-  return apiFetch<RunStart>(
-    `/v1/threads/${encodeURIComponent(threadId)}/interrupts/${encodeURIComponent(interruptId)}`,
-    { method: "POST", body: JSON.stringify(decision) },
-  );
-}
-
-export function cancelRun(threadId: string) {
-  return apiFetch<void>(`/v1/threads/${encodeURIComponent(threadId)}/cancel`, { method: "POST" });
 }
 
 export function useDeleteThread() {

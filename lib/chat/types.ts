@@ -1,4 +1,4 @@
-import type { Event as AgUiEvent } from "@ag-ui/core";
+import type { Event as AgUiEvent, Interrupt } from "@ag-ui/core";
 
 /**
  * The view model the chat renders, built by `lib/chat/reduce.ts` from the AG-UI
@@ -32,13 +32,15 @@ export type AgentCard = {
   name: string;
   description?: string;
   parentToolCallId: string;
-  status: "running" | "done" | "error";
+  status: "running" | "waiting" | "done" | "error";
   startedAt: number;
   durationMs?: number;
   error?: string;
   progress?: string;
   log?: { at: number; message: string }[];
   text?: string;
+  /** The requests a paused sub-agent waits on (status "waiting"); answered on its thread. */
+  interrupts?: Interrupt[];
 };
 
 export type Task = { id: string; title: string; status: string };
@@ -84,8 +86,8 @@ export type ToolPart = {
   approval?: { id: string; approved?: boolean; reason?: string };
   /** What the backend asks the user to confirm. */
   prompt?: string;
-  /** A sub-agent's request forwarded through this `task` call while it waits. */
-  request?: { subagent: string; childThreadId: string; toolName: string; args: unknown; reason: string };
+  /** What a paused call asks: for the `question` tool, its questions. */
+  request?: { toolName: string; args: unknown };
   /** Event timestamps: when the call was announced and how long until its result. */
   startedAt?: number;
   durationMs?: number;

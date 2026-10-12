@@ -22,9 +22,11 @@ artifacts, and a live context-usage ring.
   streams **AG-UI** events for every open thread. There is no Next.js proxy and
   no AI SDK runtime: `lib/chat/reduce.ts` folds the events into the view model.
 
-> Read alongside `~/code/agentlite/docs/PLAN.md` (§3.3 events, §3.4 transport,
-> Appendix B reducer table). That document is the source of truth for the
-> events `lib/chat/reduce.ts` understands.
+> Read alongside `~/code/agentlite/docs/`: `ARCHITECTURE.md` (the socket
+> frames), `HITL.md` (approvals, questions, sub-agent requests) and
+> `AG-UI-RENDERING.md` (every event, what `lib/chat/reduce.ts` makes of it and
+> which component renders it). Those documents are the source of truth for the
+> wire contract.
 
 ---
 
@@ -60,8 +62,8 @@ app/
 - Root + `(app)` layouts are **Server Components**; every interactive surface is
   `'use client'`.
 - **No `app/api/*` routes** — all network calls go directly to the Go backend.
-- Landing flow: the first message on `/chat` starts the run (`POST /v1/agent/chat`
-  without a thread id); the server creates the thread and the page navigates to
+- Landing flow: the first message on `/chat` sends a `run` frame without a thread
+  id; the server creates the thread, the `ack` names it, and the page navigates to
   `/chat/[threadId]`, which opens it and replays the turn from its start.
 
 ```
@@ -98,24 +100,23 @@ plans/  00–06 + agent-ui-redesign.md   # design docs (see §9)
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | REST (`lib/api/client.ts`) and the WebSocket (`lib/chat/socket.ts`, `http` → `ws`) |
 
-REST (TanStack Query / `apiFetch` in `lib/api/*`):
+WebSocket `GET /v1/agent/chat?v=1` (`lib/chat/socket.ts`), one per tab, carries
+everything between the UI and its agents:
+- requests (`chatSocket.request`, answered by `ack {threadId, runId, seq}` or
+  `error {code, message}` with the same `requestId`): `run {threadId?, agentId?,
+  model?, connectors?, messages}`, `answer {threadId, interruptId, approved?,
+  justification?, output?}`, `cancel {threadId}`;
+- following: `subscribe {threadId, after?}`, `unsubscribe {threadId}`; the server
+  streams `event {threadId, seq, event}` and `idle {threadId}`; a subscription ends
+  at the segment's `RUN_FINISHED`/`RUN_ERROR`.
+
+REST (TanStack Query / `apiFetch` in `lib/api/*`) is for reads and admin only:
 - `GET /v1/agents`, `GET /v1/models`, `GET /v1/connectors`, `GET /v1/connectors/{id}`
 - `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, created_at, updated_at, run_status?}]}`;
   fetched once, refetched when a run this tab watches starts or ends and on window focus (no polling)
 - `GET /v1/threads/{id}` (its `connectors` set the composer's toggles), `PATCH`, `DELETE`
 - `GET /v1/threads/{id}/messages` → `{data: [{id, thread_id, role, seq, created_at, text, events}], cursor}`;
   `events` are the AG-UI events of that turn, `cursor` is the log id to subscribe from (`""` when idle)
-- `POST /v1/agent/chat` `{model, messages:[{id, role:"user", content}], thread_id?, agent_id?, connectors?}` →
-  `{id, thread_id, agent_id, model, status, cursor}`; without `thread_id` the server creates the thread
-- `POST /v1/threads/{id}/interrupts/{interruptId}` `{approved, justification?}` or `{output}` → `{run_id, cursor}`
-- `POST /v1/threads/{id}/cancel`
-
-WebSocket `GET /v1/agent/chat?v=1` (`lib/chat/socket.ts`), one per tab, streaming only:
-- client → server: `subscribe{threadId, after?}`, `unsubscribe{threadId}`
-- server → client: `event{threadId, seq, event}`, `idle{threadId}` (no active run),
-  `error{threadId, code, message}`
-- a subscription ends at the segment's `RUN_FINISHED`/`RUN_ERROR`; a new
-  `subscribe` for the same thread replaces the old one.
 
 There is no identity header and no temporary mode: every thread is persisted.
 
@@ -134,7 +135,8 @@ approval and a `question` alike. The full event → part → component table is
 
 Per-message `metadata`: `{agentId, model, createdAt, durationMs, usage:{inputTokens, outputTokens}, cancelled?, error?}`.
 Data part payloads: `data-agent` is the backend's agent activity
-(`subagentRunId, childThreadId, name, description?, status, startedAt, durationMs?, error?, progress?, log?, text?`),
+(`subagentRunId, childThreadId, name, description?, status: running | waiting | done | error, startedAt, durationMs?, error?, progress?, log?, text?, interrupts?`; `interrupts` are the child's pending AG-UI interrupts while `waiting`).
+When a run ends, cards still `running` or `waiting` are settled as `error`.
 `data-task-list` is `{tasks:[{id, title, status}]}`, `data-artifact` is `{id, title, kind, content, language?, url?, …}`.
 
 ---
@@ -153,7 +155,7 @@ parts. Keep that document current when the encoder or the reducer changes.
 lib/chat/socket.ts   one WebSocket; the set of followed threads + their last seq; jittered-backoff
                      reconnect re-subscribes every followed thread from its last seq
 lib/chat/store.ts    zustand: threads[threadId] = ThreadState; frames are reduced as they arrive and
-                     published once per animation frame; runs, decisions and cancels go over REST
+                     published once per animation frame; runs, answers and cancels are socket requests
 use-thread.ts        useThread(threadId) → {messages, status, loaded, error, send, approve, answer, stop};
                      opens the thread on mount, unsubscribes (and marks it unloaded) on unmount
   └─ ThreadChat  (re-renders once per published frame; children mostly bail)
@@ -176,8 +178,8 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
   events with `reduce`, then `subscribe{after: cursor}`. A reload mid-answer
   therefore shows the folded partial turn and streams only the tail. Leaving a
   thread view closes its side panel.
-- **Sending** appends an optimistic user message, `POST`s the turn and
-  subscribes from the returned cursor; the backend's `TEXT_MESSAGE_*` for the
+- **Sending** appends an optimistic user message, sends a `run` frame and
+  subscribes from the ack's cursor; the backend's `TEXT_MESSAGE_*` for the
   same message id replaces the optimistic copy. `agentId` comes from the UI store
   (`"auto"` → omitted so the backend's default `assistant` answers; `null` → the
   bare-model `chat` agent); `model` and `connectors` are the selected ones.
@@ -191,7 +193,7 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
 Both pause the run with `RUN_FINISHED{outcome:{type:"interrupt", interrupts}}`
 (thread status `awaiting_input`; the composer shows Stop). The reducer stamps
 each interrupt onto its tool part (`state: "approval"`, `approval.id` = the
-interrupt id). The decision goes to `POST /v1/threads/{id}/interrupts/{interruptId}`;
+interrupt id). The answer is an `answer` frame on that thread;
 the continuation starts with `RUN_STARTED` for the same `turnId`, so it folds
 into the same assistant message. A run that ends without that answer (a cancel)
 leaves the part `denied`.
@@ -199,11 +201,15 @@ leaves the part `denied`.
 - **Approval**: `ToolLine` opens, shows the arguments, a justification field and
   Approve / Deny, and calls `approve(interruptId, approved, justification)`. The
   backend echoes the decision as `CUSTOM approval`.
-- **Question** (the `question` tool, or a sub-agent's question forwarded through
-  its `task` call): the part carries `request: {toolName: "question", args}`;
-  `QuestionCard` renders `request.args.questions` and calls
-  `answer(interruptId, {answers, text})`. A forwarded approval shows on the
-  `task` line as "<sub-agent> wants to run <tool> <args>" with Approve / Deny.
+- **Question** (the `question` tool): the part carries `request: {toolName:
+  "question", args}`; `QuestionCard` renders `request.args.questions` and calls
+  `answer(interruptId, {answers, text})`.
+- **A sub-agent's request** shows on its `AgentCard` in the parent thread (status
+  "Needs you", the card's `interrupts`), with the same `ToolLine` or `QuestionCard`
+  controls, built by `interruptPart` in the reducer. The answer (`answerSubagent`)
+  is an `answer` frame on the child's thread; the controls stay disabled while it
+  is in flight and a refusal shows under them. The child resumes and the card
+  follows it. The parent never pauses.
   The answers come back as the tool's output and the card becomes a read-only recap.
 
 ---

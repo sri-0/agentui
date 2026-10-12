@@ -27,7 +27,7 @@ export function LandingView() {
     if (!message.text.trim()) return;
     let threadId: string;
     try {
-      threadId = (await startThread(message.text, runOptions())).thread_id;
+      threadId = (await startThread(message.text, runOptions())).threadId;
     } catch (err) {
       setError((err as Error).message);
       return;
