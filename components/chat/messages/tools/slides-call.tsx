@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { ToolPart } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
 import { AlertCircleIcon, CheckIcon, LoaderIcon, PresentationIcon } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 
 type Deck = { deck_id?: string; title?: string };
 
@@ -24,11 +24,12 @@ const LABELS: Record<string, { running: string; done: string }> = {
 
 /**
  * A call to one of open-slide's tools (mcp.yaml `ui: slides`). When the run
- * creates a deck, the artifact panel opens on its live preview; when it
- * writes slides, the preview reloads. A call that was already finished when
- * it mounted (history) does neither.
+ * creates a deck or asks for its preview, the artifact panel opens on the
+ * deck's live preview; when it writes slides, the preview reloads. A call
+ * that was already finished when it mounted (history) does neither. Memoized
+ * on the part, like every part renderer.
  */
-export function SlidesCall({ part }: { part: ToolPart }) {
+export const SlidesCall = memo(function SlidesCall({ part }: { part: ToolPart }) {
   const { deck_id: deckId, title } = deckOf(part);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const refreshArtifact = useUiStore((s) => s.refreshArtifact);
@@ -38,7 +39,9 @@ export function SlidesCall({ part }: { part: ToolPart }) {
     if (!live.current || part.state !== "done" || !deckId) return;
     live.current = false;
     if (part.toolName === "deck_write") refreshArtifact(deckId);
-    else openSidepanel({ kind: "artifact", artifactId: deckId });
+    else if (part.toolName === "deck_create" || part.toolName === "deck_preview_url") {
+      openSidepanel({ kind: "artifact", artifactId: deckId });
+    }
   }, [part.state, part.toolName, deckId, openSidepanel, refreshArtifact]);
 
   const label = LABELS[part.toolName] ?? { running: part.toolName, done: part.toolName };
@@ -60,6 +63,7 @@ export function SlidesCall({ part }: { part: ToolPart }) {
           variant="link"
           size="sm"
           className="ml-auto h-auto p-0 text-xs"
+          aria-label={`Open ${title ?? "the deck"}`}
           onClick={() => openSidepanel({ kind: "artifact", artifactId: deckId })}
         >
           Open
@@ -67,4 +71,4 @@ export function SlidesCall({ part }: { part: ToolPart }) {
       )}
     </div>
   );
-}
+});

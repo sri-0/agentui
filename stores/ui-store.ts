@@ -23,8 +23,8 @@ type UiState = {
   /** connector ids switched on, or null for all of them */
   selectedConnectors: string[] | null;
   sidepanel: SidepanelState;
-  /** Per artifact id, bumped to reload it: the panel's refresh button, or a
-   *  tool that changed it (a slide deck write). */
+  /** Per url artifact id, bumped to reload its page: the panel's refresh
+   *  button, or a tool that changed it (a slide deck write). */
   artifactRefresh: Record<string, number>;
 
   setModel: (id: string | null) => void;

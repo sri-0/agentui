@@ -1,6 +1,6 @@
 "use client";
 
-import { SourceDetails } from "@/components/right-panel/sources-view";
+import { SourceDetails } from "@/components/chat/source-details";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSource } from "@/lib/api/sources";
@@ -21,6 +21,7 @@ export function SourceChip({ number }: { number: number }) {
         <button
           type="button"
           data-source={number}
+          aria-label={`Source ${number}`}
           className="mx-0.5 inline-flex h-4 min-w-4 -translate-y-px items-center justify-center rounded bg-muted px-1 align-middle text-[10px] font-medium tabular-nums text-muted-foreground transition-colors hover:bg-primary/15 hover:text-primary"
         >
           {number}

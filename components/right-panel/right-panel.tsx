@@ -2,12 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import { useAgents } from "@/lib/api/agents";
-import { useArtifactBody } from "@/lib/api/artifacts";
+import { invalidateArtifactBody, useArtifactBody, useThreadArtifacts } from "@/lib/api/artifacts";
 import { downloadArtifact } from "@/lib/chat/artifacts";
 import { useChatStore } from "@/lib/chat/store";
 import type { Artifact, ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
+import { useQueryClient } from "@tanstack/react-query";
 import { BotIcon, ChevronLeftIcon, DownloadIcon, ExternalLinkIcon, RotateCwIcon, XIcon } from "lucide-react";
+import { useEffect } from "react";
 
 import { AgentDetailsView } from "./agent-details-view";
 import { AgentStatusBadge, AgentView } from "./agent-view";
@@ -36,8 +38,17 @@ export function RightPanel({
     sidepanel?.kind === "agent" ? s.threads[sidepanel.threadId]?.status : undefined,
   );
 
+  const artifact = sidepanel?.kind === "artifact" ? artifacts.find((a) => a.id === sidepanel.artifactId) : undefined;
+  // An artifact a sub-agent published reaches this thread only through the
+  // API: the backend stores it before announcing it, so fetch the list again.
+  const missing = sidepanel?.kind === "artifact" && !artifact;
+  const queryClient = useQueryClient();
+  const { isFetching } = useThreadArtifacts(threadId);
+  useEffect(() => {
+    if (missing) void queryClient.invalidateQueries({ queryKey: ["artifacts", threadId] });
+  }, [missing, threadId, queryClient]);
+
   if (!sidepanel) return null;
-  const artifact = sidepanel.kind === "artifact" ? artifacts.find((a) => a.id === sidepanel.artifactId) : undefined;
 
   return (
     <aside className="flex h-full flex-col border-l bg-card/30">
@@ -87,7 +98,9 @@ export function RightPanel({
             (artifact ? (
               <ArtifactView threadId={threadId} artifact={artifact} />
             ) : (
-              <p className="text-sm text-muted-foreground">Artifact not found.</p>
+              <p className="text-sm text-muted-foreground">
+                {isFetching ? "Looking for the artifact…" : "Artifact not found."}
+              </p>
             ))}
           {sidepanel.kind === "sources" && <SourcesView threadId={threadId} number={sidepanel.number} />}
           {sidepanel.kind === "model" && <ModelView modelId={sidepanel.modelId} />}
@@ -114,15 +127,20 @@ function ArtifactTitle({ title }: { title: string }) {
 
 /** Reload the artifact; open a page in a new tab, or download a body. */
 function ArtifactActions({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
-  const refresh = useUiStore((s) => s.artifactRefresh[artifact.id] ?? 0);
   const refreshArtifact = useUiStore((s) => s.refreshArtifact);
-  const { data } = useArtifactBody(threadId, artifact, refresh);
-  const body = artifact.content ?? data;
+  const queryClient = useQueryClient();
+  const { body } = useArtifactBody(threadId, artifact);
+  const reload = () =>
+    artifact.kind === "url"
+      ? refreshArtifact(artifact.id)
+      : void invalidateArtifactBody(queryClient, threadId, artifact.id);
   return (
     <>
-      <Button variant="ghost" size="icon-sm" title="Refresh" onClick={() => refreshArtifact(artifact.id)}>
-        <RotateCwIcon className="size-4" />
-      </Button>
+      {artifact.content == null && (
+        <Button variant="ghost" size="icon-sm" title="Refresh" onClick={reload}>
+          <RotateCwIcon className="size-4" />
+        </Button>
+      )}
       {artifact.kind === "url" ? (
         <Button variant="ghost" size="icon-sm" title="Open in a new tab" asChild>
           <a href={artifact.url} target="_blank" rel="noopener noreferrer">

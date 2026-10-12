@@ -2,6 +2,7 @@
 
 import Papa from "papaparse";
 
+import { MessageResponse } from "@/components/ai-elements/message";
 import { Markdown } from "@/components/chat/messages/markdown";
 import { useArtifactBody } from "@/lib/api/artifacts";
 import type { Artifact } from "@/lib/chat/types";
@@ -10,28 +11,46 @@ import { useUiStore } from "@/stores/ui-store";
 import { AppWindowIcon, FileTextIcon } from "lucide-react";
 import { useMemo } from "react";
 
-/** One artifact: a url artifact embeds its page; any other kind renders its
- *  body. Both reload when the artifact's refresh counter is bumped. */
+/** One artifact: a url artifact embeds its page, any other kind renders its
+ *  body. */
 export function ArtifactView({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
-  const refresh = useUiStore((s) => s.artifactRefresh[artifact.id] ?? 0);
-  if (artifact.kind === "url") {
-    return (
-      <iframe
-        key={refresh}
-        title={artifact.title}
-        src={artifact.url}
-        // Another origin, so it cannot reach this app; it may not navigate it either.
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
-        className="size-full flex-1 border-0 bg-white"
-      />
-    );
-  }
-  return <ArtifactBody threadId={threadId} artifact={artifact} refresh={refresh} />;
+  return artifact.kind === "url" ? (
+    <EmbeddedPage artifact={artifact} />
+  ) : (
+    <ArtifactBody threadId={threadId} artifact={artifact} />
+  );
 }
 
-function ArtifactBody({ threadId, artifact, refresh }: { threadId: string; artifact: Artifact; refresh: number }) {
-  const { data, error } = useArtifactBody(threadId, artifact, refresh);
-  const body = artifact.content ?? data;
+/** A url artifact's page, reloaded whenever its refresh counter is bumped.
+ *  Only a page on another origin is embedded: there the sandbox's script
+ *  permissions cannot reach this app. */
+function EmbeddedPage({ artifact }: { artifact: Artifact }) {
+  const refresh = useUiStore((s) => s.artifactRefresh[artifact.id] ?? 0);
+  if (!embeddable(artifact.url)) {
+    return <p className="p-6 text-sm text-muted-foreground">This page cannot be shown here.</p>;
+  }
+  return (
+    <iframe
+      key={refresh}
+      title={artifact.title}
+      src={artifact.url}
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+      className="size-full flex-1 border-0 bg-white"
+    />
+  );
+}
+
+function embeddable(url?: string): boolean {
+  try {
+    const u = new URL(url ?? "");
+    return (u.protocol === "https:" || u.protocol === "http:") && u.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function ArtifactBody({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
+  const { body, error } = useArtifactBody(threadId, artifact);
   if (error) return <p className="text-sm text-destructive">{error.message}</p>;
   if (body == null) return <p className="text-sm text-muted-foreground">Loading…</p>;
   switch (artifact.kind) {
@@ -44,9 +63,10 @@ function ArtifactBody({ threadId, artifact, refresh }: { threadId: string; artif
       );
     case "code":
     case "json":
+      // Code is shown as written: no citation chips inside it.
       return (
         <div className="text-sm">
-          <Markdown>{`\`\`\`${artifact.kind === "json" ? "json" : (artifact.language ?? "")}\n${body}\n\`\`\``}</Markdown>
+          <MessageResponse>{`\`\`\`${artifact.kind === "json" ? "json" : (artifact.language ?? "")}\n${body}\n\`\`\``}</MessageResponse>
         </div>
       );
     default:

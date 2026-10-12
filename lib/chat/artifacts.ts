@@ -17,11 +17,10 @@ export function collectArtifacts(messages: ChatMessage[]): Artifact[] {
 }
 
 /** Every artifact of the conversation, newest first: the stored list, with
- *  what the live stream announced since it was fetched laid over it. */
-export function useArtifacts(threadId: string, messages: ChatMessage[]): Artifact[] {
+ *  what the live stream announced (`collectArtifacts`) laid over it. */
+export function useArtifacts(threadId: string, live: Artifact[]): Artifact[] {
   const { data: stored = [] } = useThreadArtifacts(threadId);
   return useMemo(() => {
-    const live = collectArtifacts(messages);
     const latest = new Map(live.map((a) => [a.id, a]));
     const known = new Set(stored.map((a) => a.id));
     const announced = live.filter((a) => !known.has(a.id)).reverse();
@@ -30,7 +29,7 @@ export function useArtifacts(threadId: string, messages: ChatMessage[]): Artifac
       return l && (l.version ?? 0) >= (a.version ?? 0) ? { ...a, ...l } : a;
     });
     return [...announced, ...updated];
-  }, [stored, messages]);
+  }, [stored, live]);
 }
 
 const EXT: Record<string, string> = { markdown: "md", json: "json", html: "html", csv: "csv" };

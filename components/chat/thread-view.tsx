@@ -35,9 +35,9 @@ import { useThread } from "./use-thread";
 
 export function ThreadView({ threadId }: { threadId: string }) {
   return (
-    <ThreadIdContext.Provider value={threadId}>
+    <ThreadIdContext value={threadId}>
       <ThreadChat key={threadId} threadId={threadId} />
-    </ThreadIdContext.Provider>
+    </ThreadIdContext>
   );
 }
 
@@ -84,18 +84,22 @@ export function ThreadChat({ threadId }: { threadId: string }) {
     [threadId, onOpenUsage],
   );
 
-  const artifacts = useArtifacts(threadId, messages);
+  const announced = useMemo(() => collectArtifacts(messages), [messages]);
+  const artifacts = useArtifacts(threadId, announced);
+  const latestArtifactId = announced.at(-1)?.id;
   const { data: sources = [] } = useThreadSources(threadId);
   const citedCount = sources.filter((s) => s.cited_in?.length).length;
-  const latestArtifactId = useMemo(() => collectArtifacts(messages).at(-1)?.id, [messages]);
 
   // A run that ends may have published artifacts and cited sources.
   const queryClient = useQueryClient();
   const streaming = status === "streaming";
+  const wasStreaming = useRef(streaming);
   useEffect(() => {
-    if (streaming) return;
-    void queryClient.invalidateQueries({ queryKey: ["artifacts", threadId] });
-    void queryClient.invalidateQueries({ queryKey: ["sources", threadId] });
+    if (wasStreaming.current && !streaming) {
+      void queryClient.invalidateQueries({ queryKey: ["artifacts", threadId] });
+      void queryClient.invalidateQueries({ queryKey: ["sources", threadId] });
+    }
+    wasStreaming.current = streaming;
   }, [streaming, threadId, queryClient]);
 
   // Auto-open the artifacts panel when a new artifact arrives during a run:
@@ -259,6 +263,7 @@ function PanelButton({
       size="sm"
       className="gap-1.5 text-muted-foreground data-[active=true]:text-foreground"
       data-active={open}
+      aria-pressed={open}
       onClick={() => (open ? closeSidepanel() : openSidepanel({ kind: panel }))}
     >
       {icon}

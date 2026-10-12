@@ -1,7 +1,7 @@
 "use client";
 
 import { MessageResponse, type MessageResponseProps } from "@/components/ai-elements/message";
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import type { Components } from "streamdown";
 
 import { SourceChip } from "./source-chip";
@@ -20,10 +20,9 @@ export const Markdown = memo(function Markdown({
   children,
   ...props
 }: Omit<MessageResponseProps, "children"> & { children: string }) {
-  const text = useMemo(() => children.replace(CITATION, '<sourceref n="$1"></sourceref>'), [children]);
   return (
     <MessageResponse allowedTags={allowedTags} components={components} {...props}>
-      {text}
+      {children.replace(CITATION, '<sourceref n="$1"></sourceref>')}
     </MessageResponse>
   );
 });
