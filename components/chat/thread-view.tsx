@@ -16,12 +16,15 @@ import {
 } from "@/components/ui/resizable";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useModels } from "@/lib/api/models";
+import { useThreadSources } from "@/lib/api/sources";
 import { fetchThread } from "@/lib/api/threads";
-import { collectArtifacts } from "@/lib/chat/artifacts";
+import { collectArtifacts, useArtifacts } from "@/lib/chat/artifacts";
 import { useChatStore } from "@/lib/chat/store";
+import { ThreadIdContext } from "@/lib/chat/thread-context";
 import { useUiStore } from "@/stores/ui-store";
-import { FileTextIcon, LoaderIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { BookOpenIcon, FileTextIcon, LoaderIcon } from "lucide-react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 
 import { Composer, type ComposerStatus } from "./composer/composer";
 import { ThreadUsageRing } from "./composer/thread-usage-ring";
@@ -31,7 +34,11 @@ import { TaskBar } from "./task-bar";
 import { useThread } from "./use-thread";
 
 export function ThreadView({ threadId }: { threadId: string }) {
-  return <ThreadChat key={threadId} threadId={threadId} />;
+  return (
+    <ThreadIdContext.Provider value={threadId}>
+      <ThreadChat key={threadId} threadId={threadId} />
+    </ThreadIdContext.Provider>
+  );
 }
 
 export function ThreadChat({ threadId }: { threadId: string }) {
@@ -50,7 +57,11 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   const sidepanel = useUiStore((s) => s.sidepanel);
   const panelOpen = Boolean(sidepanel);
   const sideDefault =
-    sidepanel?.kind === "artifact" ? 48 : sidepanel?.kind === "agent" ? 42 : 34;
+    sidepanel?.kind === "artifact" || sidepanel?.kind === "artifacts"
+      ? 48
+      : sidepanel?.kind === "agent"
+        ? 42
+        : 34;
   const { data: models = [] } = useModels();
   const selectedModel = useUiStore((s) => s.selectedModel);
   const contextWindow =
@@ -73,8 +84,19 @@ export function ThreadChat({ threadId }: { threadId: string }) {
     [threadId, onOpenUsage],
   );
 
-  const artifacts = useMemo(() => collectArtifacts(messages), [messages]);
-  const latestArtifactId = artifacts.at(-1)?.id;
+  const artifacts = useArtifacts(threadId, messages);
+  const { data: sources = [] } = useThreadSources(threadId);
+  const citedCount = sources.filter((s) => s.cited_in?.length).length;
+  const latestArtifactId = useMemo(() => collectArtifacts(messages).at(-1)?.id, [messages]);
+
+  // A run that ends may have published artifacts and cited sources.
+  const queryClient = useQueryClient();
+  const streaming = status === "streaming";
+  useEffect(() => {
+    if (streaming) return;
+    void queryClient.invalidateQueries({ queryKey: ["artifacts", threadId] });
+    void queryClient.invalidateQueries({ queryKey: ["sources", threadId] });
+  }, [streaming, threadId, queryClient]);
 
   // Auto-open the artifacts panel when a new artifact arrives during a run:
   // the latest id seen once history has loaded is the baseline, so reopening
@@ -122,7 +144,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
         <div className="flex h-full flex-col overflow-hidden">
           <ThreadHeader
             artifactCount={artifacts.length}
-            latestArtifactId={latestArtifactId}
+            sourceCount={citedCount}
             reconnecting={!connected}
           />
 
@@ -167,7 +189,12 @@ export function ThreadChat({ threadId }: { threadId: string }) {
             minSize="24%"
             maxSize="65%"
           >
-            <RightPanel messages={messages} contextWindow={contextWindow} />
+            <RightPanel
+              threadId={threadId}
+              messages={messages}
+              artifacts={artifacts}
+              contextWindow={contextWindow}
+            />
           </ResizablePanel>
         </>
       )}
@@ -178,18 +205,13 @@ export function ThreadChat({ threadId }: { threadId: string }) {
 /** Static thread header — memoized so it never re-renders during streaming. */
 const ThreadHeader = memo(function ThreadHeader({
   artifactCount,
-  latestArtifactId,
+  sourceCount,
   reconnecting,
 }: {
   artifactCount: number;
-  latestArtifactId?: string;
+  sourceCount: number;
   reconnecting: boolean;
 }) {
-  const openSidepanel = useUiStore((s) => s.openSidepanel);
-  const closeSidepanel = useUiStore((s) => s.closeSidepanel);
-  // Selector returns a boolean → header only re-renders when the panel toggles
-  // open/closed for artifacts, not on every sidepanel change.
-  const artifactOpen = useUiStore((s) => s.sidepanel?.kind === "artifact");
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
       <SidebarTrigger className="text-muted-foreground" />
@@ -200,32 +222,50 @@ const ThreadHeader = memo(function ThreadHeader({
         </span>
       )}
       <div className="ml-auto flex items-center gap-2">
-        {latestArtifactId && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-muted-foreground data-[active=true]:text-foreground"
-            data-active={artifactOpen}
-            onClick={() =>
-              artifactOpen
-                ? closeSidepanel()
-                : openSidepanel({
-                    kind: "artifact",
-                    artifactId: latestArtifactId,
-                  })
-            }
-          >
-            <FileTextIcon className="size-4" />
-            Artifacts
-            <Badge
-              variant="secondary"
-              className="rounded-full px-1.5 py-0 text-[10px] tabular-nums"
-            >
-              {artifactCount}
-            </Badge>
-          </Button>
+        {sourceCount > 0 && (
+          <PanelButton panel="sources" icon={<BookOpenIcon className="size-4" />} label="Sources" count={sourceCount} />
+        )}
+        {artifactCount > 0 && (
+          <PanelButton panel="artifacts" icon={<FileTextIcon className="size-4" />} label="Artifacts" count={artifactCount} />
         )}
       </div>
     </header>
   );
 });
+
+/** A header button that toggles the conversation's artifacts or sources. */
+function PanelButton({
+  panel,
+  icon,
+  label,
+  count,
+}: {
+  panel: "artifacts" | "sources";
+  icon: ReactNode;
+  label: string;
+  count: number;
+}) {
+  const openSidepanel = useUiStore((s) => s.openSidepanel);
+  const closeSidepanel = useUiStore((s) => s.closeSidepanel);
+  // A boolean selector: the header re-renders only when this panel toggles.
+  const open = useUiStore((s) =>
+    panel === "artifacts"
+      ? s.sidepanel?.kind === "artifacts" || s.sidepanel?.kind === "artifact"
+      : s.sidepanel?.kind === "sources",
+  );
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="gap-1.5 text-muted-foreground data-[active=true]:text-foreground"
+      data-active={open}
+      onClick={() => (open ? closeSidepanel() : openSidepanel({ kind: panel }))}
+    >
+      {icon}
+      {label}
+      <Badge variant="secondary" className="rounded-full px-1.5 py-0 text-[10px] tabular-nums">
+        {count}
+      </Badge>
+    </Button>
+  );
+}

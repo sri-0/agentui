@@ -1,31 +1,23 @@
 "use client";
 
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from "@/components/ai-elements/message";
+import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Task, TaskContent, TaskTrigger } from "@/components/ai-elements/task";
 import { Button } from "@/components/ui/button";
 import type { ThreadStatus } from "@/lib/chat/reduce";
 import type { ChatMessage, ChatPart } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  FileIcon,
-  FileTextIcon,
-  LoaderIcon,
-} from "lucide-react";
+import { AppWindowIcon, CheckIcon, ChevronDownIcon, FileTextIcon, LoaderIcon } from "lucide-react";
 import { memo, type ReactNode } from "react";
 
 import { ThinkingIndicator } from "../loading";
 import { AgentCard } from "./agent-card";
+import { Markdown } from "./markdown";
 import { MessageActions } from "./message-actions";
 import { MessageMeta } from "./message-meta";
 import { MessageReasoning } from "./message-reasoning";
 import { QuestionCard, type Answer } from "./question-card";
 import { ToolLine, type Approve } from "./tool-line";
+import { toolRenderers } from "./tools/registry";
 
 export function MessageList({
   messages,
@@ -119,9 +111,7 @@ const MessageItem = memo(function MessageItem({
     const key = partKey(part, i);
     switch (part.type) {
       case "text":
-        return part.text ? (
-          <MessageResponse key={key}>{part.text}</MessageResponse>
-        ) : null;
+        return part.text ? <Markdown key={key}>{part.text}</Markdown> : null;
       case "reasoning":
         return (
           <MessageReasoning
@@ -135,7 +125,7 @@ const MessageItem = memo(function MessageItem({
             }
           />
         );
-      case "tool":
+      case "tool": {
         // A paused question: the part carries the questions in its request.
         if (part.state === "approval" && part.request?.toolName === "question") {
           return (
@@ -148,16 +138,12 @@ const MessageItem = memo(function MessageItem({
           );
         }
         // The card mounts once the questions (the call's input) have arrived.
-        return part.toolName === "question" && part.input != null ? (
-          <QuestionCard
-            key={key}
-            part={part}
-            pending={part.state === "approval"}
-            onAnswer={answer}
-          />
-        ) : (
-          <ToolLine key={key} part={part} onApprove={approve} />
-        );
+        if (part.toolName === "question" && part.input != null) {
+          return <QuestionCard key={key} part={part} pending={part.state === "approval"} onAnswer={answer} />;
+        }
+        const Renderer = part.ui && part.state !== "approval" ? toolRenderers[part.ui] : undefined;
+        return Renderer ? <Renderer key={key} part={part} /> : <ToolLine key={key} part={part} onApprove={approve} />;
+      }
       case "data-agent":
         return <AgentCard key={key} data={part.data} />;
       case "data-artifact":
@@ -171,11 +157,7 @@ const MessageItem = memo(function MessageItem({
               openSidepanel({ kind: "artifact", artifactId: part.data.id })
             }
           >
-            {part.data.kind === "file" ? (
-              <FileIcon className="size-4" />
-            ) : (
-              <FileTextIcon className="size-4" />
-            )}
+            {part.data.kind === "url" ? <AppWindowIcon className="size-4" /> : <FileTextIcon className="size-4" />}
             {part.data.title}
           </Button>
         );

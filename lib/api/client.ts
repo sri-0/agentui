@@ -33,3 +33,11 @@ export async function apiFetch<T>(
   const text = await res.text();
   return (text ? JSON.parse(text) : undefined) as T;
 }
+
+/** A response body as text, for content that is not JSON (artifact bodies). */
+export async function apiText(path: string): Promise<string> {
+  const res = await fetch(`${API_URL}${path}`);
+  const text = await res.text();
+  if (!res.ok) throw new ApiError(res.status, text || `Request failed: ${res.status}`);
+  return text;
+}

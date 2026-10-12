@@ -45,16 +45,21 @@ export type AgentCard = {
 
 export type Task = { id: string; title: string; status: string };
 
+/** A published artifact: a document with a body (fetched from the API) or,
+ *  kind "url", a page to embed. */
 export type Artifact = {
   id: string;
   title: string;
-  kind: "markdown" | "code" | "html" | "json" | "csv" | "file";
-  content: string;
+  kind: "markdown" | "code" | "html" | "json" | "csv" | "url";
   language?: string;
+  /** kind url: the page to embed */
   url?: string;
-  mime?: string;
-  filename?: string;
-  size?: number;
+  /** bumped each time the artifact is published again under its id */
+  version?: number;
+  /** the body, only in threads from before artifacts were stored */
+  content?: string;
+  /** set on artifacts listed by the API */
+  updated_at?: string;
 };
 
 export type TextPart = { type: "text"; id: string; text: string; done: boolean };
@@ -88,6 +93,8 @@ export type ToolPart = {
   prompt?: string;
   /** What a paused call asks: for the `question` tool, its questions. */
   request?: { toolName: string; args: unknown };
+  /** The UI renderer the tool asks for (see components/chat/messages/tools). */
+  ui?: string;
   /** Event timestamps: when the call was announced and how long until its result. */
   startedAt?: number;
   durationMs?: number;

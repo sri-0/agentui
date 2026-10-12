@@ -1,84 +1,53 @@
+import { useMemo } from "react";
+
+import { useThreadArtifacts } from "@/lib/api/artifacts";
+
 import type { Artifact, ChatMessage } from "./types";
 
-export type ArtifactData = Artifact;
-
-export type ArtifactSummary = {
-  id: string;
-  title: string;
-  kind: ArtifactData["kind"];
-};
-
-/** The full artifact (latest content) by id, or undefined. */
-export function findArtifact(
-  messages: ChatMessage[],
-  id: string,
-): ArtifactData | undefined {
-  let found: ArtifactData | undefined;
+/** The artifacts announced in the loaded messages, latest version of each,
+ *  in first-seen order. */
+export function collectArtifacts(messages: ChatMessage[]): Artifact[] {
+  const byId = new Map<string, Artifact>();
   for (const m of messages) {
     for (const p of m.parts) {
-      if (p.type === "data-artifact" && p.data.id === id) found = p.data;
+      if (p.type === "data-artifact") byId.set(p.data.id, p.data);
     }
   }
-  return found;
+  return [...byId.values()];
 }
 
-const EXT: Record<string, string> = {
-  csv: "csv",
-  json: "json",
-  html: "html",
-  markdown: "md",
-};
+/** Every artifact of the conversation, newest first: the stored list, with
+ *  what the live stream announced since it was fetched laid over it. */
+export function useArtifacts(threadId: string, messages: ChatMessage[]): Artifact[] {
+  const { data: stored = [] } = useThreadArtifacts(threadId);
+  return useMemo(() => {
+    const live = collectArtifacts(messages);
+    const latest = new Map(live.map((a) => [a.id, a]));
+    const known = new Set(stored.map((a) => a.id));
+    const announced = live.filter((a) => !known.has(a.id)).reverse();
+    const updated = stored.map((a) => {
+      const l = latest.get(a.id);
+      return l && (l.version ?? 0) >= (a.version ?? 0) ? { ...a, ...l } : a;
+    });
+    return [...announced, ...updated];
+  }, [stored, messages]);
+}
+
+const EXT: Record<string, string> = { markdown: "md", json: "json", html: "html", csv: "csv" };
 const MIME: Record<string, string> = {
-  csv: "text/csv",
+  markdown: "text/markdown",
   json: "application/json",
   html: "text/html",
+  csv: "text/csv",
 };
 
-/** Download the artifact as a file (csv → .csv opens in Excel, etc.). */
-export function downloadArtifact(a: ArtifactData) {
-  // file-kind artifacts point at a remote binary (office docs) served with
-  // Content-Disposition: attachment — a direct anchor click downloads it, so
-  // there's no local Blob to build.
-  if (a.kind === "file" || a.url) {
-    if (!a.url) return;
-    const el = document.createElement("a");
-    el.href = a.url;
-    if (a.filename) el.download = a.filename;
-    el.rel = "noopener";
-    document.body.appendChild(el);
-    el.click();
-    el.remove();
-    return;
-  }
+/** Save an artifact's body as a file (csv opens in Excel, and so on). */
+export function downloadArtifact(a: Artifact, body: string) {
   const ext = a.kind === "code" ? (a.language ?? "txt") : (EXT[a.kind] ?? "txt");
-  const blob = new Blob([a.content], { type: MIME[a.kind] ?? "text/plain" });
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(new Blob([body], { type: MIME[a.kind] ?? "text/plain" }));
   const el = document.createElement("a");
   el.href = url;
   el.download = `${a.title.replace(/[^a-z0-9-_]+/gi, "-").toLowerCase() || "artifact"}.${ext}`;
-  document.body.appendChild(el);
   el.click();
-  el.remove();
   URL.revokeObjectURL(url);
-}
-
-/**
- * All artifacts in the conversation, deduped by id (re-emitting the same id
- * updates it), in first-seen order. Used by the artifacts dropdown + top-bar
- * count.
- */
-export function collectArtifacts(messages: ChatMessage[]): ArtifactSummary[] {
-  const map = new Map<string, ArtifactSummary>();
-  for (const m of messages) {
-    for (const p of m.parts) {
-      if (p.type === "data-artifact") {
-        map.set(p.data.id, {
-          id: p.data.id,
-          title: p.data.title,
-          kind: p.data.kind,
-        });
-      }
-    }
-  }
-  return [...map.values()];
 }

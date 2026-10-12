@@ -8,7 +8,11 @@ export type SidepanelState =
   | { kind: "agent"; threadId: string; name: string }
   | { kind: "agent-details"; agentId: string }
   | { kind: "connector"; connectorId: string }
+  /** the conversation's artifacts, or one of them */
+  | { kind: "artifacts" }
   | { kind: "artifact"; artifactId: string }
+  /** the conversation's sources; `number` picks one out */
+  | { kind: "sources"; number?: number }
   | { kind: "model"; modelId: string }
   | null;
 
@@ -19,12 +23,16 @@ type UiState = {
   /** connector ids switched on, or null for all of them */
   selectedConnectors: string[] | null;
   sidepanel: SidepanelState;
+  /** Per artifact id, bumped to reload it: the panel's refresh button, or a
+   *  tool that changed it (a slide deck write). */
+  artifactRefresh: Record<string, number>;
 
   setModel: (id: string | null) => void;
   setAgent: (id: string | null) => void;
   setConnectors: (ids: string[] | null) => void;
   openSidepanel: (s: NonNullable<SidepanelState>) => void;
   closeSidepanel: () => void;
+  refreshArtifact: (id: string) => void;
   requestNewChat: () => void;
 };
 
@@ -35,12 +43,15 @@ export const useUiStore = create<UiState>()(
       selectedAgentId: "auto",
       selectedConnectors: null,
       sidepanel: null,
+      artifactRefresh: {},
 
       setModel: (id) => set({ selectedModel: id }),
       setAgent: (id) => set({ selectedAgentId: id }),
       setConnectors: (ids) => set({ selectedConnectors: ids }),
       openSidepanel: (s) => set({ sidepanel: s }),
       closeSidepanel: () => set({ sidepanel: null }),
+      refreshArtifact: (id) =>
+        set((s) => ({ artifactRefresh: { ...s.artifactRefresh, [id]: (s.artifactRefresh[id] ?? 0) + 1 } })),
       requestNewChat: () => set({ sidepanel: null, selectedConnectors: null }),
     }),
     {

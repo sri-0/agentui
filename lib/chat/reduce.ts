@@ -104,6 +104,7 @@ export function reduce(state: ThreadState, event: AgUiEvent): ThreadState {
           state: "running",
           argsText: "",
           startedAt: event.timestamp,
+          ui: (event.metadata as { ui?: string } | undefined)?.ui,
         }),
       );
     case EventType.TOOL_CALL_ARGS:

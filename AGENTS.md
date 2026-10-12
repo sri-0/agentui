@@ -77,17 +77,22 @@ components/
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card,
-                              #   agent-card, message-reasoning, message-actions, message-meta
-  right-panel/                # right-panel, agent-view (child thread), artifact-view, usage-view,
-                              #   model-view, agent-details-view, connector-details-view
+                              #   agent-card, markdown (+ source-chip), message-reasoning,
+                              #   message-actions, message-meta
+      tools/                  # tool renderers: registry.ts (name → component), slides-call
+  right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
+                              #   sources-view, usage-view, model-view, agent-details-view,
+                              #   connector-details-view
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
 
 lib/
   chat/  socket.ts (WebSocket) · reduce.ts (AG-UI events → view model) · store.ts (zustand threads) ·
-         types.ts (ChatMessage/parts) · usage.ts · artifacts.ts · tasks.ts
-  api/   client.ts (apiFetch) · agents.ts · models.ts · threads.ts · connectors.ts · types.ts
+         types.ts (ChatMessage/parts) · usage.ts · artifacts.ts · tasks.ts ·
+         thread-context.ts (the thread a view shows, for citations)
+  api/   client.ts (apiFetch, apiText) · agents.ts · models.ts · threads.ts · connectors.ts ·
+         artifacts.ts · sources.ts · types.ts
   providers.ts · group-threads.ts · dayjs.ts · utils.ts
 stores/ ui-store.ts            # Zustand UI state
 hooks/  use-mobile.ts
@@ -122,6 +127,10 @@ for reads and admin:
 - `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, created_at, updated_at, run_status?}]}`;
   fetched once, refetched when a run this tab watches starts or ends and on window focus (no polling)
 - `GET /v1/threads/{id}` (its `connectors` set the composer's toggles), `PATCH`, `DELETE`
+- `GET /v1/threads/{id}/artifacts` (the conversation's artefacts, no bodies) and
+  `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
+- `GET /v1/threads/{id}/sources` and `GET /v1/threads/{id}/sources/{n}` (what `[source:n]`
+  refers to, fetched when a citation is opened); the list is refetched when a run ends
 - `GET /v1/threads/{id}/messages` → `{data: [{id, thread_id, role, seq, created_at, text, events}], cursor}`;
   `events` are the AG-UI events of that turn, `cursor` is the log id to subscribe from (`""` when idle)
 
@@ -144,7 +153,9 @@ Per-message `metadata`: `{agentId, model, createdAt, durationMs, usage:{inputTok
 Data part payloads: `data-agent` is the backend's agent activity
 (`subagentRunId, childThreadId, name, description?, status: running | waiting | done | error, startedAt, durationMs?, error?, progress?, log?, text?, interrupts?`; `interrupts` are the child's pending AG-UI interrupts while `waiting`).
 When a run ends, cards still `running` or `waiting` are settled as `error`.
-`data-task-list` is `{tasks:[{id, title, status}]}`, `data-artifact` is `{id, title, kind, content, language?, url?, …}`.
+`data-task-list` is `{tasks:[{id, title, status}]}`, `data-artifact` is `{id, title, kind, version, language?, url?}`
+(no body: `ArtifactView` fetches it; kind `url` embeds the page; old threads carry `content`).
+A `tool` part carries `ui` when the backend names a renderer for the tool (agentlite TOOLS.md).
 
 ---
 
@@ -169,16 +180,18 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
        ├─ ThreadHeader (memo)
        ├─ MessageList  ← the intended re-render
        │     └─ MessageItem (memo on the message ref — the reducer shares untouched messages)
-       │           ├─ text          → MessageResponse (streamdown)
+       │           ├─ text          → Markdown (streamdown; [source:N] → SourceChip with a popover)
        │           ├─ reasoning     → MessageReasoning
-       │           ├─ tool          → ToolLine (one line; approvals open it) / QuestionCard (the `question` tool)
+       │           ├─ tool          → the renderer `toolRenderers[part.ui]` names (SlidesCall), else
+       │           │                  ToolLine (one line; approvals open it) / QuestionCard (`question`)
        │           ├─ data-agent    → AgentCard → side panel opens the child thread
-       │           ├─ data-artifact → inline button → right panel
+       │           ├─ data-artifact → inline button → the artefact in the right panel
        │           └─ step-start    → consecutive steps by one agent form a stage; in a pipeline every
        │                              stage but the last collapses into a StageCard
        ├─ TaskBar (memo)  ← latest data-task-list
        └─ Composer (memo) + ThreadUsageRing (self-subscribes to the thread)
-  └─ RightPanel (agent = AgentView(useThread(childThreadId)) / artifact / usage / model / agent-details / connector)
+  └─ RightPanel (agent = AgentView(useThread(childThreadId)) / artifacts / artifact / sources /
+                 usage / model / agent-details / connector)
 ```
 
 - **Opening a thread** = `GET /v1/threads/{id}/messages`, fold every message's
@@ -190,6 +203,12 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
   same message id replaces the optimistic copy. `agentId` comes from the UI store
   (`"auto"` → omitted so the backend's default `assistant` answers; `null` → the
   bare-model `chat` agent); `model` and `connectors` are the selected ones.
+- **Artefacts and sources** are the conversation's, fetched from the API and merged with
+  what the live stream announced (`useArtifacts`). The header shows Artifacts and Sources
+  buttons with counts; a new artefact opens the panel during a run. A `url` artefact (a
+  slide deck) is embedded in an iframe; the panel's refresh button, or a tool renderer
+  (`refreshArtifact`), reloads it. Citations render as chips; the sources panel lists cited
+  sources and, on request, everything tools returned.
 - **Sub-agents** are threads: the parent's `data-agent` card carries
   `childThreadId`, and the side panel renders it with the same `MessageList`.
 
