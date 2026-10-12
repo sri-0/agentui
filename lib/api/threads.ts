@@ -40,6 +40,17 @@ export function useThreads() {
   });
 }
 
+/** Create a thread with its first message and start its run. This is the one
+ *  turn sent over HTTP, so the server can check the request before the thread
+ *  exists; it replies once the thread is stored. Later turns go over the
+ *  socket. */
+export function createThread(text: string, opts: { agentId?: string; model?: string; connectors?: string[] | null }) {
+  return apiFetch<{ threadId: string; runId: string; seq: string }>("/v1/agent/chat", {
+    method: "POST",
+    body: JSON.stringify({ messages: [{ id: crypto.randomUUID(), role: "user", content: text }], ...opts }),
+  });
+}
+
 /** A thread's stored turns, oldest first, plus the log cursor to subscribe
  *  from ("" when no run is active). */
 export function fetchMessages(threadId: string) {

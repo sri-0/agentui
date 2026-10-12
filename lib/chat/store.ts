@@ -87,12 +87,6 @@ export function closeThread(threadId: string) {
 
 type RunOptions = { agentId?: string; model?: string; connectors?: string[] | null };
 
-/** Start a thread with its first message; the server names the thread.
- *  The caller opens it, which replays the turn from its start. */
-export function startThread(text: string, opts: RunOptions) {
-  return chatSocket.request({ type: "run", messages: [{ id: crypto.randomUUID(), role: "user", content: text }], ...opts });
-}
-
 /** Send a turn and follow it. */
 export async function sendMessage(threadId: string, text: string, opts: RunOptions) {
   const id = crypto.randomUUID();

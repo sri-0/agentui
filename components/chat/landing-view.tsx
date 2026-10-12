@@ -2,7 +2,7 @@
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { startThread } from "@/lib/chat/store";
+import { createThread } from "@/lib/api/threads";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -21,13 +21,13 @@ export function LandingView() {
 
   const [error, setError] = useState<string | null>(null);
 
-  // The first message starts the run and the server names the thread; the
-  // thread view then opens it and replays the turn from its start.
+  // The first message creates the thread over HTTP and starts its run; the
+  // thread view then opens it, subscribes and replays the turn from its start.
   const start = async (message: PromptInputMessage) => {
     if (!message.text.trim()) return;
     let threadId: string;
     try {
-      threadId = (await startThread(message.text, runOptions())).threadId;
+      threadId = (await createThread(message.text, runOptions())).threadId;
     } catch (err) {
       setError((err as Error).message);
       return;

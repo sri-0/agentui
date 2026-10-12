@@ -3,11 +3,14 @@ import type { Event as AgUiEvent } from "@ag-ui/core";
 import { API_URL } from "@/lib/api/client";
 
 /**
- * One WebSocket per browser tab to the backend's agent chat endpoint; all
- * traffic with agents goes over it. Requests (run, answer, cancel) are
- * answered by an `ack` or `error` frame carrying their requestId. Thread
- * subscriptions are multiplexed over the same socket; each thread remembers
- * the last log cursor it saw so a reconnect resumes it without a gap.
+ * One WebSocket per browser tab, shared by every thread the UI shows, to the
+ * backend's agent chat endpoint. All traffic with agents on existing threads
+ * goes over it; a new thread is created over HTTP first (`createThread`).
+ * Requests (run, answer, cancel) are answered by an `ack` or `error` frame
+ * carrying their requestId. Thread subscriptions are multiplexed over the
+ * same socket; each thread remembers the last log cursor it saw so a
+ * reconnect resumes it without a gap. The server lets the socket in to a
+ * thread on its first frame about it, and refuses one the user cannot read.
  */
 
 /** An answer to an interrupt: an approval, or a question's answers. */
@@ -17,7 +20,7 @@ export type Decision = { approved?: boolean; justification?: string; output?: un
 export type Request =
   | {
       type: "run";
-      threadId?: string;
+      threadId: string;
       model?: string;
       agentId?: string;
       connectors?: string[] | null;
@@ -122,6 +125,7 @@ class ChatSocket {
       }
       if (!this.subs.has(frame.threadId)) return; // still in flight after an unsubscribe
       if (frame.type === "event") this.subs.set(frame.threadId, frame.seq);
+      if (frame.type === "error" && frame.code === "not_found") this.subs.delete(frame.threadId); // refused: not resubscribed
       this.onFrame(frame);
     };
     ws.onclose = () => {

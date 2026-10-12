@@ -62,9 +62,11 @@ app/
 - Root + `(app)` layouts are **Server Components**; every interactive surface is
   `'use client'`.
 - **No `app/api/*` routes** — all network calls go directly to the Go backend.
-- Landing flow: the first message on `/chat` sends a `run` frame without a thread
-  id; the server creates the thread, the `ack` names it, and the page navigates to
-  `/chat/[threadId]`, which opens it and replays the turn from its start.
+- Landing flow: the first message on `/chat` is `POST /v1/agent/chat`
+  (`createThread` in `lib/api/threads.ts`); the server creates the thread, starts
+  the run and replies `201 {threadId, runId, seq}` once the thread is stored. The
+  page navigates to `/chat/[threadId]`, which opens it, subscribes and replays the
+  turn from its start. Every later turn is a `run` frame on the socket.
 
 ```
 components/
@@ -100,17 +102,22 @@ plans/  00–06 + agent-ui-redesign.md   # design docs (see §9)
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | REST (`lib/api/client.ts`) and the WebSocket (`lib/chat/socket.ts`, `http` → `ws`) |
 
-WebSocket `GET /v1/agent/chat?v=1` (`lib/chat/socket.ts`), one per tab, carries
-everything between the UI and its agents:
+WebSocket `GET /v1/agent/chat?v=1` (`lib/chat/socket.ts`), one per tab and shared
+by every thread, carries everything between the UI and its agents on existing
+threads. The server checks the user can read a thread on the first frame about
+it (normally the subscribe) and answers `not_found` if not; the socket then
+drops that subscription instead of retrying it on reconnect.
 - requests (`chatSocket.request`, answered by `ack {threadId, runId, seq}` or
-  `error {code, message}` with the same `requestId`): `run {threadId?, agentId?,
+  `error {code, message}` with the same `requestId`): `run {threadId, agentId?,
   model?, connectors?, messages}`, `answer {threadId, interruptId, approved?,
   justification?, output?}`, `cancel {threadId}`;
 - following: `subscribe {threadId, after?}`, `unsubscribe {threadId}`; the server
   streams `event {threadId, seq, event}` and `idle {threadId}`; a subscription ends
   at the segment's `RUN_FINISHED`/`RUN_ERROR`.
 
-REST (TanStack Query / `apiFetch` in `lib/api/*`) is for reads and admin only:
+REST (TanStack Query / `apiFetch` in `lib/api/*`) is for creating a thread and
+for reads and admin:
+- `POST /v1/agent/chat` → `201 {threadId, runId, seq}`: a new thread with its first turn
 - `GET /v1/agents`, `GET /v1/models`, `GET /v1/connectors`, `GET /v1/connectors/{id}`
 - `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, created_at, updated_at, run_status?}]}`;
   fetched once, refetched when a run this tab watches starts or ends and on window focus (no polling)
