@@ -1,6 +1,8 @@
 "use client";
 
+import { ConnectorIcon } from "@/components/chat/composer/connector-icon";
 import { Badge } from "@/components/ui/badge";
+import { useConnectors } from "@/lib/api/connectors";
 import type { Source } from "@/lib/api/sources";
 import dayjs from "@/lib/dayjs";
 import { ExternalLinkIcon } from "lucide-react";
@@ -25,7 +27,7 @@ export function SourceDetails({ source: s }: { source: Source }) {
             <span className="font-medium">{s.title || "Untitled"}</span>
           )}
           <p className="text-xs text-muted-foreground">
-            {s.system} · {s.tool} · retrieved {dayjs(s.retrieved_at).fromNow()}
+            <SourceSystem system={s.system} iconClassName="size-3" /> · {s.tool} · retrieved {dayjs(s.retrieved_at).fromNow()}
             {cites > 0 && ` · cited ${cites === 1 ? "once" : `${cites} times`}`}
           </p>
         </div>
@@ -41,5 +43,18 @@ export function SourceDetails({ source: s }: { source: Source }) {
         </dl>
       )}
     </div>
+  );
+}
+
+/** The system a source came from: its connector's icon and name, or the bare
+ *  id when no connector has it. */
+export function SourceSystem({ system, iconClassName }: { system: string; iconClassName?: string }) {
+  const { data: connectors } = useConnectors();
+  const c = connectors?.find((c) => c.id === system);
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1 align-middle">
+      <ConnectorIcon name={c?.icon} className={iconClassName} />
+      <span className="truncate">{c?.name ?? system}</span>
+    </span>
   );
 }

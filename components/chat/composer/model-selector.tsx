@@ -20,7 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ProviderIcon } from "@/components/provider-icon";
-import { useGroupedModels } from "@/lib/api/models";
+import { hasCapability, useGroupedModels } from "@/lib/api/models";
 import { useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 import {
@@ -117,9 +117,9 @@ export const ModelSelector = memo(function ModelSelector() {
                       </span>
                     </div>
                     <div className="flex shrink-0 items-center gap-1 text-muted-foreground">
-                      {m.vision && <EyeIcon className="size-3" />}
-                      {m.tools && <WrenchIcon className="size-3" />}
-                      {m.reasoning && <BrainIcon className="size-3" />}
+                      {hasCapability(m, "vision") && <EyeIcon className="size-3" />}
+                      {hasCapability(m, "tool_calling") && <WrenchIcon className="size-3" />}
+                      {hasCapability(m, "reasoning") && <BrainIcon className="size-3" />}
                       {m.context_length ? (
                         <Badge
                           variant="secondary"

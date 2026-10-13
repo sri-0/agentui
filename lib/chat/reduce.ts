@@ -29,6 +29,7 @@ const ACTIVITY_PARTS: Record<string, DataPart["type"]> = {
   agent: "data-agent",
   task_list: "data-task-list",
   artifact: "data-artifact",
+  compaction: "data-compaction",
 };
 
 /**
@@ -222,10 +223,12 @@ export function interruptPart(i: Interrupt): ToolPart {
   return { type: "tool", toolCallId: i.toolCallId ?? i.id, toolName: meta.toolName ?? "tool", input: meta.args, ...pausedOn(i) };
 }
 
-/** When a run ends, nothing in it is still waiting: approvals never answered
- *  did not run, and sub-agent cards still open lost their parent. */
+/** When a run ends, nothing in it is still waiting: text still open is
+ *  complete, approvals never answered did not run, and sub-agent cards still
+ *  open lost their parent. */
 function settleOpenParts(m: ChatMessage): ChatMessage {
   const open = (p: ChatPart) =>
+    (p.type === "text" && !p.done) ||
     (p.type === "tool" && p.state === "approval") ||
     (p.type === "data-agent" && (p.data.status === "running" || p.data.status === "waiting"));
   if (!m.parts.some(open)) return m;
@@ -233,6 +236,7 @@ function settleOpenParts(m: ChatMessage): ChatMessage {
     ...m,
     parts: m.parts.map((p): ChatPart => {
       if (!open(p)) return p;
+      if (p.type === "text") return { ...p, done: true };
       if (p.type === "tool") return { ...p, state: "denied" };
       if (p.type === "data-agent") return { ...p, data: { ...p.data, status: "error", error: p.data.error ?? "stopped", interrupts: undefined } };
       return p;

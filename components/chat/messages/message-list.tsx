@@ -11,6 +11,7 @@ import { memo, type ReactNode } from "react";
 
 import { ThinkingIndicator } from "../loading";
 import { AgentCard } from "./agent-card";
+import { CompactionDivider } from "./compaction-divider";
 import { Markdown } from "./markdown";
 import { MessageActions } from "./message-actions";
 import { MessageMeta } from "./message-meta";
@@ -56,7 +57,9 @@ export function MessageList({
 }
 
 const isVisible = (p: ChatPart) =>
-  p.type !== "step-start" && !(p.type === "text" && !p.text);
+  p.type !== "step-start" &&
+  !(p.type === "text" && !p.text) &&
+  !(p.type === "data-compaction" && p.data.status === "declined");
 
 const partKey = (p: ChatPart, i: number) =>
   p.type === "tool" ? p.toolCallId : ("id" in p && p.id) || i;
@@ -111,7 +114,11 @@ const MessageItem = memo(function MessageItem({
     const key = partKey(part, i);
     switch (part.type) {
       case "text":
-        return part.text ? <Markdown key={key}>{part.text}</Markdown> : null;
+        return part.text ? (
+          <Markdown key={key} streaming={!part.done}>
+            {part.text}
+          </Markdown>
+        ) : null;
       case "reasoning":
         return (
           <MessageReasoning
@@ -148,6 +155,8 @@ const MessageItem = memo(function MessageItem({
       }
       case "data-agent":
         return <AgentCard key={key} data={part.data} />;
+      case "data-compaction":
+        return <CompactionDivider key={key} data={part.data} />;
       case "data-artifact":
         return (
           <Button

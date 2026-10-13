@@ -4,33 +4,58 @@ import Papa from "papaparse";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { Markdown } from "@/components/chat/messages/markdown";
+import { Button } from "@/components/ui/button";
 import { useArtifactBody } from "@/lib/api/artifacts";
+import { downloadArtifact } from "@/lib/chat/artifacts";
 import type { Artifact } from "@/lib/chat/types";
 import dayjs from "@/lib/dayjs";
 import { useUiStore } from "@/stores/ui-store";
-import { AppWindowIcon, FileTextIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AppWindowIcon, DownloadIcon, ExternalLinkIcon, FileTextIcon, RotateCwIcon } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 /** A url artifact's page, reloaded whenever its refresh counter is bumped.
  *  Only a page on another origin is embedded: there the sandbox's script
- *  permissions cannot reach this app. */
+ *  permissions cannot reach this app. The page loads in the app's theme and
+ *  is sent every change after (open-slide's embed contract: `?theme=` and an
+ *  `open-slide:theme` message), so switching does not reload it. */
 export function EmbeddedPage({ artifact }: { artifact: Artifact }) {
   const refresh = useUiStore((s) => s.artifactRefresh[artifact.id] ?? 0);
+  const { resolvedTheme } = useTheme();
+  const [loadTheme] = useState(resolvedTheme);
+  const frame = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => postTheme(frame.current, resolvedTheme), [resolvedTheme]);
+
   if (!embeddable(artifact.url)) {
     return <p className="p-6 text-sm text-muted-foreground">This page cannot be shown here.</p>;
   }
   return (
     <iframe
       key={refresh}
+      ref={frame}
       title={artifact.title}
-      src={artifact.url}
+      src={withTheme(artifact.url, loadTheme)}
+      onLoad={() => postTheme(frame.current, resolvedTheme)}
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
-      className="size-full flex-1 border-0 bg-white"
+      className="size-full flex-1 border-0 bg-background"
     />
   );
 }
 
-function embeddable(url?: string): boolean {
+function withTheme(url: string, theme?: string): string {
+  const u = new URL(url);
+  if (theme) u.searchParams.set("theme", theme);
+  return u.toString();
+}
+
+function postTheme(frame: HTMLIFrameElement | null, theme?: string) {
+  if (!frame?.contentWindow || !theme) return;
+  frame.contentWindow.postMessage({ type: "open-slide:theme", theme }, new URL(frame.src).origin);
+}
+
+function embeddable(url?: string): url is string {
   try {
     const u = new URL(url ?? "");
     return (u.protocol === "https:" || u.protocol === "http:") && u.origin !== window.location.origin;
@@ -47,17 +72,12 @@ export function ArtifactBody({ threadId, artifact }: { threadId: string; artifac
   switch (artifact.kind) {
     case "csv":
       return <CsvTable content={body} />;
-    case "html":
-      // Sandboxed without scripts: static HTML and CSS render, nothing runs.
-      return (
-        <iframe title={artifact.title} sandbox="" srcDoc={body} className="h-[70vh] w-full rounded-md border bg-white" />
-      );
     case "code":
     case "json":
       // Code is shown as written: no citation chips inside it.
       return (
         <div className="text-sm">
-          <MessageResponse>{`\`\`\`${artifact.kind === "json" ? "json" : (artifact.language ?? "")}\n${body}\n\`\`\``}</MessageResponse>
+          <MessageResponse mode="static">{`\`\`\`${artifact.kind === "json" ? "json" : (artifact.language ?? "")}\n${body}\n\`\`\``}</MessageResponse>
         </div>
       );
     default:
@@ -134,5 +154,42 @@ function CsvTable({ content }: { content: string }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Reload the artifact; open a page in a new tab, or download a body. */
+export function ArtifactActions({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
+  const refreshArtifact = useUiStore((s) => s.refreshArtifact);
+  const queryClient = useQueryClient();
+  const { body } = useArtifactBody(threadId, artifact);
+  const reload = () => {
+    if (artifact.kind === "url") refreshArtifact(artifact.id);
+    else void queryClient.invalidateQueries({ queryKey: ["artifact-body", threadId, artifact.id] });
+  };
+  return (
+    <>
+      {artifact.content == null && (
+        <Button variant="ghost" size="icon-sm" title="Refresh" onClick={reload}>
+          <RotateCwIcon className="size-4" />
+        </Button>
+      )}
+      {artifact.kind === "url" ? (
+        <Button variant="ghost" size="icon-sm" title="Open in a new tab" asChild>
+          <a href={artifact.url} target="_blank" rel="noopener noreferrer">
+            <ExternalLinkIcon className="size-4" />
+          </a>
+        </Button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title="Download"
+          disabled={body == null}
+          onClick={() => body != null && downloadArtifact(artifact, body)}
+        >
+          <DownloadIcon className="size-4" />
+        </Button>
+      )}
+    </>
   );
 }

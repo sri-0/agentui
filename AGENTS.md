@@ -57,6 +57,7 @@ app/
     layout.tsx            # app shell: SidebarProvider + AppSidebar + SidebarInset
     chat/page.tsx         # <LandingView> — centered composer for a new chat
     chat/[threadId]/page.tsx   # <ThreadView> — awaits params (Next 16), renders the chat
+    artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts (GET /v1/artifacts)
 ```
 
 - Root + `(app)` layouts are **Server Components**; every interactive surface is
@@ -77,12 +78,13 @@ components/
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card,
-                              #   agent-card, markdown (+ source-chip), message-reasoning,
-                              #   message-actions, message-meta
+                              #   agent-card, markdown (+ source-chip), compaction-divider,
+                              #   message-reasoning, message-actions, message-meta
       tools/                  # tool renderers: registry.ts (name → component), slides-call
   right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
                               #   sources-view, usage-view, model-view, agent-details-view,
                               #   connector-details-view
+  artifacts/artifacts-view.tsx  # the all-artifacts page: paged list + the open one beside it
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
@@ -144,7 +146,7 @@ There is no identity header and no temporary mode: every thread is persisted.
 `ThreadState = {messages, status, error?, loaded}`. Messages are our own part
 shapes (`lib/chat/types.ts`); nothing depends on the AI SDK. Part types: `text`,
 `reasoning`, `tool` (state `running | done | error | approval | denied`), `step-start`,
-and `data-agent | data-task-list | data-artifact`. An interrupt is stamped onto the
+and `data-agent | data-task-list | data-artifact | data-compaction`. An interrupt is stamped onto the
 tool part it holds (`state: "approval"`, `approval.id` = the interrupt id), for an
 approval and a `question` alike. The full event → part → component table is
 `agentlite/docs/AG-UI-RENDERING.md`.
@@ -154,7 +156,10 @@ Data part payloads: `data-agent` is the backend's agent activity
 (`subagentRunId, childThreadId, name, description?, status: running | waiting | done | error, startedAt, durationMs?, error?, progress?, log?, text?, interrupts?`; `interrupts` are the child's pending AG-UI interrupts while `waiting`).
 When a run ends, cards still `running` or `waiting` are settled as `error`.
 `data-task-list` is `{tasks:[{id, title, status}]}`, `data-artifact` is `{id, title, kind, version, language?, url?}`
-(no body: `ArtifactView` fetches it; kind `url` embeds the page; old threads carry `content`).
+with kind `markdown | code | json | csv | url` (no body: `ArtifactView` fetches it; kind `url` embeds the
+page; old threads carry `content`). `data-compaction` is `{status: running | completed | failed | declined,
+summary?, inputTokens?, outputTokens?, durationMs?, error?}`, one per compaction of the model's context.
+When a run ends, text parts still open are marked done.
 A `tool` part carries `ui` when the backend names a renderer for the tool (agentlite TOOLS.md).
 
 ---
@@ -180,12 +185,16 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
        ├─ ThreadHeader (memo)
        ├─ MessageList  ← the intended re-render
        │     └─ MessageItem (memo on the message ref — the reducer shares untouched messages)
-       │           ├─ text          → Markdown (streamdown; [source:N] → SourceChip with a popover)
+       │           ├─ text          → Markdown (streamdown; [source:N] → SourceChip: the source's
+       │           │                  connector icon and name, and a popover). `streaming` while the
+       │           │                  part is open, static once done (see §8)
        │           ├─ reasoning     → MessageReasoning
        │           ├─ tool          → the renderer `toolRenderers[part.ui]` names (SlidesCall), else
        │           │                  ToolLine (one line; approvals open it) / QuestionCard (`question`)
        │           ├─ data-agent    → AgentCard → side panel opens the child thread
        │           ├─ data-artifact → inline button → the artifact in the right panel
+       │           ├─ data-compaction → CompactionDivider: a rule where the context was compacted
+       │           │                  and a `compact_context` line holding the summary
        │           └─ step-start    → consecutive steps by one agent form a stage; in a pipeline every
        │                              stage but the last collapses into a StageCard
        ├─ TaskBar (memo)  ← latest data-task-list
@@ -301,7 +310,11 @@ Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
   - `ToolCard`, `QuestionCard`, `AgentCard` → `memo` on the part/data ref (the
     reducer replaces it only on a real event for that call or agent).
   - `MessageReasoning` → primitive `text`/`isStreaming` (default shallow memo).
-  - `MessageResponse` (Streamdown) → already memoized on `children`.
+  - `MessageResponse` (Streamdown) → already memoized on `children` and
+    `isAnimating`. Streamdown's streaming mode applies each update in a
+    transition, which can leave the last one uncommitted; `Markdown` therefore
+    switches to static mode when its part is done (`streaming={!part.done}`),
+    and complete text elsewhere (artifacts, model notes) is rendered static.
   - `TaskBar` → `taskSignature` (task ids + statuses).
 
 ### Rules for new code
@@ -355,7 +368,9 @@ isolating subscriptions and memoizing leaves over "it's probably fine".
   `@/components`, `@/lib`, `@/ui`, `@/hooks`; pulls the `@ai-elements` registry
   (the `components/ai-elements/*` AI SDK building blocks).
 - **Theme**: `next-themes`, dark by default, class-based, transitions disabled on
-  switch.
+  switch. An embedded `url` artifact (`EmbeddedPage`) loads with `?theme=<resolved>`
+  and is sent each change as `postMessage({type: "open-slide:theme", theme})`
+  (open-slide-mcp's embed contract), so it follows the app without reloading.
 - Markdown is rendered with **streamdown** (+ `@streamdown/code|math|mermaid|cjk`,
   syntax highlighting via `shiki`). `@xyflow/react`, `rive`, `motion`,
   `media-chrome` are installed for richer artifact/graph rendering but only

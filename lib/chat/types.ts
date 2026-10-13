@@ -50,7 +50,7 @@ export type Task = { id: string; title: string; status: string };
 export type Artifact = {
   id: string;
   title: string;
-  kind: "markdown" | "code" | "html" | "json" | "csv" | "url";
+  kind: "markdown" | "code" | "json" | "csv" | "url";
   language?: string;
   /** kind url: the page to embed */
   url?: string;
@@ -60,6 +60,19 @@ export type Artifact = {
   content?: string;
   /** set on artifacts listed by the API */
   updated_at?: string;
+};
+
+/** A context compaction (the `compaction` activity): the backend summarised the
+ *  earlier conversation, which the model now sees as `summary`. "declined"
+ *  means the summary was discarded and nothing changed. */
+export type Compaction = {
+  status: "running" | "completed" | "failed" | "declined";
+  summary?: string;
+  /** what the summarizer read and wrote */
+  inputTokens?: number;
+  outputTokens?: number;
+  durationMs?: number;
+  error?: string;
 };
 
 export type TextPart = { type: "text"; id: string; text: string; done: boolean };
@@ -106,7 +119,8 @@ export type StepPart = { type: "step-start"; agent: string; done: boolean };
 export type DataPart =
   | { type: "data-agent"; id: string; data: AgentCard }
   | { type: "data-task-list"; id: string; data: { tasks: Task[] } }
-  | { type: "data-artifact"; id: string; data: Artifact };
+  | { type: "data-artifact"; id: string; data: Artifact }
+  | { type: "data-compaction"; id: string; data: Compaction };
 
 export type ChatPart = TextPart | ReasoningPart | ToolPart | StepPart | DataPart;
 

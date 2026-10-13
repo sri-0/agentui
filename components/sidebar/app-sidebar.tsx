@@ -22,6 +22,7 @@ import { groupThreads, threadTitle } from "@/lib/group-threads";
 import { useUiStore } from "@/stores/ui-store";
 import {
   CircleAlertIcon,
+  LayersIcon,
   MoonIcon,
   PenSquareIcon,
   SearchIcon,
@@ -31,7 +32,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { useSyncExternalStore } from "react";
 
 export function AppSidebar() {
@@ -39,6 +40,7 @@ export function AppSidebar() {
   const groups = groupThreads(threads);
   const params = useParams();
   const activeId = params?.threadId as string | undefined;
+  const pathname = usePathname();
   const requestNewChat = useUiStore((s) => s.requestNewChat);
 
   return (
@@ -80,6 +82,14 @@ export function AppSidebar() {
                 <SidebarMenuButton tooltip="Search chats" className="h-9 gap-2.5">
                   <SearchIcon />
                   <span>Search chats</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Artifacts" isActive={pathname === "/artifacts"} className="h-9 gap-2.5">
+                  <Link href="/artifacts">
+                    <LayersIcon />
+                    <span>Artifacts</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

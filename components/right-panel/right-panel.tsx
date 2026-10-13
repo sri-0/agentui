@@ -2,18 +2,17 @@
 
 import { Button } from "@/components/ui/button";
 import { useAgents } from "@/lib/api/agents";
-import { useArtifactBody, useThreadArtifacts } from "@/lib/api/artifacts";
-import { downloadArtifact } from "@/lib/chat/artifacts";
+import { useThreadArtifacts } from "@/lib/api/artifacts";
 import { useChatStore } from "@/lib/chat/store";
 import type { Artifact, ChatMessage } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
 import { useQueryClient } from "@tanstack/react-query";
-import { BotIcon, ChevronLeftIcon, DownloadIcon, ExternalLinkIcon, RotateCwIcon, XIcon } from "lucide-react";
+import { BotIcon, ChevronLeftIcon, XIcon } from "lucide-react";
 import { useEffect } from "react";
 
 import { AgentDetailsView } from "./agent-details-view";
 import { AgentStatusBadge, AgentView } from "./agent-view";
-import { ArtifactBody, ArtifactList, EmbeddedPage } from "./artifact-view";
+import { ArtifactActions, ArtifactBody, ArtifactList, EmbeddedPage } from "./artifact-view";
 import { ConnectorDetailsView } from "./connector-details-view";
 import { ModelView } from "./model-view";
 import { SourcesView } from "./sources-view";
@@ -122,42 +121,5 @@ function ArtifactTitle({ title }: { title: string }) {
       </Button>
       <span className="truncate text-sm font-semibold">{title}</span>
     </div>
-  );
-}
-
-/** Reload the artifact; open a page in a new tab, or download a body. */
-function ArtifactActions({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
-  const refreshArtifact = useUiStore((s) => s.refreshArtifact);
-  const queryClient = useQueryClient();
-  const { body } = useArtifactBody(threadId, artifact);
-  const reload = () => {
-    if (artifact.kind === "url") refreshArtifact(artifact.id);
-    else void queryClient.invalidateQueries({ queryKey: ["artifact-body", threadId, artifact.id] });
-  };
-  return (
-    <>
-      {artifact.content == null && (
-        <Button variant="ghost" size="icon-sm" title="Refresh" onClick={reload}>
-          <RotateCwIcon className="size-4" />
-        </Button>
-      )}
-      {artifact.kind === "url" ? (
-        <Button variant="ghost" size="icon-sm" title="Open in a new tab" asChild>
-          <a href={artifact.url} target="_blank" rel="noopener noreferrer">
-            <ExternalLinkIcon className="size-4" />
-          </a>
-        </Button>
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title="Download"
-          disabled={body == null}
-          onClick={() => body != null && downloadArtifact(artifact, body)}
-        >
-          <DownloadIcon className="size-4" />
-        </Button>
-      )}
-    </>
   );
 }

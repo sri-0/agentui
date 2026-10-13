@@ -27,11 +27,14 @@ export function useSelectedModel(): Model | undefined {
   return models.find((m) => m.id === selectedModel);
 }
 
+/** Whether the model reports a capability (tool_calling, vision, reasoning, …). */
+export function hasCapability(model: Model | undefined, capability: string): boolean {
+  return Boolean(model?.capabilities?.includes(capability));
+}
+
 /** Whether the model can call tools (drives agent availability). */
 export function modelSupportsTools(model?: Model): boolean {
-  return Boolean(
-    model && (model.tools || model.capabilities?.includes("tool_calling")),
-  );
+  return hasCapability(model, "tool_calling");
 }
 
 export type ProviderGroup = { providerId: string; providerName: string; models: Model[] };

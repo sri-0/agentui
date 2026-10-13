@@ -16,23 +16,32 @@ export type Agent = {
   system_prompt?: string;
 };
 
+/** A model as /v1/models serves it: id "<provider>/<model>", the provider's
+ *  own name for it, and what its provider, discovery and model card say. */
 export type Model = {
   id: string;
+  upstream_id: string;
   object: "model";
-  type: "llm" | "embedding" | "vision" | string;
+  type: "llm" | "embedding" | string;
   provider_id: string;
   provider_name: string;
   name?: string;
   description?: string;
   context_length?: number;
-  vision?: boolean;
-  tools?: boolean;
-  reasoning?: boolean;
-  audio?: boolean;
-  multimodal?: boolean;
+  max_output_tokens?: number;
   owned_by?: string;
+  /** tool_calling, reasoning, vision, structured_output, … */
   capabilities?: string[];
   supported_parameters?: string[];
+  /** US dollars per million tokens */
+  pricing?: { input?: number; output?: number; cache_read?: number; cache_write?: number };
+  benchmarks?: Record<string, number>;
+  license?: string;
+  release_date?: string;
+  knowledge_cutoff?: string;
+  /** the model card's notes (Markdown) */
+  notes?: string;
+  sources?: string[];
   architecture?: {
     input_modalities?: string[];
     output_modalities?: string[];

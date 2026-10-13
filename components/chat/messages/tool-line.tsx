@@ -128,6 +128,6 @@ function hint(input: unknown): string {
   return "";
 }
 
-function seconds(ms: number): string {
+export function seconds(ms: number): string {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }

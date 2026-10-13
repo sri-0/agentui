@@ -32,11 +32,10 @@ export function useArtifacts(threadId: string, live: Artifact[]): Artifact[] {
   }, [stored, live]);
 }
 
-const EXT: Record<string, string> = { markdown: "md", json: "json", html: "html", csv: "csv" };
+const EXT: Record<string, string> = { markdown: "md", json: "json", csv: "csv" };
 const MIME: Record<string, string> = {
   markdown: "text/markdown",
   json: "application/json",
-  html: "text/html",
   csv: "text/csv",
 };
 

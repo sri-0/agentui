@@ -51,9 +51,11 @@ const KEYWORD: [RegExp, ProviderInfo][] = [
   [/kimi|moonshot/, { key: "moonshot", name: "Moonshot" }],
 ];
 
+/** The brand of a model, for its icon. Model ids are "<provider>/<model>",
+ *  and the brand is the model's, so the provider segment is skipped. */
 export function providerForModel(modelId?: string): ProviderInfo {
   if (!modelId) return FALLBACK;
-  const lower = modelId.toLowerCase();
+  const lower = modelId.toLowerCase().slice(modelId.indexOf("/") + 1);
   const prefix = lower.split("/")[0];
   if (PREFIX[prefix]) return PREFIX[prefix];
   for (const [re, info] of KEYWORD) {
