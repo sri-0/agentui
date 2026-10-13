@@ -1,12 +1,13 @@
 "use client";
 
 import { Message, MessageContent } from "@/components/ai-elements/message";
+import { ArtifactIcon } from "@/components/right-panel/artifact-view";
 import { Task, TaskContent, TaskTrigger } from "@/components/ai-elements/task";
 import { Button } from "@/components/ui/button";
 import type { ThreadStatus } from "@/lib/chat/reduce";
 import type { ChatMessage, ChatPart } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
-import { AppWindowIcon, CheckIcon, ChevronDownIcon, FileTextIcon, LoaderIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, LoaderIcon } from "lucide-react";
 import { memo, type ReactNode } from "react";
 
 import { ThinkingIndicator } from "../loading";
@@ -168,7 +169,7 @@ const MessageItem = memo(function MessageItem({
               openSidepanel({ kind: "artifact", artifactId: part.data.id })
             }
           >
-            {part.data.kind === "url" ? <AppWindowIcon className="size-4" /> : <FileTextIcon className="size-4" />}
+            <ArtifactIcon kind={part.data.kind} className="size-4" />
             {part.data.title}
           </Button>
         );

@@ -3,7 +3,7 @@
 import { SourceDetails, SourceSystem } from "@/components/chat/source-details";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useSource, useThreadSources } from "@/lib/api/sources";
+import { useListedSource, useSource } from "@/lib/api/sources";
 import { useThreadId } from "@/lib/chat/thread-context";
 import { useUiStore } from "@/stores/ui-store";
 import { useState } from "react";
@@ -15,7 +15,7 @@ import { useState } from "react";
 export function SourceChip({ number }: { number: number }) {
   const threadId = useThreadId();
   const [open, setOpen] = useState(false);
-  const listed = useThreadSources(threadId).data?.find((s) => s.number === number);
+  const { data: listed } = useListedSource(threadId, number);
   const fetched = useSource(threadId, number, open && !listed);
   const data = listed ?? fetched.data;
   const error = listed ? null : fetched.error;
@@ -26,10 +26,10 @@ export function SourceChip({ number }: { number: number }) {
         <button
           type="button"
           data-source={number}
-          aria-label={`Source ${number}`}
           className="mx-0.5 inline-flex h-4 min-w-4 max-w-40 -translate-y-px items-center justify-center gap-1 rounded bg-muted px-1 align-middle text-[10px] font-medium tabular-nums text-muted-foreground transition-colors hover:bg-primary/15 hover:text-primary"
         >
           {listed && <SourceSystem system={listed.system} iconClassName="size-2.5 shrink-0" />}
+          <span className="sr-only">Source </span>
           <span>{number}</span>
         </button>
       </PopoverTrigger>

@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
  *  is sent every change after (open-slide's embed contract: `?theme=` and an
  *  `open-slide:theme` message), so switching does not reload it. */
 export function EmbeddedPage({ artifact }: { artifact: Artifact }) {
+  // Callers key it by artifact, so each page loads in the theme of the moment.
   const refresh = useUiStore((s) => s.artifactRefresh[artifact.id] ?? 0);
   const { resolvedTheme } = useTheme();
   const [loadTheme] = useState(resolvedTheme);
@@ -50,9 +51,21 @@ function withTheme(url: string, theme?: string): string {
   return u.toString();
 }
 
+// Any origin may receive it: the message is only a theme name, and before the
+// page loads the frame still holds about:blank, whose origin is this app's.
 function postTheme(frame: HTMLIFrameElement | null, theme?: string) {
-  if (!frame?.contentWindow || !theme) return;
-  frame.contentWindow.postMessage({ type: "open-slide:theme", theme }, new URL(frame.src).origin);
+  if (frame?.contentWindow && theme) frame.contentWindow.postMessage({ type: "open-slide:theme", theme }, "*");
+}
+
+/** An artifact's icon: a page or a document. */
+export function ArtifactIcon({ kind, className }: { kind: Artifact["kind"]; className?: string }) {
+  return kind === "url" ? <AppWindowIcon className={className} /> : <FileTextIcon className={className} />;
+}
+
+/** What an artifact is, its version and when it last changed. */
+export function artifactDetails(a: Artifact): string {
+  const version = a.version && a.version > 1 ? `version ${a.version}` : "";
+  return [a.kind, version, a.updated_at ? dayjs(a.updated_at).fromNow() : ""].filter(Boolean).join(" · ");
 }
 
 function embeddable(url?: string): url is string {
@@ -102,18 +115,10 @@ export function ArtifactList({ artifacts }: { artifacts: Artifact[] }) {
             onClick={() => openSidepanel({ kind: "artifact", artifactId: a.id })}
             className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/30"
           >
-            {a.kind === "url" ? (
-              <AppWindowIcon className="size-4 shrink-0 text-muted-foreground" />
-            ) : (
-              <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-            )}
+            <ArtifactIcon kind={a.kind} className="size-4 shrink-0 text-muted-foreground" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{a.title}</span>
-              <span className="text-xs text-muted-foreground">
-                {a.kind}
-                {a.version && a.version > 1 ? ` · version ${a.version}` : ""}
-                {a.updated_at ? ` · ${dayjs(a.updated_at).fromNow()}` : ""}
-              </span>
+              <span className="text-xs text-muted-foreground">{artifactDetails(a)}</span>
             </span>
           </button>
         </li>

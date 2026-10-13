@@ -20,7 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAgents } from "@/lib/api/agents";
-import { modelSupportsTools, useSelectedModel } from "@/lib/api/models";
+import { hasCapability, useSelectedModel } from "@/lib/api/models";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import {
@@ -50,7 +50,7 @@ export const AgentSelector = memo(function AgentSelector() {
   }, [agents, selectedAgentId, isAuto, current, setAgent]);
 
   // Agents drive tool calls — only offer the picker when the model supports them.
-  if (!modelSupportsTools(model)) return null;
+  if (!hasCapability(model, "tool_calling")) return null; // agents need tools
 
   const triggerLabel = isAuto ? "Auto" : (current?.name ?? "No agent");
   const active = isAuto || !!current;

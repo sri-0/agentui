@@ -97,6 +97,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   useEffect(() => {
     if (wasStreaming.current && !streaming) {
       void queryClient.invalidateQueries({ queryKey: ["artifacts", threadId] });
+      void queryClient.invalidateQueries({ queryKey: ["recent-artifacts"] });
       void queryClient.invalidateQueries({ queryKey: ["sources", threadId] });
     }
     wasStreaming.current = streaming;

@@ -20,20 +20,21 @@ export const CompactionDivider = memo(function CompactionDivider({ data }: { dat
 
   return (
     <div className="my-2 flex flex-col gap-1 text-sm">
-      <div role="separator" className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span aria-hidden className="h-px flex-1 bg-border" />
         <span className="flex min-w-0 items-center gap-1.5">
           {data.status === "running" && <LoaderIcon className="size-3.5 shrink-0 animate-spin" />}
           <span className="truncate" title={data.error}>
             {label(data)}
           </span>
         </span>
-        <span className="h-px flex-1 bg-border" />
+        <span aria-hidden className="h-px flex-1 bg-border" />
       </div>
       {data.status === "completed" && data.summary && (
         <>
           <button
             type="button"
+            aria-expanded={open}
             onClick={() => setOpen(!open)}
             className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-muted-foreground hover:bg-accent/50"
           >

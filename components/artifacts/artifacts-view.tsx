@@ -1,13 +1,18 @@
 "use client";
 
-import { ArtifactActions, ArtifactBody, EmbeddedPage } from "@/components/right-panel/artifact-view";
+import {
+  ArtifactActions,
+  ArtifactBody,
+  artifactDetails,
+  ArtifactIcon,
+  EmbeddedPage,
+} from "@/components/right-panel/artifact-view";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { type RecentArtifact, useRecentArtifacts } from "@/lib/api/artifacts";
 import { ThreadIdContext } from "@/lib/chat/thread-context";
-import dayjs from "@/lib/dayjs";
 import { cn } from "@/lib/utils";
-import { AppWindowIcon, ChevronLeftIcon, FileTextIcon, MessageSquareIcon } from "lucide-react";
+import { ChevronLeftIcon, MessageSquareIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -21,7 +26,7 @@ const keyOf = (a: RecentArtifact) => `${a.root_id}/${a.id}`;
  */
 export function ArtifactsView() {
   const { data, error, isPending, fetchNextPage, hasNextPage, isFetchingNextPage } = useRecentArtifacts();
-  const artifacts = data?.pages.flat() ?? [];
+  const artifacts = data?.pages.flatMap((p) => p.data) ?? [];
   const [openKey, setOpenKey] = useState<string>();
   const open = artifacts.find((a) => keyOf(a) === openKey);
 
@@ -53,20 +58,13 @@ export function ArtifactsView() {
                     a === open && "bg-accent",
                   )}
                 >
-                  {a.kind === "url" ? (
-                    <AppWindowIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <FileTextIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  )}
+                  <ArtifactIcon kind={a.kind} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{a.title}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {a.thread_title || "Untitled conversation"}
                     </span>
-                    <span className="text-xs text-muted-foreground">
-                      {a.kind}
-                      {a.version && a.version > 1 ? ` · version ${a.version}` : ""} · {dayjs(a.updated_at).fromNow()}
-                    </span>
+                    <span className="text-xs text-muted-foreground">{artifactDetails(a)}</span>
                   </span>
                 </button>
               </li>
@@ -88,7 +86,7 @@ export function ArtifactsView() {
           {open ? (
             // Citations in the body are numbered by the artifact's conversation.
             <ThreadIdContext value={open.root_id}>
-              <OpenArtifact artifact={open} onBack={() => setOpenKey(undefined)} />
+              <OpenArtifact key={keyOf(open)} artifact={open} onBack={() => setOpenKey(undefined)} />
             </ThreadIdContext>
           ) : (
             <p className="m-auto text-sm text-muted-foreground">Pick an artifact to open it.</p>
@@ -107,9 +105,10 @@ function OpenArtifact({ artifact, onBack }: { artifact: RecentArtifact; onBack: 
           <ChevronLeftIcon className="size-4" />
         </Button>
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{artifact.title}</span>
-        <Button variant="ghost" size="sm" asChild>
-          <Link href={`/chat/${artifact.thread_id}`}>
-            <MessageSquareIcon className="size-4" /> Open conversation
+        {/* The conversation, not the sub-agent thread that may have published it. */}
+        <Button variant="ghost" size="sm" title="Open conversation" asChild>
+          <Link href={`/chat/${artifact.root_id}`}>
+            <MessageSquareIcon className="size-4" /> <span className="hidden sm:inline">Open conversation</span>
           </Link>
         </Button>
         <ArtifactActions threadId={artifact.root_id} artifact={artifact} />

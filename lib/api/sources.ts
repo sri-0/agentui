@@ -26,10 +26,21 @@ const sourcesPath = (threadId: string) => `/v1/threads/${encodeURIComponent(thre
 /** Every source of a thread's conversation, by number. Refetched when a run
  *  ends (see ThreadChat). */
 export function useThreadSources(threadId: string) {
+  return useQuery({ queryKey: ["sources", threadId], queryFn: () => listSources(threadId) });
+}
+
+/** One source from the conversation's list, so a chip re-renders only when
+ *  its own source changes. */
+export function useListedSource(threadId: string, number: number) {
   return useQuery({
     queryKey: ["sources", threadId],
-    queryFn: async () => (await apiFetch<ListResponse<Source>>(sourcesPath(threadId))).data ?? [],
+    queryFn: () => listSources(threadId),
+    select: (list) => list.find((s) => s.number === number),
   });
+}
+
+async function listSources(threadId: string) {
+  return (await apiFetch<ListResponse<Source>>(sourcesPath(threadId))).data ?? [];
 }
 
 /** One source, fetched when a citation is opened. */

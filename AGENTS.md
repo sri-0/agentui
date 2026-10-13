@@ -131,12 +131,15 @@ for reads and admin:
 - `GET /v1/threads/{id}` (its `connectors` set the composer's toggles), `PATCH`, `DELETE`
 - `GET /v1/threads/{id}/artifacts` (the conversation's artifacts, no bodies) and
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
+- `GET /v1/artifacts?after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
+  every conversation's artifacts for `/artifacts`, newest first; `next` is the cursor for `after`
 - `GET /v1/threads/{id}/sources` and `GET /v1/threads/{id}/sources/{n}` (what `[source:n]`
-  refers to, fetched when a citation is opened); the list is refetched when a run ends
+  refers to; each chip reads its source from the list, and one not listed yet is fetched
+  when its citation is opened); the list is refetched when a run ends
 - `GET /v1/threads/{id}/messages` → `{data: [{id, thread_id, role, seq, created_at, text, events}], cursor}`;
   `events` are the AG-UI events of that turn, `cursor` is the log id to subscribe from (`""` when idle)
 
-There is no identity header and no temporary mode: every thread is persisted.
+There is no identity header yet and no temporary mode: every thread is persisted.
 
 ---
 
@@ -259,7 +262,11 @@ leaves the part `denied`.
   Only `useThread` and `ThreadUsageRing` read it.
 - **TanStack Query** (`lib/api/*`) for REST: keys `['agents']`, `['models']`,
   `['connectors']` (cached 5 min) and `['threads']` (refetched on run status
-  changes and window focus). Deleting a thread invalidates `['threads']`.
+  changes and window focus). Deleting a thread invalidates `['threads']`. Per
+  conversation: `['artifacts', id]`, `['sources', id]` (one list; chips `select`
+  their own source), `['artifact-body', id, artifactId, version]`; across
+  conversations `['recent-artifacts']` (infinite). A run's end invalidates the
+  conversation's artifacts and sources and `['recent-artifacts']`.
 
 ---
 
@@ -314,7 +321,11 @@ Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
     `isAnimating`. Streamdown's streaming mode applies each update in a
     transition, which can leave the last one uncommitted; `Markdown` therefore
     switches to static mode when its part is done (`streaming={!part.done}`),
-    and complete text elsewhere (artifacts, model notes) is rendered static.
+    and complete text elsewhere (reasoning once done, artifacts, model notes)
+    is rendered static. The switch remounts the rendered markdown once at the
+    end of each part (static mode renders one tree, streaming one per block):
+    code blocks re-highlight and an open citation popover closes. That is the
+    price of never showing a stale answer.
   - `TaskBar` → `taskSignature` (task ids + statuses).
 
 ### Rules for new code

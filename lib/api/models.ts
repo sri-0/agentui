@@ -32,11 +32,6 @@ export function hasCapability(model: Model | undefined, capability: string): boo
   return Boolean(model?.capabilities?.includes(capability));
 }
 
-/** Whether the model can call tools (drives agent availability). */
-export function modelSupportsTools(model?: Model): boolean {
-  return hasCapability(model, "tool_calling");
-}
-
 export type ProviderGroup = { providerId: string; providerName: string; models: Model[] };
 
 /** Group models by provider for the grouped selector. */

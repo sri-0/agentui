@@ -1,12 +1,13 @@
 /**
- * Map a model id (e.g. "openai/gpt-4o", "anthropic/claude-3.5", "gpt-oss-120b")
- * to a provider brand for display + icon. Icons live in /public/providers/*.svg.
+ * Map a model id ("<provider>/<model>", e.g. "openrouter/openai/gpt-4o",
+ * "litellm/gpt-oss-120b") to the model's brand for display and icon. Icons
+ * live in /public/providers/*.svg.
  */
 export type ProviderInfo = { key: string; name: string };
 
 const FALLBACK: ProviderInfo = { key: "openrouter", name: "OpenRouter" };
 
-// id-prefix (before the first "/") → provider
+// the model's vendor segment (after the provider) → brand
 const PREFIX: Record<string, ProviderInfo> = {
   openai: { key: "openai", name: "OpenAI" },
   anthropic: { key: "anthropic", name: "Anthropic" },

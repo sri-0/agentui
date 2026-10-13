@@ -40,18 +40,16 @@ export type RecentArtifact = Artifact & {
   updated_at: string;
 };
 
-const recentPage = 50;
-
-/** Artifacts across every conversation, newest first, a page at a time. */
+/** Artifacts across every conversation, newest first, a page at a time; a
+ *  full page names the cursor of the next. Marked stale when a run ends. */
 export function useRecentArtifacts() {
   return useInfiniteQuery({
     queryKey: ["recent-artifacts"],
     initialPageParam: "",
-    queryFn: async ({ pageParam }) => {
-      const q = new URLSearchParams({ limit: String(recentPage) });
-      if (pageParam) q.set("before", pageParam);
-      return (await apiFetch<ListResponse<RecentArtifact>>(`/v1/artifacts?${q}`)).data ?? [];
-    },
-    getNextPageParam: (page) => (page.length < recentPage ? undefined : page.at(-1)?.updated_at),
+    queryFn: ({ pageParam }) =>
+      apiFetch<ListResponse<RecentArtifact> & { next?: string }>(
+        `/v1/artifacts?${new URLSearchParams(pageParam ? { after: pageParam } : {})}`,
+      ),
+    getNextPageParam: (page) => page.next || undefined,
   });
 }

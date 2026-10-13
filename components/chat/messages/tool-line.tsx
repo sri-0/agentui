@@ -48,6 +48,7 @@ export const ToolLine = memo(function ToolLine({ part, onApprove }: { part: Tool
     <div className="my-0.5 text-sm">
       <button
         type="button"
+        aria-expanded={open}
         onClick={() => setToggled(!open)}
         className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-muted-foreground hover:bg-accent/50"
       >
