@@ -70,6 +70,11 @@ export function useDeleteThread() {
       apiFetch<void>(`/v1/threads/${encodeURIComponent(id)}`, {
         method: "DELETE",
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["threads"] }),
+    // The thread's artifacts go with it.
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["threads"] }),
+        qc.invalidateQueries({ queryKey: ["recent-artifacts"] }),
+      ]),
   });
 }

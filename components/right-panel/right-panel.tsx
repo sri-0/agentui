@@ -87,7 +87,7 @@ export function RightPanel({
         <AgentView key={sidepanel.threadId} threadId={sidepanel.threadId} />
       ) : artifact?.kind === "url" ? (
         <div className="flex flex-1 flex-col">
-          <EmbeddedPage key={artifact.id} artifact={artifact} />
+          <EmbeddedPage artifact={artifact} />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-6">

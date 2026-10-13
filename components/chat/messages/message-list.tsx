@@ -1,8 +1,8 @@
 "use client";
 
 import { Message, MessageContent } from "@/components/ai-elements/message";
-import { ArtifactIcon } from "@/components/right-panel/artifact-view";
 import { Task, TaskContent, TaskTrigger } from "@/components/ai-elements/task";
+import { ArtifactIcon } from "@/components/right-panel/artifact-view";
 import { Button } from "@/components/ui/button";
 import type { ThreadStatus } from "@/lib/chat/reduce";
 import type { ChatMessage, ChatPart } from "@/lib/chat/types";

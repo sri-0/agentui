@@ -21,23 +21,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
  *  is sent every change after (open-slide's embed contract: `?theme=` and an
  *  `open-slide:theme` message), so switching does not reload it. */
 export function EmbeddedPage({ artifact }: { artifact: Artifact }) {
-  // Callers key it by artifact, so each page loads in the theme of the moment.
   const refresh = useUiStore((s) => s.artifactRefresh[artifact.id] ?? 0);
+  if (!embeddable(artifact.url)) {
+    return <p className="p-6 text-sm text-muted-foreground">This page cannot be shown here.</p>;
+  }
+  // A new frame for each page and each reload: navigating a frame in place
+  // adds browser history, and a new one loads in the theme of the moment.
+  return <PageFrame key={`${artifact.url} ${refresh}`} url={artifact.url} title={artifact.title} />;
+}
+
+function PageFrame({ url, title }: { url: string; title: string }) {
   const { resolvedTheme } = useTheme();
   const [loadTheme] = useState(resolvedTheme);
   const frame = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => postTheme(frame.current, resolvedTheme), [resolvedTheme]);
 
-  if (!embeddable(artifact.url)) {
-    return <p className="p-6 text-sm text-muted-foreground">This page cannot be shown here.</p>;
-  }
   return (
     <iframe
-      key={refresh}
       ref={frame}
-      title={artifact.title}
-      src={withTheme(artifact.url, loadTheme)}
+      title={title}
+      src={withTheme(url, loadTheme)}
       onLoad={() => postTheme(frame.current, resolvedTheme)}
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
       className="size-full flex-1 border-0 bg-background"

@@ -262,9 +262,10 @@ leaves the part `denied`.
   Only `useThread` and `ThreadUsageRing` read it.
 - **TanStack Query** (`lib/api/*`) for REST: keys `['agents']`, `['models']`,
   `['connectors']` (cached 5 min) and `['threads']` (refetched on run status
-  changes and window focus). Deleting a thread invalidates `['threads']`. Per
-  conversation: `['artifacts', id]`, `['sources', id]` (one list; chips `select`
-  their own source), `['artifact-body', id, artifactId, version]`; across
+  changes and window focus). Deleting a thread invalidates `['threads']` and
+  `['recent-artifacts']`. Per conversation: `['artifacts', id]`, `['sources', id]`
+  (one list; chips `select` their own source), `['sources', id, n]` (one source not
+  listed yet), `['artifact-body', id, artifactId, version]`; across
   conversations `['recent-artifacts']` (infinite). A run's end invalidates the
   conversation's artifacts and sources and `['recent-artifacts']`.
 

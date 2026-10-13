@@ -50,7 +50,7 @@ export const AgentSelector = memo(function AgentSelector() {
   }, [agents, selectedAgentId, isAuto, current, setAgent]);
 
   // Agents drive tool calls — only offer the picker when the model supports them.
-  if (!hasCapability(model, "tool_calling")) return null; // agents need tools
+  if (!hasCapability(model, "tool_calling")) return null;
 
   const triggerLabel = isAuto ? "Auto" : (current?.name ?? "No agent");
   const active = isAuto || !!current;

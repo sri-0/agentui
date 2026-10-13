@@ -86,7 +86,7 @@ export function ArtifactsView() {
           {open ? (
             // Citations in the body are numbered by the artifact's conversation.
             <ThreadIdContext value={open.root_id}>
-              <OpenArtifact key={keyOf(open)} artifact={open} onBack={() => setOpenKey(undefined)} />
+              <OpenArtifact artifact={open} onBack={() => setOpenKey(undefined)} />
             </ThreadIdContext>
           ) : (
             <p className="m-auto text-sm text-muted-foreground">Pick an artifact to open it.</p>

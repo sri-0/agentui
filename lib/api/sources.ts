@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 
 import { apiFetch } from "./client";
 import type { ListResponse } from "./types";
@@ -26,22 +26,20 @@ const sourcesPath = (threadId: string) => `/v1/threads/${encodeURIComponent(thre
 /** Every source of a thread's conversation, by number. Refetched when a run
  *  ends (see ThreadChat). */
 export function useThreadSources(threadId: string) {
-  return useQuery({ queryKey: ["sources", threadId], queryFn: () => listSources(threadId) });
+  return useQuery(sourcesQuery(threadId));
 }
 
 /** One source from the conversation's list, so a chip re-renders only when
  *  its own source changes. */
 export function useListedSource(threadId: string, number: number) {
-  return useQuery({
-    queryKey: ["sources", threadId],
-    queryFn: () => listSources(threadId),
-    select: (list) => list.find((s) => s.number === number),
-  });
+  return useQuery({ ...sourcesQuery(threadId), select: (list) => list.find((s) => s.number === number) });
 }
 
-async function listSources(threadId: string) {
-  return (await apiFetch<ListResponse<Source>>(sourcesPath(threadId))).data ?? [];
-}
+const sourcesQuery = (threadId: string) =>
+  queryOptions({
+    queryKey: ["sources", threadId],
+    queryFn: async () => (await apiFetch<ListResponse<Source>>(sourcesPath(threadId))).data ?? [],
+  });
 
 /** One source, fetched when a citation is opened. */
 export function useSource(threadId: string, number: number, enabled: boolean) {
