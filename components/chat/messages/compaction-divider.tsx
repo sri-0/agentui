@@ -6,6 +6,7 @@ import { CheckIcon, ChevronDownIcon, FoldVerticalIcon, LoaderIcon } from "lucide
 import { memo, useState } from "react";
 
 import { Markdown } from "./markdown";
+import { ThreadRule } from "./thread-rule";
 import { seconds } from "./tool-line";
 
 /**
@@ -20,16 +21,12 @@ export const CompactionDivider = memo(function CompactionDivider({ data }: { dat
 
   return (
     <div className="my-2 flex flex-col gap-1 text-sm">
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span aria-hidden className="h-px flex-1 bg-border" />
-        <span className="flex min-w-0 items-center gap-1.5">
-          {data.status === "running" && <LoaderIcon className="size-3.5 shrink-0 animate-spin" />}
-          <span className="truncate" title={data.error}>
-            {label(data)}
-          </span>
+      <ThreadRule>
+        {data.status === "running" && <LoaderIcon className="size-3.5 shrink-0 animate-spin" />}
+        <span className="truncate" title={data.error}>
+          {label(data)}
         </span>
-        <span aria-hidden className="h-px flex-1 bg-border" />
-      </div>
+      </ThreadRule>
       {data.status === "completed" && data.summary && (
         <>
           <button
