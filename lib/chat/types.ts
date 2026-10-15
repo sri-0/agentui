@@ -75,6 +75,10 @@ export type Compaction = {
   error?: string;
 };
 
+/** The turn ran on another model than the thread's previous turn (the
+ *  `model` activity): ids of the form <provider>/<model>. */
+export type ModelChange = { from: string; to: string };
+
 export type TextPart = { type: "text"; id: string; text: string; done: boolean };
 
 export type ReasoningPart = {
@@ -120,7 +124,8 @@ export type DataPart =
   | { type: "data-agent"; id: string; data: AgentCard }
   | { type: "data-task-list"; id: string; data: { tasks: Task[] } }
   | { type: "data-artifact"; id: string; data: Artifact }
-  | { type: "data-compaction"; id: string; data: Compaction };
+  | { type: "data-compaction"; id: string; data: Compaction }
+  | { type: "data-model"; id: string; data: ModelChange };
 
 export type ChatPart = TextPart | ReasoningPart | ToolPart | StepPart | DataPart;
 

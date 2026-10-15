@@ -149,7 +149,7 @@ There is no identity header yet and no temporary mode: every thread is persisted
 `ThreadState = {messages, status, error?, loaded}`. Messages are our own part
 shapes (`lib/chat/types.ts`); nothing depends on the AI SDK. Part types: `text`,
 `reasoning`, `tool` (state `running | done | error | approval | denied`), `step-start`,
-and `data-agent | data-task-list | data-artifact | data-compaction`. An interrupt is stamped onto the
+and `data-agent | data-task-list | data-artifact | data-compaction | data-model`. An interrupt is stamped onto the
 tool part it holds (`state: "approval"`, `approval.id` = the interrupt id), for an
 approval and a `question` alike. The full event → part → component table is
 `agentlite/docs/AG-UI-RENDERING.md`.
@@ -162,6 +162,7 @@ When a run ends, cards still `running` or `waiting` are settled as `error`.
 with kind `markdown | code | json | csv | url` (no body: `ArtifactView` fetches it; kind `url` embeds the
 page; old threads carry `content`). `data-compaction` is `{status: running | completed | failed | declined,
 summary?, inputTokens?, outputTokens?, durationMs?, error?}`, one per compaction of the model's context.
+`data-model` is `{from, to}`: the turn ran on another model than the thread's previous turn.
 When a run ends, text parts still open are marked done.
 A `tool` part carries `ui` when the backend names a renderer for the tool (agentlite TOOLS.md).
 
@@ -198,6 +199,8 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
        │           ├─ data-artifact → inline button → the artifact in the right panel
        │           ├─ data-compaction → CompactionDivider: a rule where the context was compacted
        │           │                  and a `compact_context` line holding the summary
+       │           ├─ data-model    → ModelChangeDivider: a rule "Changed model to X" (both rules are
+       │           │                  ThreadRule); not counted as output for the thinking indicator
        │           └─ step-start    → consecutive steps by one agent form a stage; in a pipeline every
        │                              stage but the last collapses into a StageCard
        ├─ TaskBar (memo)  ← latest data-task-list

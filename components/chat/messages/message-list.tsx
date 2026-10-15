@@ -17,6 +17,7 @@ import { Markdown } from "./markdown";
 import { MessageActions } from "./message-actions";
 import { MessageMeta } from "./message-meta";
 import { MessageReasoning } from "./message-reasoning";
+import { ModelChangeDivider } from "./model-change-divider";
 import { QuestionCard, type Answer } from "./question-card";
 import { ToolLine, type Approve } from "./tool-line";
 import { toolRenderers } from "./tools/registry";
@@ -57,8 +58,11 @@ export function MessageList({
   );
 }
 
+// The model marker comes before the model has said anything, so it does not
+// end the wait.
 const isVisible = (p: ChatPart) =>
   p.type !== "step-start" &&
+  p.type !== "data-model" &&
   !(p.type === "text" && !p.text) &&
   !(p.type === "data-compaction" && p.data.status === "declined");
 
@@ -158,6 +162,8 @@ const MessageItem = memo(function MessageItem({
         return <AgentCard key={key} data={part.data} />;
       case "data-compaction":
         return <CompactionDivider key={key} data={part.data} />;
+      case "data-model":
+        return <ModelChangeDivider key={key} data={part.data} />;
       case "data-artifact":
         return (
           <Button
@@ -185,10 +191,11 @@ const MessageItem = memo(function MessageItem({
       >
         {pipeline
           ? stages.map((stage, si) =>
-              si === stages.length - 1 ? (
+              // parts before any agent's first step (the model marker) are not a stage
+              si === stages.length - 1 || !stage.agent ? (
                 stage.parts.map(render)
               ) : (
-                <StageCard key={si} agent={stage.agent ?? "stage"} done={stage.done}>
+                <StageCard key={si} agent={stage.agent} done={stage.done}>
                   {stage.parts.map(render)}
                 </StageCard>
               ),
