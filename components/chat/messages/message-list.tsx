@@ -18,6 +18,7 @@ import { MessageActions } from "./message-actions";
 import { MessageMeta } from "./message-meta";
 import { MessageReasoning } from "./message-reasoning";
 import { ModelChangeDivider } from "./model-change-divider";
+import { SkillLoaded, UserText } from "./skill";
 import { QuestionCard, type Answer } from "./question-card";
 import { ToolLine, type Approve } from "./tool-line";
 import { toolRenderers } from "./tools/registry";
@@ -58,11 +59,12 @@ export function MessageList({
   );
 }
 
-// The model marker comes before the model has said anything, so it does not
-// end the wait.
+// The model and skill markers come before the model has said anything, so
+// they do not end the wait.
 const isVisible = (p: ChatPart) =>
   p.type !== "step-start" &&
   p.type !== "data-model" &&
+  p.type !== "data-skill" &&
   !(p.type === "text" && !p.text) &&
   !(p.type === "data-compaction" && p.data.status === "declined");
 
@@ -119,11 +121,14 @@ const MessageItem = memo(function MessageItem({
     const key = partKey(part, i);
     switch (part.type) {
       case "text":
-        return part.text ? (
+        if (!part.text) return null;
+        return isUser ? (
+          <UserText key={key} text={part.text} />
+        ) : (
           <Markdown key={key} streaming={!part.done}>
             {part.text}
           </Markdown>
-        ) : null;
+        );
       case "reasoning":
         return (
           <MessageReasoning
@@ -164,6 +169,8 @@ const MessageItem = memo(function MessageItem({
         return <CompactionDivider key={key} data={part.data} />;
       case "data-model":
         return <ModelChangeDivider key={key} data={part.data} />;
+      case "data-skill":
+        return <SkillLoaded key={key} data={part.data} />;
       case "data-artifact":
         return (
           <Button

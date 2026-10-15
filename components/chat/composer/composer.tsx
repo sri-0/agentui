@@ -4,6 +4,7 @@ import {
   PromptInput,
   PromptInputBody,
   PromptInputFooter,
+  PromptInputProvider,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
@@ -15,17 +16,12 @@ import { memo, type ReactNode } from "react";
 import { AgentSelector } from "./agent-selector";
 import { ConnectorSelector } from "./connector-selector";
 import { ModelSelector } from "./model-selector";
+import { SkillMenu, useSkillMenu } from "./skill-menu";
 
 /** What the submit button shows; the names the AI Elements input uses. */
 export type ComposerStatus = "ready" | "submitted" | "streaming";
 
-export const Composer = memo(function Composer({
-  onSubmit,
-  status,
-  onStop,
-  contextSlot,
-  autoFocus,
-}: {
+type ComposerProps = {
   onSubmit: (message: PromptInputMessage) => void;
   status: ComposerStatus;
   onStop?: () => void;
@@ -33,12 +29,25 @@ export const Composer = memo(function Composer({
   // doesn't take a per-token `usage` prop (which would defeat this memo).
   contextSlot?: ReactNode;
   autoFocus?: boolean;
-}) {
+};
+
+// The provider holds the text, so the skill menu can follow what is typed.
+export const Composer = memo(function Composer(props: ComposerProps) {
+  return (
+    <PromptInputProvider>
+      <ComposerInput {...props} />
+    </PromptInputProvider>
+  );
+});
+
+function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus }: ComposerProps) {
   const idle = status === "ready";
+  const { onKeyDown, ...menu } = useSkillMenu();
 
   return (
     <div className="relative">
       <div className="ai-glow" />
+      <SkillMenu {...menu} />
       <PromptInput
         onSubmit={onSubmit}
         className={cn(
@@ -52,6 +61,7 @@ export const Composer = memo(function Composer({
         <PromptInputBody>
           <PromptInputTextarea
             autoFocus={autoFocus}
+            onKeyDown={onKeyDown}
             className="max-h-56 min-h-[60px] resize-none border-0 bg-transparent px-6 pt-5 text-[15px] leading-relaxed shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
             placeholder="Ask anything, or pick an agent…"
           />
@@ -77,4 +87,4 @@ export const Composer = memo(function Composer({
       </PromptInput>
     </div>
   );
-});
+}

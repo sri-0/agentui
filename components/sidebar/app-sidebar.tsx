@@ -21,6 +21,7 @@ import type { RunStatus } from "@/lib/api/types";
 import { groupThreads, threadTitle } from "@/lib/group-threads";
 import { useUiStore } from "@/stores/ui-store";
 import {
+  BookOpenIcon,
   CircleAlertIcon,
   LayersIcon,
   MoonIcon,
@@ -89,6 +90,14 @@ export function AppSidebar() {
                   <Link href="/artifacts">
                     <LayersIcon />
                     <span>Artifacts</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Skills" isActive={pathname === "/skills"} className="h-9 gap-2.5">
+                  <Link href="/skills">
+                    <BookOpenIcon />
+                    <span>Skills</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
