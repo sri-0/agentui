@@ -1,5 +1,6 @@
 "use client";
 
+import { colorsOf } from "@/lib/colors";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch, apiText } from "./client";
@@ -35,24 +36,38 @@ export type SkillDetails = { title: string; description: string; category: strin
 export const skillFilePath = (id: string, path: string) =>
   `/v1/skills/${encodeURIComponent(id)}/files/${path.split("/").map(encodeURIComponent).join("/")}`;
 
+const keys = {
+  all: ["skills"],
+  lists: ["skills", "list"],
+  list: (f: Record<string, string>) => ["skills", "list", f],
+  detail: (id: string) => ["skills", "detail", id],
+};
+
 /** The skills library by name, as the filter narrows it, with the categories
  *  and sources of the skills its search matches (whatever category or source
  *  is chosen). The previous result stays while the next loads. */
 export function useSkills(filter: SkillFilter = {}) {
+  const set = Object.fromEntries(Object.entries(filter).filter(([, v]) => v)) as Record<string, string>; // {q: ""} is {}
   return useQuery({
-    queryKey: ["skills", filter],
+    queryKey: keys.list(set),
     placeholderData: keepPreviousData,
-    queryFn: () => {
-      const params = new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][]);
-      return apiFetch<SkillList>(`/v1/skills?${params}`);
-    },
+    queryFn: () => apiFetch<SkillList>(`/v1/skills?${new URLSearchParams(set)}`),
   });
+}
+
+/** The library's categories and sources, to file a skill under, and each
+ *  category's colour. */
+export function useSkillFacets() {
+  const { data } = useSkills();
+  const categories = data?.categories.map((f) => f.value) ?? [];
+  const sources = data?.sources.map((f) => f.value) ?? [];
+  return { categories, sources, colorOf: colorsOf(categories) };
 }
 
 /** One skill, by id. */
 export function useSkill(id: string) {
   return useQuery({
-    queryKey: ["skills", "one", id],
+    queryKey: keys.detail(id),
     queryFn: () => apiFetch<Skill>(`/v1/skills/${encodeURIComponent(id)}`),
   });
 }
@@ -78,7 +93,7 @@ export function useUploadSkill() {
       for (const [k, v] of Object.entries(details)) if (v.trim()) form.set(k, v);
       return apiFetch<Skill>("/v1/skills", { method: "POST", body: form });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.all }),
   });
 }
 
@@ -88,7 +103,7 @@ export function useUpdateSkill() {
   return useMutation({
     mutationFn: ({ id, details }: { id: string; details: Partial<SkillDetails> }) =>
       apiFetch<Skill>(`/v1/skills/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(details) }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.all }),
   });
 }
 
@@ -102,14 +117,16 @@ export function useWriteSkillFile() {
         body: content,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.all }),
   });
 }
 
+/** Deletes a skill. Only the lists refetch: the deleted one's page, still
+ *  open until it navigates away, would get a 404. */
 export function useDeleteSkill() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiFetch<void>(`/v1/skills/${encodeURIComponent(id)}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.lists }),
   });
 }

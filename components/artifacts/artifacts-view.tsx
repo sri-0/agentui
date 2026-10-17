@@ -11,17 +11,18 @@ import {
 } from "@/components/right-panel/artifact-view";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { type RecentArtifact, useArtifactBody, useRecentArtifacts } from "@/lib/api/artifacts";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { type RecentArtifact, useArtifactBody, useRecentArtifacts, useThreadArtifacts } from "@/lib/api/artifacts";
 import type { Artifact } from "@/lib/chat/types";
 import dayjs from "@/lib/dayjs";
 import { ThreadIdContext } from "@/lib/chat/thread-context";
 import { ArrowLeftIcon, MessageSquareIcon } from "lucide-react";
 import { useInView } from "motion/react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 
-/** An artifact id is unique within its conversation only. */
+/** An artifact id is unique within its conversation only: ?open=root/id. */
 const keyOf = (a: RecentArtifact) => `${a.root_id}/${a.id}`;
 
 /** The kinds the page filters by, as Spaces filters pages from slides; each
@@ -44,25 +45,28 @@ export function ArtifactsView() {
   const { data, error, isPending, fetchNextPage, hasNextPage, isFetchingNextPage } = useRecentArtifacts();
   const artifacts = data?.pages.flatMap((p) => p.data) ?? [];
   const params = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
   const [search, setSearch] = useState("");
-  const [kind, setKind] = useState(0);
+  const [kind, setKind] = useState("All");
 
-  const openKey = params.get("open");
-  const open = artifacts.find((a) => keyOf(a) === openKey);
+  // The open artifact, from the pages loaded or, past them, its conversation's.
+  const openKey = params.get("open") ?? "";
+  const [rootId, ...rest] = openKey.split("/");
+  const listed = artifacts.find((a) => keyOf(a) === openKey);
+  const inThread = useThreadArtifacts(openKey && !isPending && !listed ? rootId : "");
+  const open = listed ?? inThread.data?.find((a) => a.id === rest.join("/"));
   if (open) {
     return (
       <LibraryPage title="Artifacts" fill={open.kind === "url"}>
-        <ThreadIdContext value={open.root_id}>
-          <OpenArtifact artifact={open} onBack={() => router.push(pathname)} />
+        <ThreadIdContext value={rootId}>
+          <OpenArtifact rootId={rootId} artifact={open} back={pathname} />
         </ThreadIdContext>
       </LibraryPage>
     );
   }
 
   const q = search.trim().toLowerCase();
-  const kinds = KINDS[kind].kinds;
+  const kinds = KINDS.find((k) => k.label === kind)?.kinds;
   const shown = artifacts.filter(
     (a) =>
       (!kinds || kinds.includes(a.kind)) &&
@@ -72,46 +76,55 @@ export function ArtifactsView() {
   return (
     <LibraryPage title="Artifacts">
       <LibraryToolbar heading="Artifacts" search={search} onSearch={setSearch} placeholder="Search artifacts" />
-      <div role="group" aria-label="Kind" className="-mt-2 flex flex-wrap gap-1">
-        {KINDS.map((k, i) => (
-          <Button
-            key={k.label}
-            variant={i === kind ? "secondary" : "ghost"}
-            size="sm"
-            aria-pressed={i === kind}
-            onClick={() => setKind(i)}
-          >
+      <ToggleGroup
+        type="single"
+        size="sm"
+        aria-label="Kind"
+        value={kind}
+        onValueChange={(v) => v && setKind(v)}
+        className="-mt-2 flex-wrap"
+      >
+        {KINDS.map((k) => (
+          <ToggleGroupItem key={k.label} value={k.label}>
             {k.kinds && <ArtifactIcon kind={k.kinds[0]} />}
             {k.label}
-          </Button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
       {error && <p className="text-sm text-destructive">{error.message}</p>}
       {isPending && <p className="text-sm text-muted-foreground">Loading…</p>}
       {!isPending && !error && shown.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          {artifacts.length === 0 ? "No artifacts yet. Ask an agent for a report, a document or a deck." : "Nothing matches."}
+          {artifacts.length === 0
+            ? "No artifacts yet. Ask an agent for a report, a document or a deck."
+            : "Nothing matches."}
         </p>
       )}
       <LibraryItems>
         {shown.map((a) => (
           <LibraryItem
             key={keyOf(a)}
+            href={`${pathname}?open=${encodeURIComponent(keyOf(a))}`}
             preview={<ArtifactPreview artifact={a} />}
             icon={
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-background">
-                <ArtifactIcon kind={a.kind} className="size-4" />
+                <ArtifactIcon kind={a.kind} />
               </span>
             }
             title={a.title}
             subtitle={a.thread_title || "Untitled conversation"}
             meta={a.updated_at ? dayjs(a.updated_at).fromNow() : undefined}
-            onOpen={() => router.push(`${pathname}?open=${encodeURIComponent(keyOf(a))}`)}
           />
         ))}
       </LibraryItems>
       {hasNextPage && (
-        <Button variant="ghost" size="sm" className="self-center" disabled={isFetchingNextPage} onClick={() => fetchNextPage()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="self-center"
+          disabled={isFetchingNextPage}
+          onClick={() => fetchNextPage()}
+        >
           {isFetchingNextPage ? "Loading…" : "Load more"}
         </Button>
       )}
@@ -144,10 +157,13 @@ function ArtifactPreview({ artifact }: { artifact: RecentArtifact }) {
         ) : artifact.kind === "markdown" ? (
           // A page in miniature: rendered at twice the width, then scaled down.
           <span className="pointer-events-none block w-[200%] origin-top-left scale-50 text-xs" aria-hidden>
-            <Markdown>{text}</Markdown>
+            <Markdown controls={false}>{text}</Markdown>
           </span>
         ) : (
-          <span className="block font-mono text-[9px] leading-snug whitespace-pre-wrap text-muted-foreground" aria-hidden>
+          <span
+            className="block font-mono text-[9px] leading-snug whitespace-pre-wrap text-muted-foreground"
+            aria-hidden
+          >
             {text}
           </span>
         )}
@@ -169,23 +185,25 @@ function hostOf(url?: string) {
   }
 }
 
-/** An artifact opened in place of the list; a url artifact's page takes all
- *  the room there is. */
-function OpenArtifact({ artifact, onBack }: { artifact: RecentArtifact; onBack: () => void }) {
+/** An artifact of the conversation rootId, opened in place of the list; a url
+ *  artifact's page takes all the room there is. */
+function OpenArtifact({ rootId, artifact, back }: { rootId: string; artifact: Artifact; back: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeftIcon /> Artifacts
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={back}>
+            <ArrowLeftIcon /> Artifacts
+          </Link>
         </Button>
         <h1 className="mr-auto min-w-0 truncate text-xl font-semibold">{artifact.title}</h1>
         {/* The conversation, not the sub-agent thread that may have published it. */}
         <Button variant="outline" size="sm" asChild>
-          <Link href={`/chat/${artifact.root_id}`}>
+          <Link href={`/chat/${rootId}`}>
             <MessageSquareIcon /> Open thread
           </Link>
         </Button>
-        <ArtifactActions threadId={artifact.root_id} artifact={artifact} />
+        <ArtifactActions threadId={rootId} artifact={artifact} />
       </div>
       {artifact.kind === "url" ? (
         <div className="flex min-h-0 flex-1 overflow-hidden rounded-xl border">
@@ -193,7 +211,7 @@ function OpenArtifact({ artifact, onBack }: { artifact: RecentArtifact; onBack: 
         </div>
       ) : (
         <div className="rounded-xl border p-6">
-          <ArtifactBody threadId={artifact.root_id} artifact={artifact} />
+          <ArtifactBody threadId={rootId} artifact={artifact} />
         </div>
       )}
     </div>

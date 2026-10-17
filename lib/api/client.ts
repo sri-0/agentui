@@ -3,8 +3,7 @@
  * REST through this helper, the agent stream through lib/chat/socket.ts.
  */
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export class ApiError extends Error {
   constructor(
@@ -16,10 +15,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await apiText(path, init);
   // DELETE returns an empty body.
   return (text ? JSON.parse(text) : undefined) as T;
@@ -35,6 +31,15 @@ export async function apiText(path: string, init?: RequestInit): Promise<string>
   }
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
   const text = await res.text();
-  if (!res.ok) throw new ApiError(res.status, text || `Request failed: ${res.status}`);
+  if (!res.ok) throw new ApiError(res.status, serverMessage(text) || `Request failed: ${res.status}`);
   return text;
+}
+
+/** The server's own message in an error body ({"message": …}), or the body. */
+function serverMessage(body: string) {
+  try {
+    return (JSON.parse(body) as { message?: string }).message ?? body;
+  } catch {
+    return body;
+  }
 }

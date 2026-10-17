@@ -15,54 +15,54 @@ import { CopyButton } from "@/components/library/copy-button";
 import { LibraryPage } from "@/components/library/library";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { API_URL } from "@/lib/api/client";
 import {
-  type Facet,
   type Skill,
   skillFilePath,
   useDeleteSkill,
   useSkill,
+  useSkillFacets,
   useSkillFile,
-  useSkills,
   useWriteSkillFile,
 } from "@/lib/api/skills";
-import { colorsOf } from "@/lib/colors";
 import dayjs from "@/lib/dayjs";
 import { ArrowLeftIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { type BundledLanguage, bundledLanguages } from "shiki";
 
-import { EditSkillDialog, errorMessage } from "./skill-dialogs";
-import { SkillIcon, SkillTags } from "./skills-view";
+import { EditSkillDialog } from "./skill-dialogs";
+import { SkillIcon, SkillTags } from "./skill-icon";
 
 /** A skill's page (/skills/<id>): its details, how to install it, and its
- *  files; with Edit details and Delete. */
+ *  files; with Edit details and Delete. The list's filters ride along in the
+ *  query, so Skills goes back to them. */
 export function SkillPage({ id }: { id: string }) {
   const { data: skill, error } = useSkill(id);
+  const params = useSearchParams();
+  const back = params.size ? `/skills?${params}` : "/skills";
   return (
     <LibraryPage title="Skills">
-      {error && <p className="text-sm text-destructive">{errorMessage(error)}</p>}
-      {skill && <SkillDetails key={skill.id} skill={skill} />}
+      {error && <p className="text-sm text-destructive">{error.message}</p>}
+      {skill && <SkillDetails key={skill.id} skill={skill} back={back} />}
     </LibraryPage>
   );
 }
 
-function SkillDetails({ skill }: { skill: Skill }) {
+function SkillDetails({ skill, back }: { skill: Skill; back: string }) {
   const router = useRouter();
   const [path, setPath] = useState("SKILL.md");
   const [editing, setEditing] = useState(false);
   const del = useDeleteSkill();
-  const { data: all } = useSkills(); // the categories and sources to file it under
-  const values = (facets?: Facet[]) => facets?.map((f) => f.value) ?? [];
-  const colorOf = colorsOf(values(all?.categories));
+  const { colorOf } = useSkillFacets();
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/skills">
+          <Link href={back}>
             <ArrowLeftIcon /> Skills
           </Link>
         </Button>
@@ -75,8 +75,7 @@ function SkillDetails({ skill }: { skill: Skill }) {
           size="sm"
           disabled={del.isPending}
           onClick={() =>
-            confirm(`Delete the skill ${skill.name}?`) &&
-            del.mutate(skill.id, { onSuccess: () => router.push("/skills") })
+            confirm(`Delete the skill ${skill.name}?`) && del.mutate(skill.id, { onSuccess: () => router.push(back) })
           }
         >
           <Trash2Icon /> Delete
@@ -113,13 +112,7 @@ function SkillDetails({ skill }: { skill: Skill }) {
         </FileTree>
         <SkillFile key={path} skill={skill} path={path} />
       </div>
-      <EditSkillDialog
-        skill={skill}
-        open={editing}
-        onOpenChange={setEditing}
-        categories={values(all?.categories)}
-        sources={values(all?.sources)}
-      />
+      <EditSkillDialog skill={skill} open={editing} onOpenChange={setEditing} />
     </div>
   );
 }
@@ -159,47 +152,95 @@ function fileTree(paths: string[], dir = ""): ReactNode[] {
   ];
 }
 
-/** One of a skill's files under its path, with a copy button, and Preview
- *  or Edit: Markdown rendered (SKILL.md's frontmatter as YAML), code
- *  highlighted, or the file as written in an editor. A file that is not text
- *  is a link. */
+/** One of a skill's files under its path, to preview or edit: Markdown
+ *  rendered (SKILL.md's frontmatter as YAML), code highlighted, or the file as
+ *  written in an editor, saved from the header. Preview shows unsaved edits.
+ *  A file that is not text is a link. */
 function SkillFile({ skill, path }: { skill: Skill; path: string }) {
   const { data: text, error, isPending } = useSkillFile(skill, path);
-  const [editing, setEditing] = useState(false);
-  const binary = text?.includes("\uFFFD");
+  const [mode, setMode] = useState<"preview" | "edit">("preview");
+  const write = useWriteSkillFile();
+  const form = useForm({ values: { content: text ?? "" } }); // follows the saved file
+  const content = useWatch({ control: form.control, name: "content" });
+  const { isDirty } = form.formState;
+  const editable = text != null && !text.includes("�");
+  const formId = `skill-file-${path}`;
+  const cancel = () => {
+    form.reset();
+    setMode("preview");
+  };
+
   return (
     <CodeBlockContainer language={language(path) ?? "text"} className="self-start">
       <CodeBlockHeader>
         <CodeBlockFilename>{path}</CodeBlockFilename>
-        {text != null && !binary && (
+        {editable && (
           <CodeBlockActions className="gap-1">
-            <Button variant={editing ? "ghost" : "secondary"} size="xs" onClick={() => setEditing(false)}>
-              Preview
-            </Button>
-            <Button variant={editing ? "secondary" : "ghost"} size="xs" onClick={() => setEditing(true)}>
-              <PencilIcon /> Edit
-            </Button>
-            <CopyButton text={text} />
+            <ToggleGroup type="single" size="sm" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)}>
+              <ToggleGroupItem value="preview">Preview</ToggleGroupItem>
+              <ToggleGroupItem value="edit">
+                <PencilIcon /> Edit
+              </ToggleGroupItem>
+            </ToggleGroup>
+            {mode === "edit" || isDirty ? (
+              <>
+                <Button type="button" variant="ghost" size="sm" onClick={cancel}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form={formId}
+                  size="sm"
+                  className="ai-gradient-strong text-white hover:opacity-90"
+                  disabled={!isDirty || write.isPending}
+                >
+                  {write.isPending ? "Saving…" : "Save"}
+                </Button>
+              </>
+            ) : (
+              <CopyButton text={text} />
+            )}
           </CodeBlockActions>
         )}
       </CodeBlockHeader>
       {error ? (
-        <p className="p-4 text-sm text-destructive">{errorMessage(error)}</p>
+        <p className="p-6 text-sm text-destructive">{error.message}</p>
       ) : isPending ? (
-        <p className="p-4 text-sm text-muted-foreground">Loading…</p>
-      ) : binary ? (
+        <p className="p-6 text-sm text-muted-foreground">Loading…</p>
+      ) : !editable ? (
         <a
-          className="block p-4 text-sm underline"
+          className="block p-6 text-sm underline"
           href={API_URL + skillFilePath(skill.id, path)}
           target="_blank"
           rel="noreferrer"
         >
           Open {path}
         </a>
-      ) : editing ? (
-        <FileEditor skill={skill} path={path} text={text} onDone={() => setEditing(false)} />
       ) : (
-        <FilePreview path={path} text={text} />
+        <form
+          id={formId}
+          className="flex flex-col gap-3 p-6"
+          onSubmit={form.handleSubmit(({ content }) =>
+            write.mutate({ skill, path, content }, { onSuccess: () => setMode("preview") }),
+          )}
+        >
+          {write.error && (
+            <p role="alert" className="text-sm text-destructive">
+              {write.error.message}
+            </p>
+          )}
+          {mode === "edit" ? (
+            <Textarea
+              {...form.register("content")}
+              aria-label={`Edit ${path}`}
+              spellCheck={false}
+              autoFocus
+              className="min-h-80 font-mono text-xs md:text-xs"
+            />
+          ) : (
+            <FilePreview path={path} text={content} />
+          )}
+        </form>
       )}
     </CodeBlockContainer>
   );
@@ -216,46 +257,12 @@ function FilePreview({ path, text }: { path: string; text: string }) {
   if (lang === "md") {
     const [, front, body] = /^(?:---\n([\s\S]*?)\n---\n)?([\s\S]*)$/.exec(text) ?? [];
     return (
-      <div className="flex flex-col gap-4 p-4">
+      <div className="flex flex-col gap-4">
         {front && <CodeBlock code={front} language="yaml" />}
         <Markdown>{body ?? text}</Markdown>
       </div>
     );
   }
   if (lang) return <CodeBlockContent code={text} language={lang} showLineNumbers />;
-  return <pre className="overflow-x-auto p-4 font-mono text-xs whitespace-pre-wrap">{text}</pre>;
-}
-
-/** The file as written, to change and save; a SKILL.md is checked as an
- *  upload is, and keeps the skill's name. */
-function FileEditor({ skill, path, text, onDone }: { skill: Skill; path: string; text: string; onDone: () => void }) {
-  const write = useWriteSkillFile();
-  const form = useForm({ defaultValues: { content: text } });
-  return (
-    <form
-      className="flex flex-col gap-3 p-3"
-      onSubmit={form.handleSubmit(({ content }) => write.mutate({ skill, path, content }, { onSuccess: onDone }))}
-    >
-      <Textarea
-        {...form.register("content")}
-        aria-label={`Edit ${path}`}
-        spellCheck={false}
-        autoFocus
-        className="min-h-80 font-mono text-xs md:text-xs"
-      />
-      {write.error && (
-        <p role="alert" className="text-sm text-destructive">
-          {errorMessage(write.error)}
-        </p>
-      )}
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onDone}>
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" disabled={!form.formState.isDirty || write.isPending}>
-          {write.isPending ? "Saving…" : "Save"}
-        </Button>
-      </div>
-    </form>
-  );
+  return <pre className="overflow-x-auto font-mono text-xs whitespace-pre-wrap">{text}</pre>;
 }

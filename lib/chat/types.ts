@@ -79,9 +79,8 @@ export type Compaction = {
  *  `model` activity): ids of the form <provider>/<model>. */
 export type ModelChange = { from: string; to: string };
 
-/** The skill a message starting with /name loaded into its turn (the
- *  `skill` activity). */
-/** A skill a /name loaded; turns stored before skills had ids have none. */
+/** A skill a /name loaded into its turn (the `skill` activity); turns stored
+ *  before skills had ids have none. */
 export type SkillUse = { id?: string; name: string; title?: string; description: string };
 
 export type TextPart = { type: "text"; id: string; text: string; done: boolean };

@@ -94,7 +94,7 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Skills" isActive={pathname === "/skills"} className="h-9 gap-2.5">
+                <SidebarMenuButton asChild tooltip="Skills" isActive={pathname.startsWith("/skills")} className="h-9 gap-2.5">
                   <Link href="/skills">
                     <BookOpenIcon />
                     <span>Skills</span>

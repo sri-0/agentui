@@ -32,11 +32,25 @@ export function CreatableCombobox({
     setOpen(false);
   };
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      modal // inside a dialog, so its list scrolls
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setQuery("");
+      }}
+    >
       <PopoverTrigger asChild>
-        <Button id={id} type="button" variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal">
+        <Button
+          id={id}
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
           {value || <span className="text-muted-foreground">{placeholder}</span>}
-          <ChevronsUpDownIcon className="size-4 opacity-50" />
+          <ChevronsUpDownIcon className="opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
@@ -48,13 +62,13 @@ export function CreatableCombobox({
               {value && <CommandItem onSelect={() => pick("")}>None</CommandItem>}
               {options.map((o) => (
                 <CommandItem key={o} value={o} onSelect={() => pick(o)}>
-                  <CheckIcon className={cn("size-4", value === o ? "opacity-100" : "opacity-0")} />
+                  <CheckIcon className={cn(value !== o && "opacity-0")} />
                   {o}
                 </CommandItem>
               ))}
               {typed && !known && (
                 <CommandItem forceMount value={`create ${typed}`} onSelect={() => pick(typed)}>
-                  <PlusIcon className="size-4" /> Create “{typed}”
+                  <PlusIcon /> Create “{typed}”
                 </CommandItem>
               )}
             </CommandGroup>

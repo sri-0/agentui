@@ -9,12 +9,13 @@ import type { ListResponse } from "./types";
 
 const threadPath = (threadId: string) => `/v1/threads/${encodeURIComponent(threadId)}`;
 
-/** The artifacts of a thread's conversation, newest first, without bodies.
- *  Refetched when a run ends (ThreadChat) and when an artifact the panel
- *  opens is not in it (RightPanel). */
+/** The artifacts of a thread's conversation (none for ""), newest first,
+ *  without bodies. Refetched when a run ends (ThreadChat) and when an artifact
+ *  the panel opens is not in it (RightPanel). */
 export function useThreadArtifacts(threadId: string) {
   return useQuery({
     queryKey: ["artifacts", threadId],
+    enabled: threadId !== "",
     queryFn: async () => (await apiFetch<ListResponse<Artifact>>(`${threadPath(threadId)}/artifacts`)).data ?? [],
   });
 }

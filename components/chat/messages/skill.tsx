@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { useSkills } from "@/lib/api/skills";
 import type { SkillUse } from "@/lib/chat/types";
 import { BookOpenIcon } from "lucide-react";
@@ -37,10 +38,10 @@ export function UserText({ text }: { text: string }) {
   const rest = text.slice(m[0].length);
   return (
     <>
-      <span className="inline-flex w-fit items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 font-mono text-xs text-primary">
-        <BookOpenIcon className="size-3" />
+      <Badge variant="secondary" className="font-mono">
+        <BookOpenIcon />
         {m[1]}
-      </span>
+      </Badge>
       {rest && <Markdown>{rest}</Markdown>}
     </>
   );

@@ -72,7 +72,6 @@ function postTheme(frame: HTMLIFrameElement | null, theme?: string) {
   if (frame?.contentWindow && theme) frame.contentWindow.postMessage({ type: "open-slide:theme", theme }, "*");
 }
 
-/** An artifact's icon: a page or a document. */
 /** What each kind of artifact is called, with its icon and colour. */
 export const ARTIFACT_KINDS: Record<Artifact["kind"], { label: string; icon: LucideIcon; color: string }> = {
   markdown: { label: "Document", icon: FileTextIcon, color: "text-sky-600 dark:text-sky-400" },
@@ -82,6 +81,7 @@ export const ARTIFACT_KINDS: Record<Artifact["kind"], { label: string; icon: Luc
   url: { label: "Page", icon: AppWindowIcon, color: "text-amber-600 dark:text-amber-400" },
 };
 
+/** An artifact's icon, in its kind's colour. */
 export function ArtifactIcon({ kind, className }: { kind: Artifact["kind"]; className?: string }) {
   const { icon: Icon, color } = ARTIFACT_KINDS[kind] ?? ARTIFACT_KINDS.markdown;
   return <Icon className={cn(color, className)} />;

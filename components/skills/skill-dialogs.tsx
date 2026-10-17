@@ -23,26 +23,16 @@ import {
   FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
-import { type Skill, type SkillDetails, useUpdateSkill, useUploadSkill } from "@/lib/api/skills";
+import { type Skill, type SkillDetails, useSkillFacets, useUpdateSkill, useUploadSkill } from "@/lib/api/skills";
 import { UploadIcon, XIcon } from "lucide-react";
 import { Controller, FormProvider, useForm, useFormContext } from "react-hook-form";
-
-/** The server's refusal, without its JSON wrapping. */
-export function errorMessage(err: Error) {
-  try {
-    return (JSON.parse(err.message) as { message?: string }).message ?? err.message;
-  } catch {
-    return err.message;
-  }
-}
-
-type Lists = { categories: string[]; sources: string[] };
 
 /** The details a skill is filed with, in the form around them. The
  *  description is SKILL.md's: at most 1024 characters, as the Agent Skills
  *  spec has it, and required when editing. */
-function DetailsFields({ categories, sources, describe, required }: Lists & { describe: string; required?: boolean }) {
+function DetailsFields({ describe, required }: { describe: string; required?: boolean }) {
   const { control } = useFormContext<SkillDetails>();
+  const { categories, sources } = useSkillFacets();
   return (
     <>
       <Controller
@@ -133,12 +123,11 @@ export function UploadSkillDialog({
   open,
   onOpenChange,
   onUploaded,
-  ...lists
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUploaded: (skill: Skill) => void;
-} & Lists) {
+}) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -148,7 +137,6 @@ export function UploadSkillDialog({
         </DialogHeader>
         {/* mounted with the dialog, so each opening starts empty */}
         <UploadForm
-          {...lists}
           onUploaded={(s) => {
             onOpenChange(false);
             onUploaded(s);
@@ -159,7 +147,7 @@ export function UploadSkillDialog({
   );
 }
 
-function UploadForm({ categories, sources, onUploaded }: Lists & { onUploaded: (skill: Skill) => void }) {
+function UploadForm({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   const mutation = useUploadSkill();
   const form = useForm<Upload>({
     defaultValues: { files: [], title: "", description: "", category: "", source: "" },
@@ -216,15 +204,11 @@ function UploadForm({ categories, sources, onUploaded }: Lists & { onUploaded: (
               </Field>
             )}
           />
-          <DetailsFields
-            categories={categories}
-            sources={sources}
-            describe="Leave empty to keep the SKILL.md's description"
-          />
+          <DetailsFields describe="Leave empty to keep the SKILL.md's description" />
         </FieldGroup>
         {mutation.error && (
           <p role="alert" className="text-sm text-destructive">
-            {errorMessage(mutation.error)}
+            {mutation.error.message}
           </p>
         )}
         <DialogFooter>
@@ -242,12 +226,11 @@ export function EditSkillDialog({
   skill,
   open,
   onOpenChange,
-  ...lists
 }: {
   skill: Skill;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-} & Lists) {
+}) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -256,13 +239,13 @@ export function EditSkillDialog({
           <DialogDescription>Changing the description rewrites the skill&apos;s SKILL.md.</DialogDescription>
         </DialogHeader>
         {/* mounted with the dialog, so each opening starts from the skill */}
-        <EditForm skill={skill} {...lists} onSaved={() => onOpenChange(false)} />
+        <EditForm skill={skill} onSaved={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   );
 }
 
-function EditForm({ skill, categories, sources, onSaved }: Lists & { skill: Skill; onSaved: () => void }) {
+function EditForm({ skill, onSaved }: { skill: Skill; onSaved: () => void }) {
   const mutation = useUpdateSkill();
   const form = useForm<SkillDetails>({
     defaultValues: {
@@ -289,16 +272,11 @@ function EditForm({ skill, categories, sources, onSaved }: Lists & { skill: Skil
         })}
       >
         <FieldGroup>
-          <DetailsFields
-            categories={categories}
-            sources={sources}
-            describe="What the skill does and when to use it"
-            required
-          />
+          <DetailsFields describe="What the skill does and when to use it" required />
         </FieldGroup>
         {mutation.error && (
           <p role="alert" className="text-sm text-destructive">
-            {errorMessage(mutation.error)}
+            {mutation.error.message}
           </p>
         )}
         <DialogFooter>

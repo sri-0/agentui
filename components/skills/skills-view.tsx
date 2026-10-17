@@ -1,7 +1,13 @@
 "use client";
 
-import { LibraryItem, LibraryItems, LibraryPage, LibraryToolbar, NavItem, NavSection } from "@/components/library/library";
-import { Badge } from "@/components/ui/badge";
+import {
+  LibraryItem,
+  LibraryItems,
+  LibraryPage,
+  LibraryToolbar,
+  NavItem,
+  NavSection,
+} from "@/components/library/library";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,32 +15,38 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { type Facet, type Skill, useSkills } from "@/lib/api/skills";
-import { type Color, colorsOf } from "@/lib/colors";
+import { type Facet, useSkillFacets, useSkills } from "@/lib/api/skills";
+import type { Color } from "@/lib/colors";
 import dayjs from "@/lib/dayjs";
 import { cn } from "@/lib/utils";
-import { BookOpenIcon, ChevronDownIcon, LibraryIcon, SparklesIcon, UploadIcon } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChevronDownIcon, LibraryIcon, SparklesIcon, UploadIcon } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { errorMessage, UploadSkillDialog } from "./skill-dialogs";
+import { UploadSkillDialog } from "./skill-dialogs";
+import { SkillIcon, SkillTags } from "./skill-icon";
 
 /** The draft "Create with agent" opens a new chat with. */
 const CREATE_PROMPT =
   "Help me create a new skill for the skills library. Ask me what it should do, its category and its source, " +
   "then write it with write_skill.";
 
+/** /skills with the filter given, the empty ones left out. */
+const skillsHref = (filter: Record<string, string | undefined>, path = "/skills") => {
+  const params = new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][]);
+  return params.size ? `${path}?${params}` : path;
+};
+
 /**
- * The skills library: categories and sources in a panel beside the skills
- * they choose, as cards (or rows), searched by name, title or description.
- * The choices are in the URL (?category=&source=), so a skill's page
- * (/skills/<id>) goes back to them. Create adds a skill with an agent or from
- * an upload.
+ * The skills library: categories and sources beside the skills they choose,
+ * as cards (or rows), searched by name, title or description. The choices are
+ * in the URL (?category=&source=), and a skill's page (/skills/<id>) carries
+ * them to go back to. Create adds a skill with an agent or from an upload.
  */
 export function SkillsView() {
   const params = useSearchParams();
   const router = useRouter();
-  const pathname = usePathname();
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -47,34 +59,33 @@ export function SkillsView() {
   }, [search]);
 
   const { data, error, isPending } = useSkills({ q, category, source });
-  const { data: all } = useSkills(); // every skill: the total, and the options to file one under
+  const { data: all } = useSkills(); // every skill: the total
+  const { colorOf } = useSkillFacets(); // the same colours whatever is chosen
   const skills = data?.data ?? [];
-  const values = (facets?: Facet[]) => facets?.map((f) => f.value) ?? [];
-  const colorOf = colorsOf(values(all?.categories)); // the same whatever is chosen
-
-  const choose = (choice: { category?: string; source?: string }) => {
-    const next = new URLSearchParams(Object.entries({ category, source, ...choice }).filter(([, v]) => v) as [string, string][]);
-    router.replace(next.size ? `${pathname}?${next}` : pathname);
-  };
-  const open = (id: string) => router.push(`/skills/${encodeURIComponent(id)}`);
+  const skillHref = (id: string) => skillsHref({ category, source }, `/skills/${encodeURIComponent(id)}`);
 
   const nav = (
     <>
       <NavItem
-        icon={<LibraryIcon className="size-4 text-muted-foreground" />}
+        icon={<LibraryIcon className="text-muted-foreground" />}
         label="All skills"
         count={all?.data.length}
         active={!category && !source}
-        onClick={() => choose({ category: undefined, source: undefined })}
+        href="/skills"
       />
       <FacetNav
         label="Categories"
         facets={data?.categories}
         chosen={category}
+        href={(v) => skillsHref({ category: v, source })}
         colorOf={colorOf}
-        onChoose={(v) => choose({ category: v })}
       />
-      <FacetNav label="Sources" facets={data?.sources} chosen={source} onChoose={(v) => choose({ source: v })} />
+      <FacetNav
+        label="Sources"
+        facets={data?.sources}
+        chosen={source}
+        href={(v) => skillsHref({ category, source: v })}
+      />
     </>
   );
 
@@ -93,8 +104,10 @@ export function SkillsView() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-auto">
-              <DropdownMenuItem onSelect={() => router.push(`/chat?prompt=${encodeURIComponent(CREATE_PROMPT)}`)}>
-                <SparklesIcon /> Create with agent
+              <DropdownMenuItem asChild>
+                <Link href={`/chat?prompt=${encodeURIComponent(CREATE_PROMPT)}`}>
+                  <SparklesIcon /> Create with agent
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setUploading(true)}>
                 <UploadIcon /> Upload skill
@@ -103,7 +116,7 @@ export function SkillsView() {
           </DropdownMenu>
         }
       />
-      {error && <p className="text-sm text-destructive">{errorMessage(error)}</p>}
+      {error && <p className="text-sm text-destructive">{error.message}</p>}
       {isPending && <p className="text-sm text-muted-foreground">Loading…</p>}
       {!isPending && !error && skills.length === 0 && (
         <p className="text-sm text-muted-foreground">
@@ -114,13 +127,13 @@ export function SkillsView() {
         {skills.map((s) => (
           <LibraryItem
             key={s.id}
+            href={skillHref(s.id)}
             icon={<SkillIcon color={colorOf(s.category)} />}
             title={s.title || s.name}
             subtitle={<span className="font-mono">/{s.name}</span>}
             meta={`Updated ${dayjs(s.updated_at).fromNow()}`}
-            onOpen={() => open(s.id)}
           >
-            <span className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">{plain(s.description)}</span>
+            <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">{plain(s.description)}</p>
             <SkillTags skill={s} color={colorOf(s.category)} />
           </LibraryItem>
         ))}
@@ -128,9 +141,7 @@ export function SkillsView() {
       <UploadSkillDialog
         open={uploading}
         onOpenChange={setUploading}
-        categories={values(all?.categories)}
-        sources={values(all?.sources)}
-        onUploaded={(s) => open(s.id)}
+        onUploaded={(s) => router.push(skillHref(s.id))}
       />
     </LibraryPage>
   );
@@ -142,14 +153,14 @@ function FacetNav({
   label,
   facets = [],
   chosen,
+  href,
   colorOf,
-  onChoose,
 }: {
   label: string;
   facets?: Facet[];
   chosen?: string;
+  href: (value?: string) => string;
   colorOf?: (value: string) => Color;
-  onChoose: (value?: string) => void;
 }) {
   return (
     <NavSection label={label}>
@@ -161,42 +172,16 @@ function FacetNav({
           label={f.value}
           count={f.count}
           active={chosen === f.value}
-          onClick={() => onChoose(chosen === f.value ? undefined : f.value)}
+          href={href(chosen === f.value ? undefined : f.value)}
         />
       ))}
     </NavSection>
   );
 }
 
-/** A skill's icon: a tile in its category's gradient. */
-export function SkillIcon({ color, className }: { color: Color; className?: string }) {
-  return (
-    <span
-      className={cn(
-        "flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-white shadow-xs",
-        color.gradient,
-        className,
-      )}
-    >
-      <BookOpenIcon className="size-4" />
-    </span>
-  );
-}
-
-/** A skill's category, in its colour, and source. */
-export function SkillTags({ skill, color }: { skill: Skill; color: Color }) {
-  if (!skill.category && !skill.source) return null;
-  return (
-    <span className="flex flex-wrap gap-1.5">
-      {skill.category && (
-        <Badge variant="outline" className={color.badge}>
-          {skill.category}
-        </Badge>
-      )}
-      {skill.source && <Badge variant="outline">{skill.source}</Badge>}
-    </span>
-  );
-}
-
 /** Markdown as plain text, for a few lines on a card. */
-const plain = (md: string) => md.replace(/[*_`#>[\]]/g, "").replace(/\s+/g, " ").trim();
+const plain = (md: string) =>
+  md
+    .replace(/[*_`#>[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();

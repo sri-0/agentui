@@ -6,7 +6,6 @@ import {
   PromptInputFooter,
   PromptInputProvider,
   PromptInputSubmit,
-  PromptInputTextarea,
   PromptInputTools,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
@@ -16,7 +15,7 @@ import { memo, type ReactNode } from "react";
 import { AgentSelector } from "./agent-selector";
 import { ConnectorSelector } from "./connector-selector";
 import { ModelSelector } from "./model-selector";
-import { SkillMenu, useSkillMenu } from "./skill-menu";
+import { SkillTextarea } from "./skill-menu";
 
 /** What the submit button shows; the names the AI Elements input uses. */
 export type ComposerStatus = "ready" | "submitted" | "streaming";
@@ -45,12 +44,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
 
 function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder }: ComposerProps) {
   const idle = status === "ready";
-  const { onKeyDown, ...menu } = useSkillMenu();
 
   return (
     <div className="relative">
       <div className="ai-glow" />
-      <SkillMenu {...menu} />
       <PromptInput
         onSubmit={onSubmit}
         className={cn(
@@ -62,9 +59,8 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
         )}
       >
         <PromptInputBody>
-          <PromptInputTextarea
+          <SkillTextarea
             autoFocus={autoFocus}
-            onKeyDown={onKeyDown}
             className="max-h-56 min-h-[60px] resize-none border-0 bg-transparent px-6 pt-5 text-[15px] leading-relaxed shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
             placeholder={placeholder ?? "Ask anything, or pick an agent…"}
           />
@@ -80,10 +76,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
             <PromptInputSubmit
               status={status}
               onStop={onStop}
-              className={cn(
-                "size-9 rounded-full border-0",
-                idle && "ai-gradient-strong text-white hover:opacity-90",
-              )}
+              className={cn("size-9 rounded-full border-0", idle && "ai-gradient-strong text-white hover:opacity-90")}
             />
           </div>
         </PromptInputFooter>
