@@ -70,10 +70,12 @@ export function ThreadChat({ threadId }: { threadId: string }) {
 
   // The question the run waits on takes the composer's place until it is
   // answered or put away (by its interrupt id); the thread can bring it back.
+  // Once answered the run streams again: no second answer while the question
+  // part catches up, and the panel comes back if the answer fails.
   const question = pendingQuestion(messages);
   const questionId = question && (question.approval?.id ?? question.toolCallId);
   const [putAway, setPutAway] = useState<string>();
-  const asking = question && putAway !== questionId ? question : undefined;
+  const asking = status !== "streaming" && question && putAway !== questionId ? question : undefined;
   const onReopenQuestion = useCallback(() => setPutAway(undefined), []);
 
   // Stable handlers keep the memoized Composer and header out of the
@@ -165,7 +167,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
                 messages={messages}
                 status={status}
                 approve={approve}
-                onReopenQuestion={onReopenQuestion}
+                onReopenQuestion={question && putAway === questionId ? onReopenQuestion : undefined}
               />
             </ConversationContent>
             <ConversationScrollButton />
@@ -178,7 +180,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
                 <p className="mb-2 text-center text-xs text-destructive">{error}</p>
               )}
               {asking ? (
-                <QuestionPanel key={questionId} part={asking} onAnswer={answer} onCancel={() => setPutAway(questionId)} />
+                <QuestionPanel key={questionId} part={asking} onAnswer={answer} onCancel={() => setPutAway(questionId)} autoFocus />
               ) : (
                 <Composer
                   onSubmit={onSubmit}

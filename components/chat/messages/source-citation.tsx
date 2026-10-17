@@ -26,7 +26,8 @@ import { useContext } from "react";
 /**
  * One or more adjacent [source:N] citations as an AI Elements inline
  * citation: a badge naming the first source (its host, or the system it came
- * from) and how many more, and on hover a card to page through them. The
+ * from) and how many more, and on hover a card to page through them; a click
+ * (or tap, or Enter) opens the conversation's sources at the first. The
  * conversation's sources are listed once for every citation; one the list
  * does not have yet (it is refetched when a run ends) is fetched on open.
  */
@@ -50,6 +51,8 @@ function ThreadCitation({ threadId, numbers }: { threadId: string; numbers: numb
           data-source={numbers.join(",")}
           sources={numbers.map((n, i) => (i === 0 ? name : String(n)))}
           className="cursor-pointer align-middle text-[10px] font-medium"
+          aria-label={`Sources ${numbers.join(", ")}`}
+          onClick={() => openSidepanel({ kind: "sources", number: numbers[0] })}
         />
         <InlineCitationCardBody>
           <InlineCitationCarousel>

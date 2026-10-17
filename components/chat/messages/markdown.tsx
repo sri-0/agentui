@@ -17,7 +17,10 @@ const components = {
 } as Components;
 
 const citations = (text: string) =>
-  text.replace(CITATIONS, (run) => `<sourceref n="${run.match(/\d+/g)?.join(",")}"></sourceref>`);
+  text.replace(CITATIONS, (run) => `<sourceref n="${[...new Set(run.match(/\d+/g))].join(",")}"></sourceref>`);
+
+/** Text without its [source:N] citations, for a preview that shows none. */
+export const stripCitations = (text: string) => text.replace(CITATIONS, "");
 
 /** Markdown with [source:N] citations shown as AI Elements inline citations. `streaming`
  *  text is repaired as it arrives (an unclosed link or emphasis); finished

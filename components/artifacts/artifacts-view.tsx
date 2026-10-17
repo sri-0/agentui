@@ -1,7 +1,7 @@
 "use client";
 
 import { LibraryItem, LibraryItems, LibraryPage, LibraryToolbar } from "@/components/library/library";
-import { Markdown } from "@/components/chat/messages/markdown";
+import { Markdown, stripCitations } from "@/components/chat/messages/markdown";
 import {
   ARTIFACT_KINDS,
   ArtifactActions,
@@ -139,7 +139,7 @@ function ArtifactPreview({ artifact }: { artifact: RecentArtifact }) {
   const seen = useInView(ref, { once: true });
   const { body } = useArtifactBody(artifact.root_id, artifact, seen);
   // A card shows no citations: they open cards of their own.
-  const text = body?.slice(0, 1200).replace(/\[source:\s*\d+\]/g, "");
+  const text = body && stripCitations(body.slice(0, 1200));
   return (
     <span ref={ref} className="relative flex w-full justify-center overflow-hidden px-5 pt-10">
       <span className="w-full overflow-hidden rounded-t-md border border-b-0 bg-background px-3 pt-3 shadow-sm">
