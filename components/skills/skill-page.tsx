@@ -50,7 +50,7 @@ function SkillDetails({ skill }: { skill: Skill }) {
           <PencilIcon /> Edit details
         </Button>
         <Button
-          variant="outline"
+          variant="destructive"
           size="sm"
           disabled={del.isPending}
           onClick={() =>
