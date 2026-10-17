@@ -30,19 +30,32 @@ export const SkillLoaded = memo(function SkillLoaded({ data }: { data: SkillUse 
   );
 });
 
-/** What the user typed; a leading /name that is a skill shows as a chip. */
+/** What the user typed; each /name that is a skill shows as a chip. A text
+ *  that is only chips and plain words renders as such, inline; otherwise the
+ *  leading chips come first and the rest is Markdown. */
 export function UserText({ text }: { text: string }) {
   const skills = useSkills().data?.data ?? [];
-  const m = /^\/([a-z0-9-]+)(?:\s+|$)/.exec(text);
-  if (!m || !skills.some((s) => s.name === m[1])) return <Markdown>{text}</Markdown>;
-  const rest = text.slice(m[0].length);
-  return (
-    <>
-      <Badge variant="secondary" className="font-mono">
-        <BookOpenIcon />
-        {m[1]}
-      </Badge>
-      {rest && <Markdown>{rest}</Markdown>}
-    </>
+  const names = new Set(skills.map((s) => s.name));
+  const isRef = (word: string) => /^\/[a-z0-9-]+$/.test(word) && names.has(word.slice(1));
+  const chip = (word: string, key: number) => (
+    <Badge key={key} variant="secondary" className="mx-0.5 font-mono align-baseline">
+      <BookOpenIcon />
+      {word.slice(1)}
+    </Badge>
   );
+  const words = text.split(/(\s+)/);
+  if (!words.some(isRef)) return <Markdown>{text}</Markdown>;
+  // leading chips, then the rest as Markdown
+  let i = 0;
+  while (i < words.length && (isRef(words[i]) || /^\s+$/.test(words[i]))) i++;
+  const rest = words.slice(i).join("");
+  if (!words.slice(i).some(isRef)) {
+    return (
+      <>
+        {words.slice(0, i).filter(isRef).map(chip)}
+        {rest && <Markdown>{rest}</Markdown>}
+      </>
+    );
+  }
+  return <p className="whitespace-pre-wrap">{words.map((w, k) => (isRef(w) ? chip(w, k) : w))}</p>;
 }

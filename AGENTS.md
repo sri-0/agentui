@@ -77,7 +77,7 @@ components/
     use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
-                              #   connector-icon, thread-usage-ring, command-menu (the / and @ palette)
+                              #   connector-icon, thread-usage-ring, references (the text, with / and @ chips)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card,
                               #   agent-card, markdown (+ source-chip), compaction-divider,
                               #   message-reasoning, message-actions, message-meta,
@@ -454,14 +454,15 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
-- **The `/` and `@` palette** (`composer/command-menu.tsx`) is the one menu behind both
-  sigils: shadcn's Command in a Popover, stock styling, an icon per row. `/` lists the skills
-  a message can load; a picked one is a chip in the input's header row (its ✕ or Backspace on
-  empty text removes it) and goes ahead of the text as `/name` on send. `@` lists the agents;
-  the backend resolves references by sigil (`agentlite/internal/refs`) and `/name` is the
-  only kind so far (`@agent` and `#id` are planned, there is no `$`), so picking an agent
-  sets the thread's agent as the selector does and clears the text. Add kinds there, not as
-  another menu.
+- **References are chips in the text** (`composer/references.tsx`): the composer's text is a
+  Tiptap editor whose Mention nodes are the chips, with one list (shadcn's Command in a
+  popover, stock styling, an icon per row) for every sigil in its `KINDS` table. `/` lists
+  the skills a message can load; the chip reads as `/name` in the text sent, wherever it
+  sits, which the backend resolves (`agentlite/internal/refs`: `/` is the only sigil so far,
+  `@agent` and `#id` are planned, there is no `$`). `@` lists the agents; since `@agent` is
+  not resolved yet, picking one sets the thread's agent as the selector does and the chip
+  stays out of the text. Backspace after a chip takes it. Add kinds to the table and their
+  choices to `useChoices`, not another menu.
 - **`components/ui/` is shadcn registry output only** (style `radix-nova`, as the CLI writes
   it) and `components/ai-elements/` the AI Elements registry. Hand-written shared pieces go
   in `components/common/` or `components/library/`, never in `ui/`.
