@@ -75,6 +75,7 @@ components/
   providers.tsx               # QueryClientProvider + ThemeProvider + single TooltipProvider
   chat/
     use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
+    reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with / and @ chips)
@@ -455,8 +456,9 @@ before large changes:
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
 - **References are chips in the text** (`composer/references.tsx`): the composer's text is a
-  Tiptap editor whose Mention nodes are the chips, with one list (shadcn's Command in a
-  popover, stock styling, an icon per row) for every sigil in its `KINDS` table. `/` lists
+  Tiptap editor whose Mention nodes are the chips (`chat/reference-chip.tsx`: the text's font,
+  the list's coloured icon), with one list (shadcn's Command in a popover, stock styling, an
+  icon per row) for every sigil in its `KINDS` table. `/` lists
   the skills a message can load; the chip reads as `/name` in the text sent, wherever it
   sits, which the backend resolves (`agentlite/internal/refs`: `/` is the only sigil so far,
   `@agent` and `#id` are planned, there is no `$`). `@` lists the agents; since `@agent` is

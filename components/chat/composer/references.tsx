@@ -1,7 +1,7 @@
 "use client";
 
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
-import { Badge } from "@/components/ui/badge";
+import { ReferenceChip } from "@/components/chat/reference-chip";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useAgents } from "@/lib/api/agents";
@@ -66,16 +66,16 @@ type Suggest = { char: string; query: string; items: Choice[]; command: (attrs: 
 const matches = (c: Choice, q: string) =>
   q === "" || `${c.label} ${c.keywords ?? ""}`.toLowerCase().includes(q.toLowerCase());
 
-/** A chip: the node view of a reference in the text. */
+/** A chip: the node view of a reference in the text, with the icon its
+ *  choice shows in the list (so coloured as there), or else its kind's. */
 function Chip({ node }: NodeViewProps) {
   const attrs = node.attrs as MentionNodeAttrs;
-  const Icon = kindOf(attrs.mentionSuggestionChar).icon;
+  const kind = kindOf(attrs.mentionSuggestionChar);
+  const choice = useChoices()[kind.char]?.find((c) => c.id === attrs.id);
+  const Icon = kind.icon;
   return (
-    <NodeViewWrapper as="span" className="inline-block align-baseline">
-      <Badge variant="secondary" className="font-mono">
-        <Icon />
-        {attrs.label ?? attrs.id}
-      </Badge>
+    <NodeViewWrapper as="span" className="inline">
+      <ReferenceChip icon={choice?.icon ?? <Icon />}>{attrs.label ?? attrs.id}</ReferenceChip>
     </NodeViewWrapper>
   );
 }
@@ -125,7 +125,7 @@ const editorClass = cn(
  * Elements form sends is the editor's, each chip read through its kind, so
  * `/name` reaches the server where it was typed. Backspace after a chip
  * takes the chip. The keyboard stays in the editor: arrows, Enter or Tab,
- * Escape until the query changes.
+ * Escape until the query changes or the sigil is left.
  *
  * Only this re-renders as the user types; the composer around it is memoized.
  */
@@ -190,7 +190,10 @@ export function ReferenceInput({ placeholder, autoFocus }: { placeholder?: strin
                 onStart: show,
                 onUpdate: show,
                 onKeyDown: ({ event }: { event: KeyboardEvent }) => keyRef.current(event),
-                onExit: () => setSuggest(null),
+                onExit: () => {
+                  setSuggest(null);
+                  setDismissed(undefined);
+                },
               };
             },
           })),

@@ -1,7 +1,7 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { useSkills } from "@/lib/api/skills";
+import { ReferenceChip } from "@/components/chat/reference-chip";
+import { useSkillFacets, useSkills } from "@/lib/api/skills";
 import type { SkillUse } from "@/lib/chat/types";
 import { BookOpenIcon } from "lucide-react";
 import Link from "next/link";
@@ -35,13 +35,17 @@ export const SkillLoaded = memo(function SkillLoaded({ data }: { data: SkillUse 
  *  leading chips come first and the rest is Markdown. */
 export function UserText({ text }: { text: string }) {
   const skills = useSkills().data?.data ?? [];
-  const names = new Set(skills.map((s) => s.name));
-  const isRef = (word: string) => /^\/[a-z0-9-]+$/.test(word) && names.has(word.slice(1));
+  const { colorOf } = useSkillFacets();
+  const byName = new Map(skills.map((s) => [s.name, s]));
+  const isRef = (word: string) => /^\/[a-z0-9-]+$/.test(word) && byName.has(word.slice(1));
   const chip = (word: string, key: number) => (
-    <Badge key={key} variant="secondary" className="mx-0.5 font-mono align-baseline">
-      <BookOpenIcon />
+    <ReferenceChip
+      key={key}
+      className="mx-0.5"
+      icon={<BookOpenIcon className={colorOf(byName.get(word.slice(1))?.category).text} />}
+    >
       {word.slice(1)}
-    </Badge>
+    </ReferenceChip>
   );
   const words = text.split(/(\s+)/);
   if (!words.some(isRef)) return <Markdown>{text}</Markdown>;
