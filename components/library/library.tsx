@@ -135,7 +135,7 @@ export function LibraryItem({
 }) {
   const view = useUiStore((s) => s.libraryView);
   const heading = (
-    <div className="flex min-w-0 flex-1 items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       {icon}
       <div className="min-w-0 flex-1">
         <Link href={href} className="block truncate text-sm font-medium outline-none after:absolute after:inset-0">
@@ -155,7 +155,7 @@ export function LibraryItem({
         )}
       >
         {heading}
-        {meta && <span className="shrink-0 text-xs text-muted-foreground">{meta}</span>}
+        {meta && <span className="ms-auto shrink-0 text-xs text-muted-foreground">{meta}</span>}
       </div>
     );
   }
