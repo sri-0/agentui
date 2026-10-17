@@ -1,6 +1,7 @@
 "use client";
 
 import { CreatableCombobox } from "@/components/library/creatable-combobox";
+import { MarkdownEditor } from "@/components/library/markdown-editor";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
   FileUpload,
   FileUploadDropzone,
@@ -21,13 +23,9 @@ import {
   FileUploadTrigger,
 } from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { type Skill, type SkillDetails, useUpdateSkill, useUploadSkill } from "@/lib/api/skills";
 import { UploadIcon, XIcon } from "lucide-react";
-import { useState } from "react";
-
-const noDetails: SkillDetails = { title: "", description: "", category: "", source: "" };
+import { Controller, FormProvider, useForm, useFormContext } from "react-hook-form";
 
 /** The server's refusal, without its JSON wrapping. */
 export function errorMessage(err: Error) {
@@ -38,180 +36,204 @@ export function errorMessage(err: Error) {
   }
 }
 
-/** The details a skill is filed with; the description is SKILL.md's. */
-function DetailsFields({
-  details,
-  onChange,
-  categories,
-  sources,
-  describe,
-}: {
-  details: SkillDetails;
-  onChange: (d: SkillDetails) => void;
-  categories: string[];
-  sources: string[];
-  describe: string;
-}) {
-  const set = (k: keyof SkillDetails) => (v: string) => onChange({ ...details, [k]: v });
+type Lists = { categories: string[]; sources: string[] };
+
+/** The details a skill is filed with, in the form around them. The
+ *  description is SKILL.md's: at most 1024 characters, as the Agent Skills
+ *  spec has it, and required when editing. */
+function DetailsFields({ categories, sources, describe, required }: Lists & { describe: string; required?: boolean }) {
+  const { control } = useFormContext<SkillDetails>();
   return (
-    <div className="grid gap-4">
-      <div className="grid gap-2">
-        <Label htmlFor="skill-title">Title</Label>
-        <Input
-          id="skill-title"
-          value={details.title}
-          onChange={(e) => set("title")(e.target.value)}
-          placeholder="Shown on the card; the skill's name if empty"
+    <>
+      <Controller
+        name="title"
+        control={control}
+        render={({ field }) => (
+          <Field>
+            <FieldLabel htmlFor="skill-title">Title</FieldLabel>
+            <Input {...field} id="skill-title" placeholder="Shown on the card; the skill's name if empty" />
+          </Field>
+        )}
+      />
+      <Controller
+        name="description"
+        control={control}
+        rules={{
+          maxLength: { value: 1024, message: "At most 1024 characters, as the skills spec allows" },
+          validate: (v) => !required || v.trim() !== "" || "Say what the skill does and when to use it",
+        }}
+        render={({ field, fieldState }) => (
+          <Field data-invalid={fieldState.invalid}>
+            <FieldLabel id="skill-description-label">Description</FieldLabel>
+            <MarkdownEditor
+              labelledBy="skill-description-label"
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              placeholder={describe}
+              invalid={fieldState.invalid}
+            />
+            <FieldDescription>
+              Agents read it to decide when to use the skill. {field.value.length}/1024
+            </FieldDescription>
+            <FieldError errors={[fieldState.error]} />
+          </Field>
+        )}
+      />
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Controller
+          name="category"
+          control={control}
+          render={({ field }) => (
+            <Field>
+              <FieldLabel htmlFor="skill-category">Category</FieldLabel>
+              <CreatableCombobox
+                id="skill-category"
+                value={field.value}
+                onChange={field.onChange}
+                options={categories}
+                placeholder="Pick or create"
+              />
+            </Field>
+          )}
+        />
+        <Controller
+          name="source"
+          control={control}
+          render={({ field }) => (
+            <Field>
+              <FieldLabel htmlFor="skill-source">Source</FieldLabel>
+              <CreatableCombobox
+                id="skill-source"
+                value={field.value}
+                onChange={field.onChange}
+                options={sources}
+                placeholder="e.g. Internal, Open source"
+              />
+            </Field>
+          )}
         />
       </div>
-      <div className="grid gap-2">
-        <Label htmlFor="skill-description">Description</Label>
-        <Textarea
-          id="skill-description"
-          value={details.description}
-          onChange={(e) => set("description")(e.target.value)}
-          placeholder={describe}
-          rows={4}
-        />
-        <span className="text-xs text-muted-foreground">Markdown. Agents read it to decide when to use the skill.</span>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <Label htmlFor="skill-category">Category</Label>
-          <CreatableCombobox
-            id="skill-category"
-            value={details.category}
-            onChange={set("category")}
-            options={categories}
-            placeholder="Pick or create"
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="skill-source">Source</Label>
-          <CreatableCombobox
-            id="skill-source"
-            value={details.source}
-            onChange={set("source")}
-            options={sources}
-            placeholder="e.g. Internal, Open source"
-          />
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
+
+/** An upload: the skill's zip or SKILL.md, and its details; an empty
+ *  description keeps the SKILL.md's. */
+type Upload = SkillDetails & { files: File[] };
+
+/** One file: a skill's zip or its SKILL.md. */
+const oneSkillFile = ([f]: File[]) =>
+  !f
+    ? "Choose the skill's zip or SKILL.md"
+    : /\.(zip|skill)$/i.test(f.name) || f.name === "SKILL.md" || "Choose a .zip or a SKILL.md";
 
 /** Upload a skill: drop its zip or SKILL.md, and file it. */
 export function UploadSkillDialog({
   open,
   onOpenChange,
-  categories,
-  sources,
   onUploaded,
+  ...lists
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  categories: string[];
-  sources: string[];
   onUploaded: (skill: Skill) => void;
-}) {
-  const [files, setFiles] = useState<File[]>([]);
-  const [details, setDetails] = useState(noDetails);
-  const [rejected, setRejected] = useState<string>();
-  const upload = useUploadSkill();
-  const close = (next: boolean) => {
-    if (!next) {
-      setFiles([]);
-      setDetails(noDetails);
-      setRejected(undefined);
-      upload.reset();
-    }
-    onOpenChange(next);
-  };
-  const error = rejected ?? (upload.error && errorMessage(upload.error));
-
+} & Lists) {
   return (
-    <Dialog open={open} onOpenChange={close}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Upload a skill</DialogTitle>
           <DialogDescription>A zip of the skill&apos;s folder, or its SKILL.md alone.</DialogDescription>
         </DialogHeader>
-        <form
-          className="grid gap-5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!files[0]) return;
-            upload.mutate(
-              { file: files[0], details },
-              {
-                onSuccess: (s) => {
-                  close(false);
-                  onUploaded(s);
-                },
-              },
-            );
+        {/* mounted with the dialog, so each opening starts empty */}
+        <UploadForm
+          {...lists}
+          onUploaded={(s) => {
+            onOpenChange(false);
+            onUploaded(s);
           }}
-        >
-          <FileUpload
-            value={files}
-            onValueChange={(f) => {
-              setFiles(f);
-              setRejected(undefined);
-            }}
-            maxFiles={1}
-            accept=".zip,.skill,.md"
-            onFileValidate={(f) =>
-              /\.(zip|skill)$/i.test(f.name) || f.name === "SKILL.md" ? null : "Choose a .zip or a SKILL.md"
-            }
-            onFileReject={(_, message) => setRejected(message)}
-          >
-            {files.length === 0 ? (
-              <FileUploadDropzone className="flex-col gap-2 py-8">
-                <UploadIcon className="size-6 text-muted-foreground" />
-                <span className="text-sm font-medium">Drop the skill&apos;s zip or SKILL.md here</span>
-                <FileUploadTrigger asChild>
-                  <Button type="button" variant="outline" size="sm">
-                    Browse files
-                  </Button>
-                </FileUploadTrigger>
-              </FileUploadDropzone>
-            ) : (
-              <FileUploadList>
-                {files.map((f) => (
-                  <FileUploadItem key={f.name} value={f}>
-                    <FileUploadItemPreview />
-                    <FileUploadItemMetadata />
-                    <FileUploadItemDelete asChild>
-                      <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove">
-                        <XIcon className="size-4" />
-                      </Button>
-                    </FileUploadItemDelete>
-                  </FileUploadItem>
-                ))}
-              </FileUploadList>
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function UploadForm({ categories, sources, onUploaded }: Lists & { onUploaded: (skill: Skill) => void }) {
+  const mutation = useUploadSkill();
+  const form = useForm<Upload>({
+    defaultValues: { files: [], title: "", description: "", category: "", source: "" },
+  });
+  return (
+    <FormProvider {...form}>
+      <form
+        className="grid gap-5"
+        onSubmit={form.handleSubmit(({ files, ...details }) =>
+          mutation.mutate({ file: files[0], details }, { onSuccess: onUploaded }),
+        )}
+      >
+        <FieldGroup>
+          <Controller
+            name="files"
+            control={form.control}
+            rules={{ validate: oneSkillFile }}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FileUpload
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  maxFiles={1}
+                  accept=".zip,.skill,.md"
+                  onFileReject={(_, message) => form.setError("files", { message })}
+                >
+                  {field.value.length === 0 ? (
+                    <FileUploadDropzone className="flex-col gap-2 py-8">
+                      <UploadIcon className="size-6 text-muted-foreground" />
+                      <span className="text-sm font-medium">Drop the skill&apos;s zip or SKILL.md here</span>
+                      <FileUploadTrigger asChild>
+                        <Button type="button" variant="outline" size="sm">
+                          Browse files
+                        </Button>
+                      </FileUploadTrigger>
+                    </FileUploadDropzone>
+                  ) : (
+                    <FileUploadList>
+                      {field.value.map((f) => (
+                        <FileUploadItem key={f.name} value={f}>
+                          <FileUploadItemPreview />
+                          <FileUploadItemMetadata />
+                          <FileUploadItemDelete asChild>
+                            <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove">
+                              <XIcon />
+                            </Button>
+                          </FileUploadItemDelete>
+                        </FileUploadItem>
+                      ))}
+                    </FileUploadList>
+                  )}
+                </FileUpload>
+                <FieldError errors={[fieldState.error]} />
+              </Field>
             )}
-          </FileUpload>
+          />
           <DetailsFields
-            details={details}
-            onChange={setDetails}
             categories={categories}
             sources={sources}
             describe="Leave empty to keep the SKILL.md's description"
           />
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <Button type="submit" disabled={!files[0] || upload.isPending}>
-              {upload.isPending ? "Uploading…" : "Upload"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </FieldGroup>
+        {mutation.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {errorMessage(mutation.error)}
+          </p>
+        )}
+        <DialogFooter>
+          <Button type="submit" disabled={mutation.isPending}>
+            {mutation.isPending ? "Uploading…" : "Upload"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </FormProvider>
   );
 }
 
@@ -220,63 +242,71 @@ export function EditSkillDialog({
   skill,
   open,
   onOpenChange,
-  categories,
-  sources,
+  ...lists
 }: {
   skill: Skill;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  categories: string[];
-  sources: string[];
-}) {
-  const initial: SkillDetails = {
-    title: skill.title ?? "",
-    description: skill.description,
-    category: skill.category ?? "",
-    source: skill.source ?? "",
-  };
-  const [details, setDetails] = useState(initial);
-  const update = useUpdateSkill();
+} & Lists) {
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setDetails(initial);
-        update.reset();
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Edit {skill.title || skill.name}</DialogTitle>
           <DialogDescription>Changing the description rewrites the skill&apos;s SKILL.md.</DialogDescription>
         </DialogHeader>
-        <form
-          className="grid gap-5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            update.mutate({ id: skill.id, details }, { onSuccess: () => onOpenChange(false) });
-          }}
-        >
+        {/* mounted with the dialog, so each opening starts from the skill */}
+        <EditForm skill={skill} {...lists} onSaved={() => onOpenChange(false)} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditForm({ skill, categories, sources, onSaved }: Lists & { skill: Skill; onSaved: () => void }) {
+  const mutation = useUpdateSkill();
+  const form = useForm<SkillDetails>({
+    defaultValues: {
+      title: skill.title ?? "",
+      description: skill.description,
+      category: skill.category ?? "",
+      source: skill.source ?? "",
+    },
+  });
+  // Read while rendering, so the form tracks it (react-hook-form's formState
+  // proxy): only what changed is sent, and an untouched description leaves
+  // SKILL.md alone.
+  const { dirtyFields } = form.formState;
+  return (
+    <FormProvider {...form}>
+      <form
+        className="grid gap-5"
+        onSubmit={form.handleSubmit((values) => {
+          const changed = Object.fromEntries(
+            Object.entries(values).filter(([k]) => dirtyFields[k as keyof SkillDetails]),
+          );
+          if (Object.keys(changed).length === 0) return onSaved();
+          mutation.mutate({ id: skill.id, details: changed }, { onSuccess: onSaved });
+        })}
+      >
+        <FieldGroup>
           <DetailsFields
-            details={details}
-            onChange={setDetails}
             categories={categories}
             sources={sources}
             describe="What the skill does and when to use it"
+            required
           />
-          {update.error && (
-            <p role="alert" className="text-sm text-destructive">
-              {errorMessage(update.error)}
-            </p>
-          )}
-          <DialogFooter>
-            <Button type="submit" disabled={update.isPending || !details.description.trim()}>
-              {update.isPending ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </FieldGroup>
+        {mutation.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {errorMessage(mutation.error)}
+          </p>
+        )}
+        <DialogFooter>
+          <Button type="submit" disabled={mutation.isPending}>
+            {mutation.isPending ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </FormProvider>
   );
 }

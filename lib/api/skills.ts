@@ -62,6 +62,7 @@ export function useSkillFile(skill: Skill, path: string) {
   return useQuery({
     queryKey: ["skill-file", skill.id, skill.updated_at, path],
     staleTime: Infinity,
+    placeholderData: keepPreviousData, // a saved file stays in view while its new version loads
     queryFn: () => apiText(skillFilePath(skill.id, path)),
   });
 }
@@ -81,12 +82,26 @@ export function useUploadSkill() {
   });
 }
 
-/** Sets a skill's details; "" clears a title, category or source. */
+/** Sets the details given on a skill; "" clears a title, category or source. */
 export function useUpdateSkill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, details }: { id: string; details: SkillDetails }) =>
+    mutationFn: ({ id, details }: { id: string; details: Partial<SkillDetails> }) =>
       apiFetch<Skill>(`/v1/skills/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(details) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
+/** Replaces one of a skill's files, or adds it. */
+export function useWriteSkillFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ skill, path, content }: { skill: Skill; path: string; content: string }) =>
+      apiFetch<Skill>(skillFilePath(skill.id, path), {
+        method: "PUT",
+        body: content,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
   });
 }
