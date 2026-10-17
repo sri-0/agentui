@@ -8,7 +8,16 @@ import { useSkillFacets, useSkills } from "@/lib/api/skills";
 import { colorsOf } from "@/lib/colors";
 import { useUiStore } from "@/stores/ui-store";
 import { BookOpenIcon, BotIcon, SparklesIcon } from "lucide-react";
-import { type ComponentProps, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ComponentProps,
+  type Dispatch,
+  type KeyboardEvent,
+  type ReactNode,
+  type SetStateAction,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 /** One row of the palette: what it shows, and what picking it does. */
 type Item = {
@@ -32,8 +41,8 @@ const matches = (item: Item, q: string) =>
  * The composer's textarea with the palette above it, one shadcn Command list
  * for two sigils: `/` lists the skills a message can load and `@` the agents.
  * The backend resolves references by sigil and `/name` for a skill is the only
- * kind so far (agentlite docs/SKILLS.md), so picking a skill leaves `/name ` in
- * the text and the server loads it when the message is sent. `@agent` is not
+ * kind so far (agentlite docs/SKILLS.md): picking a skill makes it a chip in
+ * the composer, which sends it ahead of the text as `/name`. `@agent` is not
  * resolved yet, so picking an agent sets the thread's agent, as the selector
  * does, and clears the text.
  *
@@ -41,7 +50,15 @@ const matches = (item: Item, q: string) =>
  * text changes); the list is told what is selected. Only this re-renders as
  * the user types.
  */
-export function CommandTextarea(props: ComponentProps<typeof PromptInputTextarea>) {
+export function CommandTextarea({
+  skills,
+  onSkillsChange,
+  ...props
+}: ComponentProps<typeof PromptInputTextarea> & {
+  /** the skills the message loads, the composer's chips */
+  skills: string[];
+  onSkillsChange: Dispatch<SetStateAction<string[]>>;
+}) {
   const { textInput } = usePromptInputController();
   const [selected, setSelected] = useState("");
   const [dismissed, setDismissed] = useState<string>();
@@ -53,10 +70,15 @@ export function CommandTextarea(props: ComponentProps<typeof PromptInputTextarea
   const sigil = parsed?.[1];
   const word = parsed?.[2] ?? "";
 
-  const skills = useSkillItems();
-  const agents = useAgentItems();
+  // Loading a skill: a chip, and the text cleared for the message itself.
+  const load = (name: string) => {
+    onSkillsChange((s) => (s.includes(name) ? s : [...s, name]));
+    textInput.clear();
+  };
+  const skillItems = useSkillItems(load);
+  const agentItems = useAgentItems();
   const heading = sigil === "/" ? "Skills" : "Agents";
-  const items = (sigil === "/" ? skills : sigil === "@" ? agents : []).filter((i) => matches(i, word));
+  const items = (sigil === "/" ? skillItems : sigil === "@" ? agentItems : []).filter((i) => matches(i, word));
   const open = items.length > 0;
   const current = items.find((i) => i.value === selected)?.value ?? items[0]?.value ?? "";
 
@@ -74,6 +96,18 @@ export function CommandTextarea(props: ComponentProps<typeof PromptInputTextarea
 
   // Not memoized: the textarea is not, and this component renders per keystroke anyway.
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Backspace on empty text takes the last chip back; a space after a whole
+    // skill name makes it a chip, as picking it would.
+    if (e.key === "Backspace" && text === "" && skills.length > 0) {
+      onSkillsChange((s) => s.slice(0, -1));
+      e.preventDefault();
+      return;
+    }
+    if (e.key === " " && sigil === "/" && skillItems.some((i) => i.label === word.toLowerCase())) {
+      load(word.toLowerCase());
+      e.preventDefault();
+      return;
+    }
     if (!open) return;
     const index = items.findIndex((i) => i.value === current);
     switch (e.key) {
@@ -140,8 +174,7 @@ export function CommandTextarea(props: ComponentProps<typeof PromptInputTextarea
 }
 
 /** `/`: the skills of the library, each in its category's colour. */
-function useSkillItems(): Item[] {
-  const { textInput } = usePromptInputController();
+function useSkillItems(load: (name: string) => void): Item[] {
   const skills = useSkills().data?.data ?? [];
   const { categories } = useSkillFacets();
   const colorOf = colorsOf(categories);
@@ -151,7 +184,7 @@ function useSkillItems(): Item[] {
     label: s.name,
     hint: s.description,
     keywords: s.title,
-    run: () => textInput.setInput(`/${s.name} `),
+    run: () => load(s.name),
   }));
 }
 

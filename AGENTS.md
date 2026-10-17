@@ -456,7 +456,8 @@ before large changes:
   `useThread`; never subscribe by hand.
 - **The `/` and `@` palette** (`composer/command-menu.tsx`) is the one menu behind both
   sigils: shadcn's Command in a Popover, stock styling, an icon per row. `/` lists the skills
-  a message can load and leaves `/name ` in the text for the server. `@` lists the agents;
+  a message can load; a picked one is a chip in the input's header row (its ✕ or Backspace on
+  empty text removes it) and goes ahead of the text as `/name` on send. `@` lists the agents;
   the backend resolves references by sigil (`agentlite/internal/refs`) and `/name` is the
   only kind so far (`@agent` and `#id` are planned, there is no `$`), so picking an agent
   sets the thread's agent as the selector does and clears the text. Add kinds there, not as
