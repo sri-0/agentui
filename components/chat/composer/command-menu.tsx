@@ -2,6 +2,7 @@
 
 import { PromptInputTextarea, usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useAgents } from "@/lib/api/agents";
 import { useGroupedModels } from "@/lib/api/models";
 import { useSkills } from "@/lib/api/skills";
@@ -90,12 +91,16 @@ export function CommandTextarea({
   const open = flat.length > 0 || (choosing && word in choices);
   const current = flat.find((i) => i.value === selected)?.value ?? flat[0]?.value ?? "";
 
-  // The textarea names the selected option for assistive tech; cmdk owns the
-  // ids, so they are read off the list once it has rendered the selection.
+  // The textarea names the list and the selected option for assistive tech;
+  // cmdk owns both ids, so they are read off the list once it has rendered.
   useEffect(() => {
+    const ta = textarea.current;
+    if (!ta) return;
     const id = open ? list?.querySelector<HTMLElement>('[cmdk-item][data-selected="true"]')?.id : undefined;
-    if (id) textarea.current?.setAttribute("aria-activedescendant", id);
-    else textarea.current?.removeAttribute("aria-activedescendant");
+    if (id) ta.setAttribute("aria-activedescendant", id);
+    else ta.removeAttribute("aria-activedescendant");
+    if (open && list?.id) ta.setAttribute("aria-controls", list.id);
+    else ta.removeAttribute("aria-controls");
   }, [open, list, current, text]);
 
   // Not memoized: the textarea is not, and this component renders per keystroke anyway.
@@ -124,10 +129,23 @@ export function CommandTextarea({
 
   return (
     <>
-      {open && (
-        <div className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-hidden rounded-2xl border bg-popover shadow-lg">
+      {/* A popover, portaled: the input group clips anything drawn above it. */}
+      <Popover open={open} onOpenChange={(o) => !o && setDismissed(text)}>
+        <PopoverAnchor asChild>
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-0" />
+        </PopoverAnchor>
+        <PopoverContent
+          side="top"
+          align="start"
+          sideOffset={8}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          // a click back into the textarea keeps the list; anything else puts it away
+          onInteractOutside={(e) => textarea.current?.contains(e.target as Node) && e.preventDefault()}
+          className="w-(--radix-popover-trigger-width) overflow-hidden rounded-2xl p-0 shadow-lg"
+        >
           <Command shouldFilter={false} value={current} onValueChange={setSelected} className="bg-transparent">
-            <CommandList ref={setList} id="command-menu" aria-label="Commands and skills" className="max-h-64">
+            <CommandList ref={setList} aria-label="Commands and skills" className="max-h-64">
               <CommandEmpty>Nothing matches</CommandEmpty>
               {groups.map((g) => (
                 <CommandGroup key={g.heading} heading={g.heading}>
@@ -148,15 +166,14 @@ export function CommandTextarea({
               ))}
             </CommandList>
           </Command>
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
       <PromptInputTextarea
         {...props}
         ref={textarea}
         onKeyDown={onKeyDown}
         aria-autocomplete="list"
         aria-expanded={open}
-        aria-controls={open ? "command-menu" : undefined}
       />
     </>
   );
