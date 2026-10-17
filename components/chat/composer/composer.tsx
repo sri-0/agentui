@@ -33,7 +33,7 @@ type ComposerProps = {
   initialText?: string;
 };
 
-// The provider holds the text, so the / palette can follow what is typed.
+// The provider holds the text, so the / and @ palette can follow what is typed.
 export const Composer = memo(function Composer(props: ComposerProps) {
   return (
     <PromptInputProvider initialInput={props.initialText}>
@@ -60,8 +60,6 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
       >
         <PromptInputBody>
           <CommandTextarea
-            status={status}
-            onStop={onStop}
             autoFocus={autoFocus}
             className="max-h-56 min-h-[60px] resize-none border-0 bg-transparent px-6 pt-5 text-[15px] leading-relaxed shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
             placeholder={placeholder ?? "Ask anything, or pick an agent…"}

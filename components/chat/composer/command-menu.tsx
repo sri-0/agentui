@@ -1,56 +1,47 @@
 "use client";
 
 import { PromptInputTextarea, usePromptInputController } from "@/components/ai-elements/prompt-input";
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useAgents } from "@/lib/api/agents";
-import { useGroupedModels } from "@/lib/api/models";
-import { useSkills } from "@/lib/api/skills";
+import { useSkillFacets, useSkills } from "@/lib/api/skills";
+import { colorsOf } from "@/lib/colors";
 import { useUiStore } from "@/stores/ui-store";
-import { useRouter } from "next/navigation";
-import { type ComponentProps, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { BookOpenIcon, BotIcon, SparklesIcon } from "lucide-react";
+import { type ComponentProps, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
-import type { ComposerStatus } from "./composer";
-
-/** One line of the palette: what it shows, and what picking it does to the composer. */
+/** One row of the palette: what it shows, and what picking it does. */
 type Item = {
-  /** unique across the palette: `command:new`, `skill:<name>`, `model:<id>` */
+  /** unique across the palette: `skill:<name>`, `agent:<id>` */
   value: string;
+  icon: ReactNode;
   label: string;
   hint?: string;
   /** matched besides the label */
   keywords?: string;
   run: () => void;
 };
-type Group = { heading: string; items: Item[] };
 
-/** What the palette follows: `/word`, or `/command rest` while a command picks among choices. */
-const SLASH = /^\/([a-z0-9-]*)(?:\s+([\s\S]*))?$/i;
+/** What the palette follows: the whole text is a sigil and the start of a name. */
+const SIGIL = /^([/@])([a-z0-9-]*)$/i;
 
 const matches = (item: Item, q: string) =>
   q === "" || `${item.label} ${item.keywords ?? ""}`.toLowerCase().includes(q.toLowerCase());
 
-const filter = (groups: Group[], q: string) =>
-  groups.map((g) => ({ ...g, items: g.items.filter((i) => matches(i, q)) })).filter((g) => g.items.length > 0);
-
 /**
- * The composer's textarea with the `/` palette above it: one list for every
- * `/` command (new chat, the model, the agent, the library pages, stop) and
- * the skills a message can load. The backend treats `/` as the one sigil of a
- * reference, and `/name` for a skill is the only kind it resolves so far
- * (agentlite docs/SKILLS.md), so picking a skill leaves `/name ` in the text
- * and the server loads it when the message is sent; the other commands act
- * here. `/model ` and `/agent ` go on to list what they can switch to.
+ * The composer's textarea with the palette above it, one shadcn Command list
+ * for two sigils: `/` lists the skills a message can load and `@` the agents.
+ * The backend resolves references by sigil and `/name` for a skill is the only
+ * kind so far (agentlite docs/SKILLS.md), so picking a skill leaves `/name ` in
+ * the text and the server loads it when the message is sent. `@agent` is not
+ * resolved yet, so picking an agent sets the thread's agent, as the selector
+ * does, and clears the text.
  *
  * The keyboard stays in the textarea (arrows, Enter or Tab, Escape until the
- * text changes); the list is shadcn's Command, told what is selected. Only
- * this re-renders as the user types.
+ * text changes); the list is told what is selected. Only this re-renders as
+ * the user types.
  */
-export function CommandTextarea({
-  status,
-  onStop,
-  ...props
-}: ComponentProps<typeof PromptInputTextarea> & { status: ComposerStatus; onStop?: () => void }) {
+export function CommandTextarea(props: ComponentProps<typeof PromptInputTextarea>) {
   const { textInput } = usePromptInputController();
   const [selected, setSelected] = useState("");
   const [dismissed, setDismissed] = useState<string>();
@@ -58,38 +49,16 @@ export function CommandTextarea({
   const textarea = useRef<HTMLTextAreaElement>(null);
 
   const text = textInput.value;
-  const parsed = text === dismissed ? null : SLASH.exec(text);
-  const word = parsed?.[1] ?? "";
-  const rest = parsed?.[2];
-  const choosing = rest !== undefined;
+  const parsed = text === dismissed ? null : SIGIL.exec(text);
+  const sigil = parsed?.[1];
+  const word = parsed?.[2] ?? "";
 
-  const commands = useCommands(status, onStop);
-  const choices = useChoices();
-  const skills = useSkills().data?.data;
-
-  // Recomputed as the text changes: that is the render this component is for.
-  const skillItems: Item[] = (skills ?? []).map((s) => ({
-    value: `skill:${s.name}`,
-    label: `/${s.name}`,
-    hint: s.description,
-    keywords: s.title,
-    run: () => textInput.setInput(`/${s.name} `),
-  }));
-  const groups: Group[] = !parsed
-    ? []
-    : choosing
-      ? filter(choices[word] ?? [], rest)
-      : filter(
-          [
-            { heading: "Commands", items: commands },
-            { heading: "Skills", items: skillItems },
-          ],
-          word,
-        );
-  const flat = groups.flatMap((g) => g.items);
-  // a command's choices stay open on no match, to say so; the top level closes
-  const open = flat.length > 0 || (choosing && word in choices);
-  const current = flat.find((i) => i.value === selected)?.value ?? flat[0]?.value ?? "";
+  const skills = useSkillItems();
+  const agents = useAgentItems();
+  const heading = sigil === "/" ? "Skills" : "Agents";
+  const items = (sigil === "/" ? skills : sigil === "@" ? agents : []).filter((i) => matches(i, word));
+  const open = items.length > 0;
+  const current = items.find((i) => i.value === selected)?.value ?? items[0]?.value ?? "";
 
   // The textarea names the list and the selected option for assistive tech;
   // cmdk owns both ids, so they are read off the list once it has rendered.
@@ -106,17 +75,17 @@ export function CommandTextarea({
   // Not memoized: the textarea is not, and this component renders per keystroke anyway.
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (!open) return;
-    const index = flat.findIndex((i) => i.value === current);
+    const index = items.findIndex((i) => i.value === current);
     switch (e.key) {
       case "ArrowDown":
-        if (flat.length) setSelected(flat[(index + 1) % flat.length].value);
+        setSelected(items[(index + 1) % items.length].value);
         break;
       case "ArrowUp":
-        if (flat.length) setSelected(flat[(index - 1 + flat.length) % flat.length].value);
+        setSelected(items[(index - 1 + items.length) % items.length].value);
         break;
       case "Enter":
       case "Tab":
-        flat[index]?.run();
+        items[index]?.run();
         break;
       case "Escape":
         setDismissed(text);
@@ -142,135 +111,74 @@ export function CommandTextarea({
           onCloseAutoFocus={(e) => e.preventDefault()}
           // a click back into the textarea keeps the list; anything else puts it away
           onInteractOutside={(e) => textarea.current?.contains(e.target as Node) && e.preventDefault()}
-          className="w-(--radix-popover-trigger-width) overflow-hidden rounded-2xl p-0 shadow-lg"
+          className="w-(--radix-popover-trigger-width) p-0"
         >
-          <Command shouldFilter={false} value={current} onValueChange={setSelected} className="bg-transparent">
-            <CommandList ref={setList} aria-label="Commands and skills" className="max-h-64">
-              <CommandEmpty>Nothing matches</CommandEmpty>
-              {groups.map((g) => (
-                <CommandGroup key={g.heading} heading={g.heading}>
-                  {g.items.map((item) => (
-                    <CommandItem
-                      key={item.value}
-                      value={item.value}
-                      onSelect={item.run}
-                      // keep the focus in the composer; the keyboard works from there
-                      onMouseDown={(e) => e.preventDefault()}
-                      className="flex-col items-start gap-0 rounded-xl px-3 py-2"
-                    >
-                      <span className="font-mono text-sm">{item.label}</span>
-                      {item.hint && <span className="line-clamp-1 text-xs text-muted-foreground">{item.hint}</span>}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              ))}
+          <Command shouldFilter={false} value={current} onValueChange={setSelected}>
+            <CommandList ref={setList} aria-label={heading}>
+              <CommandGroup heading={heading}>
+                {items.map((item) => (
+                  <CommandItem
+                    key={item.value}
+                    value={item.value}
+                    onSelect={item.run}
+                    // keep the focus in the composer; the keyboard works from there
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    {item.icon}
+                    <span className="shrink-0">{item.label}</span>
+                    {item.hint && <span className="truncate text-muted-foreground">{item.hint}</span>}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
             </CommandList>
           </Command>
         </PopoverContent>
       </Popover>
-      <PromptInputTextarea
-        {...props}
-        ref={textarea}
-        onKeyDown={onKeyDown}
-        aria-autocomplete="list"
-        aria-expanded={open}
-      />
+      <PromptInputTextarea {...props} ref={textarea} onKeyDown={onKeyDown} aria-autocomplete="list" aria-expanded={open} />
     </>
   );
 }
 
-/** The `/` commands the UI runs itself. A server-side one (`/compact`, which
- *  the backend's refs seam is meant for) would be a skill-like item that
- *  leaves its text in the message instead. */
-function useCommands(status: ComposerStatus, onStop?: () => void): Item[] {
-  const router = useRouter();
+/** `/`: the skills of the library, each in its category's colour. */
+function useSkillItems(): Item[] {
   const { textInput } = usePromptInputController();
-  const requestNewChat = useUiStore((s) => s.requestNewChat);
-  return useMemo(() => {
-    const go = (href: string) => () => {
-      textInput.clear();
-      router.push(href);
-    };
-    const items: Item[] = [
-      {
-        value: "command:new",
-        label: "/new",
-        hint: "Start a new chat",
-        run: () => {
-          requestNewChat();
-          go("/chat")();
-        },
-      },
-      {
-        value: "command:model",
-        label: "/model",
-        hint: "Switch the model",
-        keywords: "models",
-        run: () => textInput.setInput("/model "),
-      },
-      {
-        value: "command:agent",
-        label: "/agent",
-        hint: "Switch the agent",
-        keywords: "agents",
-        run: () => textInput.setInput("/agent "),
-      },
-      { value: "command:artifacts", label: "/artifacts", hint: "Every conversation's artifacts", run: go("/artifacts") },
-      { value: "command:skills", label: "/skills", hint: "The skills library", run: go("/skills") },
-    ];
-    if (status !== "ready" && onStop) {
-      items.push({
-        value: "command:stop",
-        label: "/stop",
-        hint: "Stop the run",
-        run: () => {
-          textInput.clear();
-          onStop();
-        },
-      });
-    }
-    return items;
-  }, [router, textInput, requestNewChat, status, onStop]);
+  const skills = useSkills().data?.data ?? [];
+  const { categories } = useSkillFacets();
+  const colorOf = colorsOf(categories);
+  return skills.map((s) => ({
+    value: `skill:${s.name}`,
+    icon: <BookOpenIcon className={colorOf(s.category).text} />,
+    label: s.name,
+    hint: s.description,
+    keywords: s.title,
+    run: () => textInput.setInput(`/${s.name} `),
+  }));
 }
 
-/** What `/model` and `/agent` choose among. */
-function useChoices(): Record<string, Group[]> {
+/** `@`: the default agent and the configured ones. */
+function useAgentItems(): Item[] {
   const { textInput } = usePromptInputController();
-  const { groups: providers } = useGroupedModels();
   const { data: agents = [] } = useAgents();
-  const setModel = useUiStore((s) => s.setModel);
   const setAgent = useUiStore((s) => s.setAgent);
-  return useMemo(() => {
-    const pick = (set: () => void) => () => {
-      set();
-      textInput.clear();
-    };
-    return {
-      model: providers.map((p) => ({
-        heading: p.providerName,
-        items: p.models.map((m) => ({
-          value: `model:${m.id}`,
-          label: m.name ?? m.id,
-          hint: m.id,
-          run: pick(() => setModel(m.id)),
-        })),
-      })),
-      agent: [
-        {
-          heading: "Agents",
-          items: [
-            { value: "agent:auto", label: "Auto", hint: "The default agent", run: pick(() => setAgent("auto")) },
-            { value: "agent:none", label: "Model only", hint: "No agent, the bare model", run: pick(() => setAgent(null)) },
-            ...agents.map((a) => ({
-              value: `agent:${a.id}`,
-              label: a.name,
-              hint: a.description,
-              keywords: a.id,
-              run: pick(() => setAgent(a.id)),
-            })),
-          ],
-        },
-      ],
-    };
-  }, [providers, agents, setModel, setAgent, textInput]);
+  const pick = (id: string) => () => {
+    setAgent(id);
+    textInput.clear();
+  };
+  return [
+    {
+      value: "agent:auto",
+      icon: <SparklesIcon className="text-[var(--ai-from)]" />,
+      label: "Auto",
+      hint: "the default agent",
+      run: pick("auto"),
+    },
+    ...agents.map((a) => ({
+      value: `agent:${a.id}`,
+      icon: <BotIcon />,
+      label: a.name,
+      hint: a.description,
+      keywords: a.id,
+      run: pick(a.id),
+    })),
+  ];
 }

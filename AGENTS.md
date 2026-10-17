@@ -77,7 +77,7 @@ components/
     use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
-                              #   connector-icon, thread-usage-ring, command-menu (the / palette)
+                              #   connector-icon, thread-usage-ring, command-menu (the / and @ palette)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card,
                               #   agent-card, markdown (+ source-chip), compaction-divider,
                               #   message-reasoning, message-actions, message-meta,
@@ -454,13 +454,13 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
-- **The `/` palette** (`composer/command-menu.tsx`) is the one menu behind `/`: the UI's
-  commands (`/new`, `/model`, `/agent`, `/artifacts`, `/skills`, `/stop`) and the skills a
-  message can load. The backend resolves references by sigil (`agentlite/internal/refs`):
-  `/` is the only sigil so far and `/name` loads a skill (`@agent` and `#id` are planned,
-  there is no `$`). Picking a skill leaves `/name ` in the text for the server; a server
-  command such as `/compact` would be an item that does the same. Add commands there, not
-  as another menu.
+- **The `/` and `@` palette** (`composer/command-menu.tsx`) is the one menu behind both
+  sigils: shadcn's Command in a Popover, stock styling, an icon per row. `/` lists the skills
+  a message can load and leaves `/name ` in the text for the server. `@` lists the agents;
+  the backend resolves references by sigil (`agentlite/internal/refs`) and `/name` is the
+  only kind so far (`@agent` and `#id` are planned, there is no `$`), so picking an agent
+  sets the thread's agent as the selector does and clears the text. Add kinds there, not as
+  another menu.
 - **`components/ui/` is shadcn registry output only** (style `radix-nova`, as the CLI writes
   it) and `components/ai-elements/` the AI Elements registry. Hand-written shared pieces go
   in `components/common/` or `components/library/`, never in `ui/`.
