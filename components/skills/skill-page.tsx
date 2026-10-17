@@ -11,7 +11,7 @@ import {
 import { FileTree, FileTreeFile, FileTreeFolder } from "@/components/ai-elements/file-tree";
 import { Snippet, SnippetCopyButton, SnippetInput } from "@/components/ai-elements/snippet";
 import { Markdown } from "@/components/chat/messages/markdown";
-import { CopyButton } from "@/components/library/copy-button";
+import { CopyButton } from "@/components/common/copy-button";
 import { LibraryPage } from "@/components/library/library";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";

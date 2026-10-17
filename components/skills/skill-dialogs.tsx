@@ -12,19 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import {
-  FileUpload,
-  FileUploadDropzone,
-  FileUploadItem,
-  FileUploadItemDelete,
-  FileUploadItemMetadata,
-  FileUploadItemPreview,
-  FileUploadList,
-  FileUploadTrigger,
-} from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
 import { type Skill, type SkillDetails, useSkillFacets, useUpdateSkill, useUploadSkill } from "@/lib/api/skills";
-import { UploadIcon, XIcon } from "lucide-react";
 import { Controller, FormProvider, useForm, useFormContext } from "react-hook-form";
 
 /** The details a skill is filed with, in the form around them. The
@@ -110,10 +99,10 @@ function DetailsFields({ describe, required }: { describe: string; required?: bo
 
 /** An upload: the skill's zip or SKILL.md, and its details; an empty
  *  description keeps the SKILL.md's. */
-type Upload = SkillDetails & { files: File[] };
+type Upload = SkillDetails & { file: File | null };
 
 /** One file: a skill's zip or its SKILL.md. */
-const oneSkillFile = ([f]: File[]) =>
+const oneSkillFile = (f: File | null) =>
   !f
     ? "Choose the skill's zip or SKILL.md"
     : /\.(zip|skill)$/i.test(f.name) || f.name === "SKILL.md" || "Choose a .zip or a SKILL.md";
@@ -150,56 +139,32 @@ export function UploadSkillDialog({
 function UploadForm({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   const mutation = useUploadSkill();
   const form = useForm<Upload>({
-    defaultValues: { files: [], title: "", description: "", category: "", source: "" },
+    defaultValues: { file: null, title: "", description: "", category: "", source: "" },
   });
   return (
     <FormProvider {...form}>
       <form
         className="grid gap-5"
-        onSubmit={form.handleSubmit(({ files, ...details }) =>
-          mutation.mutate({ file: files[0], details }, { onSuccess: onUploaded }),
-        )}
+        onSubmit={form.handleSubmit(({ file, ...details }) => {
+          if (file) mutation.mutate({ file, details }, { onSuccess: onUploaded });
+        })}
       >
         <FieldGroup>
           <Controller
-            name="files"
+            name="file"
             control={form.control}
             rules={{ validate: oneSkillFile }}
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
-                <FileUpload
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  maxFiles={1}
+                <FieldLabel htmlFor="skill-file">Skill file</FieldLabel>
+                <Input
+                  id="skill-file"
+                  type="file"
                   accept=".zip,.skill,.md"
-                  onFileReject={(_, message) => form.setError("files", { message })}
-                >
-                  {field.value.length === 0 ? (
-                    <FileUploadDropzone className="flex-col gap-2 py-8">
-                      <UploadIcon className="size-6 text-muted-foreground" />
-                      <span className="text-sm font-medium">Drop the skill&apos;s zip or SKILL.md here</span>
-                      <FileUploadTrigger asChild>
-                        <Button type="button" variant="outline" size="sm">
-                          Browse files
-                        </Button>
-                      </FileUploadTrigger>
-                    </FileUploadDropzone>
-                  ) : (
-                    <FileUploadList>
-                      {field.value.map((f) => (
-                        <FileUploadItem key={f.name} value={f}>
-                          <FileUploadItemPreview />
-                          <FileUploadItemMetadata />
-                          <FileUploadItemDelete asChild>
-                            <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove">
-                              <XIcon />
-                            </Button>
-                          </FileUploadItemDelete>
-                        </FileUploadItem>
-                      ))}
-                    </FileUploadList>
-                  )}
-                </FileUpload>
+                  aria-invalid={fieldState.invalid}
+                  onBlur={field.onBlur}
+                  onChange={(e) => field.onChange(e.target.files?.[0] ?? null)}
+                />
                 <FieldError errors={[fieldState.error]} />
               </Field>
             )}

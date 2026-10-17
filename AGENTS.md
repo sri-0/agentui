@@ -77,7 +77,7 @@ components/
     use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
-                              #   connector-icon, thread-usage-ring, skill-menu (the / menu)
+                              #   connector-icon, thread-usage-ring, command-menu (the / palette)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card,
                               #   agent-card, markdown (+ source-chip), compaction-divider,
                               #   message-reasoning, message-actions, message-meta,
@@ -90,13 +90,14 @@ components/
                               #   optional nav column), LibraryToolbar (title, search, actions,
                               #   grid/list toggle), LibraryItems/LibraryItem (card or row),
                               #   NavSection/NavItem; creatable-combobox (pick or create a value)
+  common/copy-button.tsx      # a copy-to-clipboard icon button for any page
   artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
                               #   once the card is in view), kind tabs, search; ?open=root/id
                               #   opens one full-page
   skills/skills-view.tsx      # categories and sources (with counts) on the left, search, Create
                               #   (with an agent: /chat?prompt=…; or upload), cards; ?skill=name
                               #   opens one full-page: details, npx command, files
-  skills/skill-dialogs.tsx    # upload (Dice UI file-upload drop area + details) and edit details
+  skills/skill-dialogs.tsx    # upload (a shadcn file input + details) and edit details
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
@@ -109,7 +110,7 @@ lib/
          artifacts.ts · sources.ts · types.ts
   providers.ts · group-threads.ts · dayjs.ts · utils.ts
 stores/ ui-store.ts            # Zustand UI state
-hooks/  use-mobile.ts
+hooks/  use-mobile.ts          # shadcn's sidebar breakpoint hook
 plans/  00–06 + agent-ui-redesign.md   # design docs (see §9)
 ```
 
@@ -147,7 +148,7 @@ for reads and admin:
   every conversation's artifacts for `/artifacts`, newest first; `next` is the cursor for `after`
 - `GET /v1/skills?q=&category=&source=` → `{data: [{name, title?, description, category?,
   source?, files: [{path}], created_at, updated_at}], categories, sources}` (`[{value, count}]`):
-  the skills library, for `/skills`, the composer's `/` menu and the `/name` chip;
+  the skills library, for `/skills`, the composer's `/` palette and the `/name` chip;
   `POST /v1/skills` as a multipart form (`file`: a skill's zip or its SKILL.md; optional
   `title`, `description`, `category`, `source`), `PATCH /v1/skills/{name}` (JSON details;
   a new description rewrites the SKILL.md), `DELETE /v1/skills/{name}`, and
@@ -453,6 +454,16 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
+- **The `/` palette** (`composer/command-menu.tsx`) is the one menu behind `/`: the UI's
+  commands (`/new`, `/model`, `/agent`, `/artifacts`, `/skills`, `/stop`) and the skills a
+  message can load. The backend resolves references by sigil (`agentlite/internal/refs`):
+  `/` is the only sigil so far and `/name` loads a skill (`@agent` and `#id` are planned,
+  there is no `$`). Picking a skill leaves `/name ` in the text for the server; a server
+  command such as `/compact` would be an item that does the same. Add commands there, not
+  as another menu.
+- **`components/ui/` is shadcn registry output only** (style `radix-nova`, as the CLI writes
+  it) and `components/ai-elements/` the AI Elements registry. Hand-written shared pieces go
+  in `components/common/` or `components/library/`, never in `ui/`.
 - Next 16: dynamic route params are **async** — `await params` in
   `chat/[threadId]/page.tsx`. Re-read `node_modules/next/dist/docs/` before using
   unfamiliar APIs (see top banner).
