@@ -64,7 +64,7 @@ export function QuestionPanel({ part, onAnswer, onCancel }: { part: ToolPart; on
     return () => cancelAnimationFrame(frame);
   }, []);
   return (
-    <div ref={ref} className="rounded-[26px] border border-border/70 bg-card/80 p-5 shadow-xl shadow-black/10 backdrop-blur-xl">
+    <div ref={ref} className="rounded-2xl bg-muted p-4">
       <Questionnaire
         shortcuts="numbers"
         onSubmit={(e) => {
@@ -112,8 +112,8 @@ export function QuestionPanel({ part, onAnswer, onCancel }: { part: ToolPart; on
           </QuestionnaireItem>
         ))}
         <QuestionnaireActions>
-          <QuestionnairePrevious size="sm" />
-          <QuestionnaireSkip size="sm" />
+          <QuestionnairePrevious size="sm" variant="ghost" />
+          <QuestionnaireSkip size="sm" variant="ghost" />
           <QuestionnaireNext size="sm" />
           <QuestionnaireSubmit size="sm" />
         </QuestionnaireActions>
@@ -132,11 +132,11 @@ export const QuestionCard = memo(function QuestionCard({ part, onReopen }: { par
   if (questions.length === 0) return null;
   if (part.state === "approval") {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
-        <HelpCircleIcon className="size-4 text-primary" />
+      <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+        <HelpCircleIcon className="size-4 text-muted-foreground" />
         <span className="mr-auto">{questions.length === 1 ? "A question is waiting for you" : `${questions.length} questions are waiting for you`}</span>
         {onReopen && (
-          <Button size="sm" variant="outline" onClick={onReopen}>
+          <Button size="sm" onClick={onReopen}>
             Answer
           </Button>
         )}
@@ -152,7 +152,7 @@ export const QuestionCard = memo(function QuestionCard({ part, onReopen }: { par
   }
   const output = part.state === "done" ? (part.output as QuestionAnswers | undefined) : undefined;
   return (
-    <div className="flex w-full flex-col gap-4 rounded-xl border bg-card p-4">
+    <div className="flex w-full flex-col gap-4 rounded-xl bg-muted p-4">
       <div className="flex items-center gap-2 text-sm font-medium">
         <HelpCircleIcon className="size-4 text-primary" />
         {output?.skipped ? "Questions skipped" : "Your answers"}
@@ -166,11 +166,7 @@ export const QuestionCard = memo(function QuestionCard({ part, onReopen }: { par
               {chosen.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {chosen.map((label) => (
-                    <Badge
-                      key={label}
-                      variant="secondary"
-                      className="gap-1 rounded-md border-primary/30 bg-primary/10 text-xs font-normal"
-                    >
+                    <Badge key={label} className="gap-1 rounded-md bg-background text-xs font-normal text-foreground">
                       <CheckIcon className="size-3 text-primary" />
                       {label}
                     </Badge>
