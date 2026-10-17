@@ -81,7 +81,8 @@ export type ModelChange = { from: string; to: string };
 
 /** The skill a message starting with /name loaded into its turn (the
  *  `skill` activity). */
-export type SkillUse = { name: string; description: string };
+/** A skill a /name loaded; turns stored before skills had ids have none. */
+export type SkillUse = { id?: string; name: string; title?: string; description: string };
 
 export type TextPart = { type: "text"; id: string; text: string; done: boolean };
 

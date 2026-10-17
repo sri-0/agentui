@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -8,22 +10,39 @@ import { LayoutGridIcon, ListIcon, SearchIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 /** The page frame of the artifacts and skills pages: a thin top bar, then
- *  an optional nav column and the scrolling content. */
-export function LibraryPage({ title, nav, children }: { title: string; nav?: ReactNode; children: ReactNode }) {
+ *  the scrolling content, with an optional nav column beside it. `fill` gives
+ *  the content the whole area, for an embedded page. */
+export function LibraryPage({
+  title,
+  nav,
+  fill,
+  children,
+}: {
+  title: string;
+  nav?: ReactNode;
+  fill?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <SidebarTrigger className="text-muted-foreground" />
         <span className="text-sm font-semibold">{title}</span>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {nav && (
-          <nav className="shrink-0 overflow-y-auto border-b p-3 md:w-60 md:border-r md:border-b-0">{nav}</nav>
-        )}
-        <main className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-8">{children}</div>
+      {fill ? (
+        <main className="flex min-h-0 flex-1 flex-col gap-4 p-4">{children}</main>
+      ) : (
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto flex max-w-screen-2xl flex-col gap-8 px-4 py-8 sm:px-8 md:flex-row md:gap-12">
+            {nav && (
+              <nav className="shrink-0 md:w-60">
+                <div className="flex flex-col gap-5 md:sticky md:top-8">{nav}</div>
+              </nav>
+            )}
+            <div className="flex min-w-0 flex-1 flex-col gap-6">{children}</div>
+          </div>
         </main>
-      </div>
+      )}
     </div>
   );
 }
@@ -52,7 +71,7 @@ export function LibraryToolbar({
           onChange={(e) => onSearch(e.target.value)}
           placeholder={placeholder}
           aria-label={placeholder}
-          className="rounded-full pl-9"
+          className="pl-9"
         />
       </div>
       {actions}
@@ -65,30 +84,26 @@ function ViewToggle() {
   const view = useUiStore((s) => s.libraryView);
   const setView = useUiStore((s) => s.setLibraryView);
   return (
-    <div role="radiogroup" aria-label="View" className="flex rounded-full border p-0.5">
+    <ButtonGroup aria-label="View">
       {(
         [
           ["grid", LayoutGridIcon, "Grid"],
           ["list", ListIcon, "List"],
         ] as const
       ).map(([value, Icon, label]) => (
-        <button
+        <Button
           key={value}
-          type="button"
-          role="radio"
-          aria-checked={view === value}
+          variant={view === value ? "secondary" : "outline"}
+          size="icon"
+          aria-pressed={view === value}
           aria-label={label}
           title={label}
           onClick={() => setView(value)}
-          className={cn(
-            "rounded-full p-1.5 text-muted-foreground transition-colors hover:text-foreground",
-            view === value && "bg-accent text-foreground",
-          )}
         >
-          <Icon className="size-4" />
-        </button>
+          <Icon />
+        </Button>
       ))}
-    </div>
+    </ButtonGroup>
   );
 }
 
@@ -97,33 +112,44 @@ export function LibraryItems({ children }: { children: ReactNode }) {
   const view = useUiStore((s) => s.libraryView);
   return (
     <div
-      className={cn(
-        view === "grid" ? "grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "flex flex-col",
-      )}
+      className={cn(view === "grid" ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" : "flex flex-col")}
     >
       {children}
     </div>
   );
 }
 
-/** One item: a card with a preview above its title (grid), or a row (list). */
+/** One item: a card holding all of it, a preview on top when there is one
+ *  (grid), or a row (list). */
 export function LibraryItem({
   preview,
   icon,
   title,
   subtitle,
   meta,
+  children,
   onOpen,
 }: {
-  preview: ReactNode;
+  preview?: ReactNode;
   icon: ReactNode;
   title: string;
   subtitle?: ReactNode;
-  /** the list's right-hand columns, e.g. a date */
+  /** e.g. a date: the list's right-hand column, the card's foot */
   meta?: ReactNode;
+  /** more for the card: a description, tags */
+  children?: ReactNode;
   onOpen: () => void;
 }) {
   const view = useUiStore((s) => s.libraryView);
+  const heading = (
+    <span className="flex min-w-0 items-center gap-3">
+      {icon}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">{title}</span>
+        {subtitle && <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>}
+      </span>
+    </span>
+  );
   if (view === "list") {
     return (
       <button
@@ -131,25 +157,22 @@ export function LibraryItem({
         onClick={onOpen}
         className="flex items-center gap-3 border-b px-2 py-3 text-left transition-colors last:border-b-0 hover:bg-accent/40"
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-md border text-muted-foreground">
-          {icon}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{title}</span>
-          {subtitle && <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>}
-        </span>
+        <span className="min-w-0 flex-1">{heading}</span>
         {meta && <span className="shrink-0 text-xs text-muted-foreground">{meta}</span>}
       </button>
     );
   }
   return (
-    <button type="button" onClick={onOpen} className="group flex flex-col gap-2 text-left">
-      <span className="flex aspect-[16/10] overflow-hidden rounded-xl border bg-muted/30 transition-colors group-hover:border-foreground/25">
-        {preview}
-      </span>
-      <span className="px-0.5 text-center">
-        <span className="block truncate text-sm font-medium">{title}</span>
-        {subtitle && <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>}
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex flex-col overflow-hidden rounded-xl border bg-card text-left transition-colors hover:border-foreground/25"
+    >
+      {preview && <span className="flex aspect-[16/9] overflow-hidden border-b bg-muted/30">{preview}</span>}
+      <span className="flex flex-1 flex-col gap-3 p-4">
+        {heading}
+        {children}
+        {meta && <span className="mt-auto text-xs text-muted-foreground">{meta}</span>}
       </span>
     </button>
   );
@@ -158,8 +181,8 @@ export function LibraryItem({
 /** A nav section: a muted label and its entries. */
 export function NavSection({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5 pb-3">
-      {label && <span className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">{label}</span>}
+    <div className="flex flex-col gap-1">
+      {label && <span className="px-2.5 pb-1 text-xs font-medium text-muted-foreground">{label}</span>}
       {children}
     </div>
   );
@@ -179,18 +202,15 @@ export function NavItem({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant={active ? "secondary" : "ghost"}
       onClick={onClick}
       aria-current={active || undefined}
-      className={cn(
-        "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/50",
-        active && "bg-accent font-medium",
-      )}
+      className="w-full justify-start gap-2.5 px-2.5 font-normal"
     >
       {icon}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-left">{label}</span>
       {count != null && <span className="text-xs tabular-nums text-muted-foreground">{count}</span>}
-    </button>
+    </Button>
   );
 }

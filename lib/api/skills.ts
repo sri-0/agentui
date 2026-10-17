@@ -5,17 +5,18 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { apiFetch, apiText } from "./client";
 import type { ListResponse } from "./types";
 
-/** A skill of the library: its name and description, from its SKILL.md; the
- *  title, category and source the library files it under; and the paths of
- *  its files, SKILL.md among them. */
+/** A skill of the library, by its id: its name (unique) and description,
+ *  from its SKILL.md; the title, category and source the library files it
+ *  under; and its files, SKILL.md among them. */
 export type Skill = {
+  id: string;
   name: string;
   title?: string;
   /** Markdown */
   description: string;
   category?: string;
   source?: string;
-  files: { path: string }[];
+  files: { path: string; size: number }[];
   created_at: string;
   updated_at: string;
 };
@@ -31,8 +32,8 @@ type SkillList = ListResponse<Skill> & { categories: Facet[]; sources: Facet[] }
 export type SkillDetails = { title: string; description: string; category: string; source: string };
 
 /** The path of one of a skill's files on the server. */
-export const skillFilePath = (name: string, path: string) =>
-  `/v1/skills/${encodeURIComponent(name)}/files/${path.split("/").map(encodeURIComponent).join("/")}`;
+export const skillFilePath = (id: string, path: string) =>
+  `/v1/skills/${encodeURIComponent(id)}/files/${path.split("/").map(encodeURIComponent).join("/")}`;
 
 /** The skills library by name, as the filter narrows it, with the categories
  *  and sources of the skills its search matches (whatever category or source
@@ -48,12 +49,20 @@ export function useSkills(filter: SkillFilter = {}) {
   });
 }
 
+/** One skill, by id. */
+export function useSkill(id: string) {
+  return useQuery({
+    queryKey: ["skills", "one", id],
+    queryFn: () => apiFetch<Skill>(`/v1/skills/${encodeURIComponent(id)}`),
+  });
+}
+
 /** One of a skill's files as text, fetched once per version of the skill. */
 export function useSkillFile(skill: Skill, path: string) {
   return useQuery({
-    queryKey: ["skill-file", skill.name, skill.updated_at, path],
+    queryKey: ["skill-file", skill.id, skill.updated_at, path],
     staleTime: Infinity,
-    queryFn: () => apiText(skillFilePath(skill.name, path)),
+    queryFn: () => apiText(skillFilePath(skill.id, path)),
   });
 }
 
@@ -76,8 +85,8 @@ export function useUploadSkill() {
 export function useUpdateSkill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, details }: { name: string; details: SkillDetails }) =>
-      apiFetch<Skill>(`/v1/skills/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify(details) }),
+    mutationFn: ({ id, details }: { id: string; details: SkillDetails }) =>
+      apiFetch<Skill>(`/v1/skills/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(details) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
   });
 }
@@ -85,7 +94,7 @@ export function useUpdateSkill() {
 export function useDeleteSkill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => apiFetch<void>(`/v1/skills/${encodeURIComponent(name)}`, { method: "DELETE" }),
+    mutationFn: (id: string) => apiFetch<void>(`/v1/skills/${encodeURIComponent(id)}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
   });
 }

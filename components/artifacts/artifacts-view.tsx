@@ -3,17 +3,18 @@
 import { LibraryItem, LibraryItems, LibraryPage, LibraryToolbar } from "@/components/library/library";
 import { Markdown } from "@/components/chat/messages/markdown";
 import {
+  ARTIFACT_KINDS,
   ArtifactActions,
   ArtifactBody,
   ArtifactIcon,
   EmbeddedPage,
 } from "@/components/right-panel/artifact-view";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type RecentArtifact, useArtifactBody, useRecentArtifacts } from "@/lib/api/artifacts";
 import type { Artifact } from "@/lib/chat/types";
 import dayjs from "@/lib/dayjs";
 import { ThreadIdContext } from "@/lib/chat/thread-context";
-import { cn } from "@/lib/utils";
 import { ArrowLeftIcon, MessageSquareIcon } from "lucide-react";
 import { useInView } from "motion/react";
 import Link from "next/link";
@@ -23,7 +24,8 @@ import { useRef, useState } from "react";
 /** An artifact id is unique within its conversation only. */
 const keyOf = (a: RecentArtifact) => `${a.root_id}/${a.id}`;
 
-/** The kinds the page filters by, as Spaces filters pages from slides. */
+/** The kinds the page filters by, as Spaces filters pages from slides; each
+ *  tab shows its first kind's icon. */
 const KINDS: { label: string; kinds?: Artifact["kind"][] }[] = [
   { label: "All" },
   { label: "Documents", kinds: ["markdown"] },
@@ -51,7 +53,7 @@ export function ArtifactsView() {
   const open = artifacts.find((a) => keyOf(a) === openKey);
   if (open) {
     return (
-      <LibraryPage title="Artifacts">
+      <LibraryPage title="Artifacts" fill={open.kind === "url"}>
         <ThreadIdContext value={open.root_id}>
           <OpenArtifact artifact={open} onBack={() => router.push(pathname)} />
         </ThreadIdContext>
@@ -70,21 +72,18 @@ export function ArtifactsView() {
   return (
     <LibraryPage title="Artifacts">
       <LibraryToolbar heading="Artifacts" search={search} onSearch={setSearch} placeholder="Search artifacts" />
-      <div role="tablist" aria-label="Kind" className="-mt-2 flex flex-wrap gap-1">
+      <div role="group" aria-label="Kind" className="-mt-2 flex flex-wrap gap-1">
         {KINDS.map((k, i) => (
-          <button
+          <Button
             key={k.label}
-            type="button"
-            role="tab"
-            aria-selected={i === kind}
+            variant={i === kind ? "secondary" : "ghost"}
+            size="sm"
+            aria-pressed={i === kind}
             onClick={() => setKind(i)}
-            className={cn(
-              "rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground",
-              i === kind && "bg-accent font-medium text-foreground",
-            )}
           >
+            {k.kinds && <ArtifactIcon kind={k.kinds[0]} />}
             {k.label}
-          </button>
+          </Button>
         ))}
       </div>
       {error && <p className="text-sm text-destructive">{error.message}</p>}
@@ -99,7 +98,11 @@ export function ArtifactsView() {
           <LibraryItem
             key={keyOf(a)}
             preview={<ArtifactPreview artifact={a} />}
-            icon={<ArtifactIcon kind={a.kind} className="size-4" />}
+            icon={
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-background">
+                <ArtifactIcon kind={a.kind} className="size-4" />
+              </span>
+            }
             title={a.title}
             subtitle={a.thread_title || "Untitled conversation"}
             meta={a.updated_at ? dayjs(a.updated_at).fromNow() : undefined}
@@ -116,8 +119,8 @@ export function ArtifactsView() {
   );
 }
 
-/** The top of an artifact as a small page, fetched once its card is seen; a
- *  url artifact shows its address. */
+/** The top of an artifact as a small page, fetched once its card is seen,
+ *  with what kind it is; a url artifact shows its address. */
 function ArtifactPreview({ artifact }: { artifact: RecentArtifact }) {
   const ref = useRef<HTMLSpanElement>(null);
   const seen = useInView(ref, { once: true });
@@ -125,7 +128,7 @@ function ArtifactPreview({ artifact }: { artifact: RecentArtifact }) {
   // A card shows no citations: they open cards of their own.
   const text = body?.slice(0, 1200).replace(/\[source:\s*\d+\]/g, "");
   return (
-    <span ref={ref} className="relative flex w-full justify-center overflow-hidden px-5 pt-5">
+    <span ref={ref} className="relative flex w-full justify-center overflow-hidden px-5 pt-10">
       <span className="w-full overflow-hidden rounded-t-md border border-b-0 bg-background px-3 pt-3 shadow-sm">
         {artifact.kind === "url" ? (
           <span className="flex h-full flex-col items-center justify-center gap-2 pb-6 text-muted-foreground">
@@ -150,6 +153,10 @@ function ArtifactPreview({ artifact }: { artifact: RecentArtifact }) {
         )}
       </span>
       <span className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-muted/60 to-transparent" />
+      <Badge variant="outline" className="absolute top-2 left-2 bg-background/90 shadow-xs">
+        <ArtifactIcon kind={artifact.kind} />
+        {ARTIFACT_KINDS[artifact.kind]?.label ?? artifact.kind}
+      </Badge>
     </span>
   );
 }
@@ -162,24 +169,26 @@ function hostOf(url?: string) {
   }
 }
 
+/** An artifact opened in place of the list; a url artifact's page takes all
+ *  the room there is. */
 function OpenArtifact({ artifact, onBack }: { artifact: RecentArtifact; onBack: () => void }) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeftIcon className="size-4" /> Artifacts
+          <ArrowLeftIcon /> Artifacts
         </Button>
         <h1 className="mr-auto min-w-0 truncate text-xl font-semibold">{artifact.title}</h1>
         {/* The conversation, not the sub-agent thread that may have published it. */}
         <Button variant="outline" size="sm" asChild>
           <Link href={`/chat/${artifact.root_id}`}>
-            <MessageSquareIcon className="size-4" /> Open conversation
+            <MessageSquareIcon /> Open thread
           </Link>
         </Button>
         <ArtifactActions threadId={artifact.root_id} artifact={artifact} />
       </div>
       {artifact.kind === "url" ? (
-        <div className="h-[75vh] overflow-hidden rounded-xl border">
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-xl border">
           <EmbeddedPage artifact={artifact} />
         </div>
       ) : (

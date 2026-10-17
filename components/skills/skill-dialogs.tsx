@@ -113,7 +113,7 @@ export function UploadSkillDialog({
   onOpenChange: (open: boolean) => void;
   categories: string[];
   sources: string[];
-  onUploaded: (name: string) => void;
+  onUploaded: (skill: Skill) => void;
 }) {
   const [files, setFiles] = useState<File[]>([]);
   const [details, setDetails] = useState(noDetails);
@@ -147,7 +147,7 @@ export function UploadSkillDialog({
               {
                 onSuccess: (s) => {
                   close(false);
-                  onUploaded(s.name);
+                  onUploaded(s);
                 },
               },
             );
@@ -255,7 +255,7 @@ export function EditSkillDialog({
           className="grid gap-5"
           onSubmit={(e) => {
             e.preventDefault();
-            update.mutate({ name: skill.name, details }, { onSuccess: () => onOpenChange(false) });
+            update.mutate({ id: skill.id, details }, { onSuccess: () => onOpenChange(false) });
           }}
         >
           <DetailsFields
