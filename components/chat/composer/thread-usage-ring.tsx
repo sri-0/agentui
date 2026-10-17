@@ -10,9 +10,11 @@ import {
 } from "@/components/ai-elements/context";
 import { useModels } from "@/lib/api/models";
 import { useChatStore } from "@/lib/chat/store";
+import type { ThreadState } from "@/lib/chat/reduce";
 import { deriveRichUsage } from "@/lib/chat/usage";
 import { useUiStore } from "@/stores/ui-store";
 import { memo, useMemo } from "react";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact" });
 
@@ -20,7 +22,11 @@ const compact = new Intl.NumberFormat("en-US", { notation: "compact" });
  * Token-usage control in the composer — the AI Elements `Context` popover
  * (percent ring trigger + hover breakdown of input/output tokens). It
  * subscribes to the thread itself so the memoized composer around it never
- * sees a changing prop; the shell below bails unless a total changes. The
+ * sees a changing prop, and only to a settled thread: while a run streams the
+ * thread changes every frame, and counting it would re-walk every part and
+ * re-serialise every tool call each time. The backend reports a turn's usage
+ * at RUN_FINISHED, so the ring moves once per turn (and when a run pauses for
+ * input); the shell below bails unless a total changes. The
  * denominator comes from the selected model, so switching model updates the
  * ring. Clicking the trigger opens the full usage side panel.
  */
@@ -35,10 +41,10 @@ export function ThreadUsageRing({
   const selectedModel = useUiStore((s) => s.selectedModel);
   const contextWindow =
     models.find((m) => m.id === selectedModel)?.context_length ?? 128_000;
-  const messages = useChatStore((s) => s.threads[threadId]?.messages);
+  const thread = useStoreWithEqualityFn(useChatStore, (s) => s.threads[threadId], untilSettled);
   const usage = useMemo(
-    () => (messages ? deriveRichUsage(messages, contextWindow) : null),
-    [messages, contextWindow],
+    () => (thread ? deriveRichUsage(thread.messages, contextWindow) : null),
+    [thread, contextWindow],
   );
 
   return (
@@ -52,6 +58,10 @@ export function ThreadUsageRing({
     />
   );
 }
+
+/** Equal while the next state streams: the last settled one stays selected. */
+const untilSettled = (prev: ThreadState | undefined, next: ThreadState | undefined) =>
+  prev === next || next?.status === "streaming";
 
 const UsageContextShell = memo(function UsageContextShell({
   total,
