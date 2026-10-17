@@ -92,7 +92,7 @@ export function SkillsView() {
                 Create <ChevronDownIcon data-icon="inline-end" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-auto">
               <DropdownMenuItem onSelect={() => router.push(`/chat?prompt=${encodeURIComponent(CREATE_PROMPT)}`)}>
                 <SparklesIcon /> Create with agent
               </DropdownMenuItem>
