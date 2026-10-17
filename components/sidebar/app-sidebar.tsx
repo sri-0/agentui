@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDeleteThread, useThreads } from "@/lib/api/threads";
 import type { RunStatus } from "@/lib/api/types";
 import { groupThreads, threadTitle } from "@/lib/group-threads";
+import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import {
   CircleAlertIcon,
@@ -196,11 +197,19 @@ function ThreadRow({
           <span className="truncate">{title}</span>
         </Link>
       </SidebarMenuButton>
-      {/* Single status icon per row, absolutely positioned in the SAME slot as
-          the hover-trash (right-1). Fades out on row hover so the trash cleanly
-          replaces it with zero shift. */}
+      {/* The status and the trash share the slot at the row's end. Hovering the
+          row slides the status out and the trash in, and tabbing to the trash
+          shows it too. (shadcn's showOnHover shows it whenever the row has
+          focus, so after a click, on top of the status.) Below md the sidebar
+          is a sheet with no hover: the trash stays and the status sits beside it. */}
       {runStatus && (
-        <span className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 transition-opacity group-hover/menu-item:opacity-0">
+        <span
+          className={cn(
+            "pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 transition duration-200 ease-out max-md:right-7 motion-reduce:transition-none",
+            "group-hover/menu-item:translate-x-2 group-hover/menu-item:opacity-0",
+            "group-has-[[data-sidebar=menu-action]:focus-visible]/menu-item:opacity-0",
+          )}
+        >
           {runStatus === "awaiting_input" ? (
             <CircleAlertIcon
               aria-label="Awaiting your input"
@@ -212,7 +221,11 @@ function ThreadRow({
         </span>
       )}
       <SidebarMenuAction
-        showOnHover
+        className={cn(
+          "translate-x-2 opacity-0 transition duration-200 ease-out motion-reduce:transition-none",
+          "group-hover/menu-item:translate-x-0 group-hover/menu-item:opacity-100 focus-visible:translate-x-0 focus-visible:opacity-100",
+          "peer-data-active/menu-button:text-sidebar-accent-foreground max-md:translate-x-0 max-md:opacity-100",
+        )}
         onClick={() =>
           del.mutate(id, { onSuccess: () => active && router.push("/chat") })
         }
