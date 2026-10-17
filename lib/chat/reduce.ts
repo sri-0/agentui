@@ -99,6 +99,9 @@ export function reduce(state: ThreadState, event: AgUiEvent): ThreadState {
       }));
 
     case EventType.TOOL_CALL_START:
+      // A replay that overlaps what the thread holds (a resubscribe, a hot
+      // reload in development) must not add the call twice.
+      if (state.messages.at(-1)?.parts.some(isTool(event.toolCallId))) return state;
       return withLast(state, (m) =>
         push(m, {
           type: "tool",

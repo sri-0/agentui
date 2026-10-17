@@ -19,7 +19,7 @@ import { MessageMeta } from "./message-meta";
 import { MessageReasoning } from "./message-reasoning";
 import { ModelChangeDivider } from "./model-change-divider";
 import { SkillLoaded, UserText } from "./skill";
-import { QuestionCard, type Answer } from "./question-card";
+import { QuestionCard } from "./question-card";
 import { ToolLine, type Approve } from "./tool-line";
 import { toolRenderers } from "./tools/registry";
 
@@ -27,12 +27,13 @@ export function MessageList({
   messages,
   status,
   approve,
-  answer,
+  onReopenQuestion,
 }: {
   messages: ChatMessage[];
   status: ThreadStatus;
   approve: Approve;
-  answer: Answer;
+  /** brings back the questions the run waits on, put away unanswered */
+  onReopenQuestion?: () => void;
 }) {
   const last = messages.at(-1);
   const waiting =
@@ -47,7 +48,7 @@ export function MessageList({
           message={message}
           streaming={status === "streaming" && index === messages.length - 1}
           approve={approve}
-          answer={answer}
+          onReopenQuestion={onReopenQuestion}
         />
       ))}
       {waiting && (
@@ -97,13 +98,13 @@ const MessageItem = memo(function MessageItem({
   message,
   streaming,
   approve,
-  answer,
+  onReopenQuestion,
 }: {
   message: ChatMessage;
   /** This is the last message and the thread is streaming. */
   streaming: boolean;
   approve: Approve;
-  answer: Answer;
+  onReopenQuestion?: () => void;
 }) {
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const isUser = message.role === "user";
@@ -143,20 +144,9 @@ const MessageItem = memo(function MessageItem({
           />
         );
       case "tool": {
-        // A paused question: the part carries the questions in its request.
-        if (part.state === "approval" && part.request?.toolName === "question") {
-          return (
-            <QuestionCard
-              key={key}
-              part={{ ...part, toolName: "question", input: part.request.args }}
-              pending
-              onAnswer={answer}
-            />
-          );
-        }
-        // The card mounts once the questions (the call's input) have arrived.
-        if (part.toolName === "question" && part.input != null) {
-          return <QuestionCard key={key} part={part} pending={part.state === "approval"} onAnswer={answer} />;
+        // A question: answered in place of the composer (QuestionPanel).
+        if (part.toolName === "question" || part.request?.toolName === "question") {
+          return <QuestionCard key={key} part={part} onReopen={onReopenQuestion} />;
         }
         // A custom renderer shows a call that runs or succeeded; ToolLine
         // handles approvals, denials and errors.

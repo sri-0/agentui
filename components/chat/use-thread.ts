@@ -6,6 +6,8 @@ import { emptyThread } from "@/lib/chat/reduce";
 import { cancelRun, closeThread, openThread, resumeRun, sendMessage, useChatStore } from "@/lib/chat/store";
 import { useUiStore } from "@/stores/ui-store";
 
+import type { QuestionAnswers } from "./messages/question-card";
+
 /** The backend's plain-model agent, used when "No agent" is picked. */
 const PLAIN_MODEL_AGENT = "chat";
 
@@ -42,11 +44,11 @@ export function useThread(threadId: string) {
     [threadId],
   );
   const answer = useCallback(
-    (toolCallId: string, output: { answers: string[][]; text?: string }) =>
-      void resumeRun(threadId, toolCallId, { output }),
+    (interruptId: string, output: QuestionAnswers) => void resumeRun(threadId, interruptId, { output }),
     [threadId],
   );
-  const stop = useCallback(() => void cancelRun(threadId), [threadId]);
+  // Resolves once the server has stopped the run, so a turn can follow it.
+  const stop = useCallback(() => cancelRun(threadId), [threadId]);
 
   return { ...thread, send, approve, answer, stop };
 }

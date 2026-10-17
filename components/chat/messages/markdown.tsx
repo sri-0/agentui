@@ -4,18 +4,22 @@ import { MessageResponse, type MessageResponseProps } from "@/components/ai-elem
 import { memo } from "react";
 import type { Components } from "streamdown";
 
-import { SourceChip } from "./source-chip";
+import { SourceCitation } from "./source-citation";
 
-const CITATION = /\[source:\s*(\d+)\]/g;
+/** One [source:N] citation, or several side by side. */
+const CITATIONS = /\[source:\s*\d+\](?:\s*\[source:\s*\d+\])*/g;
 
-// A citation becomes a custom element Streamdown lets through and renders as
-// a chip, so it works anywhere inline: lists, tables, headings.
+// Citations become a custom element Streamdown lets through and renders as
+// an inline citation, so they work anywhere inline: lists, tables, headings.
 const allowedTags = { sourceref: ["n"] };
 const components = {
-  sourceref: ({ n }: { n?: string }) => <SourceChip number={Number(n)} />,
+  sourceref: ({ n }: { n?: string }) => <SourceCitation numbers={(n ?? "").split(",").map(Number)} />,
 } as Components;
 
-/** Markdown with [source:N] citations shown as source chips. `streaming`
+const citations = (text: string) =>
+  text.replace(CITATIONS, (run) => `<sourceref n="${run.match(/\d+/g)?.join(",")}"></sourceref>`);
+
+/** Markdown with [source:N] citations shown as AI Elements inline citations. `streaming`
  *  text is repaired as it arrives (an unclosed link or emphasis); finished
  *  text renders as it is. Streamdown applies streaming updates in a
  *  transition, which can leave the last one uncommitted, so a part must stop
@@ -33,7 +37,7 @@ export const Markdown = memo(function Markdown({
       isAnimating={streaming}
       {...props}
     >
-      {children.replace(CITATION, '<sourceref n="$1"></sourceref>')}
+      {citations(children)}
     </MessageResponse>
   );
 });
