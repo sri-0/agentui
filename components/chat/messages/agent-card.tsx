@@ -155,7 +155,11 @@ function ChildRequest({ childThreadId, interrupt }: { childThreadId: string; int
   return (
     <div className="flex flex-col gap-1">
       {question ? (
-        <QuestionPanel part={part} onAnswer={(_, output) => send({ output })} />
+        sent ? (
+          <p className="text-xs text-muted-foreground">Answer sent</p>
+        ) : (
+          <QuestionPanel part={part} onAnswer={(_, output) => send({ output })} />
+        )
       ) : (
         <ToolLine
           part={sent ? { ...part, state: "running" } : part}

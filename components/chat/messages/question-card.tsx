@@ -51,18 +51,30 @@ export function pendingQuestion(messages: ChatMessage[]): ToolPart | undefined {
  * answers none of them, and the agent goes on without. Cancel, when given,
  * puts the panel away unanswered.
  */
-export function QuestionPanel({ part, onAnswer, onCancel }: { part: ToolPart; onAnswer: Answer; onCancel?: () => void }) {
+export function QuestionPanel({
+  part,
+  onAnswer,
+  onCancel,
+  autoFocus,
+}: {
+  part: ToolPart;
+  onAnswer: Answer;
+  onCancel?: () => void;
+  /** focus the question shown, so its number keys work at once: the thread's
+   *  own question does, a sub-agent's on its card does not steal the focus */
+  autoFocus?: boolean;
+}) {
   const questions = questionsOf(part);
   const id = part.approval?.id ?? part.toolCallId;
-  // Focus the question shown, so its number keys work at once: a frame
-  // later, once the questionnaire has chosen it.
+  // A frame later, once the questionnaire has chosen the question to show.
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (!autoFocus) return;
     const frame = requestAnimationFrame(() =>
       ref.current?.querySelector<HTMLElement>("[data-slot=questionnaire-item]:not([hidden])")?.focus(),
     );
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [autoFocus]);
   return (
     <div ref={ref} className="rounded-2xl bg-muted p-4">
       <Questionnaire
@@ -143,14 +155,15 @@ export const QuestionCard = memo(function QuestionCard({ part, onReopen }: { par
       </div>
     );
   }
-  if (part.state !== "done") {
+  if (part.state === "denied" || part.state === "error") {
     return (
       <div className="flex items-center gap-2 px-1.5 py-1 text-xs text-muted-foreground">
         <HelpCircleIcon className="size-3.5" /> Questions not answered
       </div>
     );
   }
-  const output = part.state === "done" ? (part.output as QuestionAnswers | undefined) : undefined;
+  if (part.state !== "done") return null; // between the call and its interrupt, or its answer and the result
+  const output = part.output as QuestionAnswers | undefined;
   return (
     <div className="flex w-full flex-col gap-4 rounded-xl bg-muted p-4">
       <div className="flex items-center gap-2 text-sm font-medium">
@@ -166,7 +179,7 @@ export const QuestionCard = memo(function QuestionCard({ part, onReopen }: { par
               {chosen.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {chosen.map((label) => (
-                    <Badge key={label} className="gap-1 rounded-md bg-background text-xs font-normal text-foreground">
+                    <Badge key={label} variant="outline" className="bg-background font-normal">
                       <CheckIcon className="size-3 text-primary" />
                       {label}
                     </Badge>

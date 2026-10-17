@@ -63,7 +63,7 @@ const hostname = (source: string) => {
   }
 };
 
-export type InlineCitationCardTriggerProps = ComponentProps<typeof Badge> & {
+export type InlineCitationCardTriggerProps = ComponentProps<"button"> & {
   sources: string[];
 };
 
@@ -73,19 +73,18 @@ export const InlineCitationCardTrigger = ({
   ...props
 }: InlineCitationCardTriggerProps) => (
   <HoverCardTrigger asChild>
-    <Badge
-      className={cn("ml-1 rounded-full", className)}
-      variant="secondary"
-      {...props}
-    >
-      {sources[0] ? (
-        <>
-          {hostname(sources[0])}{" "}
-          {sources.length > 1 && `+${sources.length - 1}`}
-        </>
-      ) : (
-        "unknown"
-      )}
+    {/* a button, so click, tap and keyboard reach it too (agentui) */}
+    <Badge asChild className={cn("ml-1 rounded-full", className)} variant="secondary">
+      <button type="button" {...props}>
+        {sources[0] ? (
+          <>
+            {hostname(sources[0])}{" "}
+            {sources.length > 1 && `+${sources.length - 1}`}
+          </>
+        ) : (
+          "unknown"
+        )}
+      </button>
     </Badge>
   </HoverCardTrigger>
 );
