@@ -106,6 +106,9 @@ components/
                               #   opens one full-page: details, npx command, files
   skills/skill-dialogs.tsx    # upload (a shadcn file input + details) and edit details
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
+  sidebar/workspace-groups.tsx # workspaces: a folder of conversations each, new chat in one, rename, delete
+  sidebar/thread-row.tsx      # one conversation row: status dot, delete on hover
+  chat/workspace-bar.tsx      # the card under the composer: the conversation's workspace, or the next one's
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
 
@@ -144,11 +147,15 @@ drops that subscription instead of retrying it on reconnect.
 
 REST (TanStack Query / `apiFetch` in `lib/api/*`) is for creating a thread and
 for reads and admin:
-- `POST /v1/agent/chat` → `201 {threadId, runId, seq}`: a new thread with its first turn
+- `POST /v1/agent/chat` → `201 {threadId, runId, seq}`: a new thread with its first turn,
+  filed under `workspaceId` when the composer's workspace card names one
 - `GET /v1/agents`, `GET /v1/models`, `GET /v1/connectors`, `GET /v1/connectors/{id}`
-- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, created_at, updated_at, run_status?}]}`;
+- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, workspace_id?, created_at, updated_at, run_status?}]}`;
   fetched once, refetched when a run this tab watches starts or ends and on window focus (no polling)
-- `GET /v1/threads/{id}` (its `connectors` set the composer's toggles), `PATCH`, `DELETE`
+- `GET /v1/threads/{id}` (its `connectors` set the composer's toggles; `['thread', id]`), `PATCH`
+  (`{workspace_id}` files it, `""` takes it out), `DELETE`
+- `GET /v1/workspaces` (by name), `POST {name}`, `PATCH /v1/workspaces/{id} {name}`,
+  `DELETE /v1/workspaces/{id}` (its conversations stay, outside any workspace)
 - `GET /v1/threads/{id}/artifacts` (the conversation's artifacts, no bodies) and
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
 - `GET /v1/artifacts?after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
@@ -301,14 +308,18 @@ leaves the part `denied`.
 
 - **Zustand UI store** (`stores/ui-store.ts`): `selectedModel`, `selectedAgentId`,
   `selectedConnectors` (null = all), `sidepanel`, `libraryView` (grid or list on the
-  artifacts and skills pages). Model, agent and view are **persisted to
-  localStorage**; the rest are ephemeral. "New chat" clears the panel and the connectors.
+  artifacts and skills pages), `newChatWorkspaceId` (the workspace the next new
+  conversation is filed under). Model, agent and view are **persisted to
+  localStorage**; the rest are ephemeral. "New chat" clears the panel and the connectors,
+  and files the chat under the workspace it was started from (none from the header).
 - **Zustand chat store** (`lib/chat/store.ts`): `threads[threadId]` for every
   thread opened in this tab (main view and side panel alike) and `connected`.
   Only `useThread` and `ThreadUsageRing` read it.
 - **TanStack Query** (`lib/api/*`) for REST: keys `['agents']`, `['models']`,
   `['connectors']` (cached 5 min), `['skills', filter]` (every filter refetched after an
-  upload, an edit or a delete; the previous result stays while the next loads) and `['threads']` (refetched on run status changes and window focus). A skill's file
+  upload, an edit or a delete; the previous result stays while the next loads) and `['threads']` (refetched on run status changes, window focus and a new conversation);
+  `['workspaces']`, and one thread as stored, `['thread', id]` (the workspace card's; moving a
+  thread sets it and refetches `['threads']`). A skill's file
   is `['skill-file', name, updated_at, path]`. Deleting a thread invalidates `['threads']` and
   `['recent-artifacts']`. Per conversation: `['artifacts', id]`, `['sources', id]`
   (one list; chips `select` their own source), `['sources', id, n]` (one source not
@@ -359,7 +370,8 @@ Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
     The ring self-subscribes to the chat store and re-renders alone for the live
     token count — the composer stays memoized.
 - **`Composer`, `ThreadHeader`, `AgentSelector`, `ModelSelector`,
-  `ReasoningEffortSelector`, `AttachmentButton`, `TaskBar`** are all `memo`'d.
+  `ReasoningEffortSelector`, `AttachmentButton`, `TaskBar`, `WorkspaceBar`** are all `memo`'d
+  (`WorkspaceBar` takes only the thread id and subscribes to the rest itself).
 - **`MessageItem`** is `memo`'d on the message ref: only the message the frame
   touched re-renders. Inside it:
   - `ToolCard`, `QuestionCard`, `AgentCard` → `memo` on the part/data ref (the

@@ -28,6 +28,8 @@ type UiState = {
   artifactRefresh: Record<string, number>;
   /** How the artifacts and skills pages lay out their items. */
   libraryView: "grid" | "list";
+  /** the workspace a new conversation is filed under, or null for none */
+  newChatWorkspaceId: string | null;
 
   setModel: (id: string | null) => void;
   setAgent: (id: string | null) => void;
@@ -35,8 +37,10 @@ type UiState = {
   openSidepanel: (s: NonNullable<SidepanelState>) => void;
   closeSidepanel: () => void;
   refreshArtifact: (id: string) => void;
-  requestNewChat: () => void;
+  /** a fresh new-chat page, filed under the workspace given (none by default) */
+  requestNewChat: (workspaceId?: string | null) => void;
   setLibraryView: (view: "grid" | "list") => void;
+  setNewChatWorkspace: (id: string | null) => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -48,6 +52,7 @@ export const useUiStore = create<UiState>()(
       sidepanel: null,
       artifactRefresh: {},
       libraryView: "grid",
+      newChatWorkspaceId: null,
 
       setModel: (id) => set({ selectedModel: id }),
       setAgent: (id) => set({ selectedAgentId: id }),
@@ -56,8 +61,10 @@ export const useUiStore = create<UiState>()(
       closeSidepanel: () => set({ sidepanel: null }),
       refreshArtifact: (id) =>
         set((s) => ({ artifactRefresh: { ...s.artifactRefresh, [id]: (s.artifactRefresh[id] ?? 0) + 1 } })),
-      requestNewChat: () => set({ sidepanel: null, selectedConnectors: null }),
+      requestNewChat: (workspaceId = null) =>
+        set({ sidepanel: null, selectedConnectors: null, newChatWorkspaceId: workspaceId }),
       setLibraryView: (view) => set({ libraryView: view }),
+      setNewChatWorkspace: (id) => set({ newChatWorkspaceId: id }),
     }),
     {
       name: "agentui-ui",

@@ -33,6 +33,7 @@ import { MessageList } from "./messages/message-list";
 import { pendingQuestion, QuestionPanel } from "./messages/question-card";
 import { TaskBar } from "./task-bar";
 import { useThread } from "./use-thread";
+import { WorkspaceBar } from "./workspace-bar";
 
 export function ThreadView({ threadId }: { threadId: string }) {
   return (
@@ -50,9 +51,12 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   // This view is keyed by thread: leaving it closes its side panel, and
   // opening it shows the connectors the thread remembers.
   useEffect(() => closeSidepanel, [closeSidepanel]);
+  const queryClient = useQueryClient();
   useEffect(() => {
-    fetchThread(threadId).then((t) => setConnectors(t.connectors ?? null), () => {});
-  }, [threadId, setConnectors]);
+    queryClient
+      .fetchQuery({ queryKey: ["thread", threadId], queryFn: () => fetchThread(threadId) })
+      .then((t) => setConnectors(t.connectors ?? null), () => {});
+  }, [threadId, setConnectors, queryClient]);
   const connected = useChatStore((s) => s.connected);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
@@ -106,7 +110,6 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   const citedCount = sources.filter((s) => s.cited_in?.length).length;
 
   // A run that ends may have published artifacts and cited sources.
-  const queryClient = useQueryClient();
   const streaming = status === "streaming";
   const wasStreaming = useRef(streaming);
   useEffect(() => {
@@ -182,13 +185,16 @@ export function ThreadChat({ threadId }: { threadId: string }) {
               {asking ? (
                 <QuestionPanel key={questionId} part={asking} onAnswer={answer} onCancel={() => setPutAway(questionId)} autoFocus />
               ) : (
-                <Composer
-                  onSubmit={onSubmit}
-                  status={composerStatus}
-                  onStop={stop}
-                  contextSlot={contextSlot}
-                  placeholder={status === "awaiting_input" ? "Send a message to cancel the open request…" : undefined}
-                />
+                <>
+                  <Composer
+                    onSubmit={onSubmit}
+                    status={composerStatus}
+                    onStop={stop}
+                    contextSlot={contextSlot}
+                    placeholder={status === "awaiting_input" ? "Send a message to cancel the open request…" : undefined}
+                  />
+                  <WorkspaceBar threadId={threadId} />
+                </>
               )}
               <p className="mt-2 text-center text-xs text-muted-foreground">
                 AI can make mistakes. Always validate responses.
