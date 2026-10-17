@@ -107,7 +107,7 @@ export function QuestionPanel({ part, onAnswer, onCancel }: { part: ToolPart; on
                   {o.description && <QuestionnaireChoiceDescription>{o.description}</QuestionnaireChoiceDescription>}
                 </QuestionnaireChoice>
               ))}
-              <QuestionnaireInput placeholder="Something else…" aria-label="Another answer" />
+              <QuestionnaireInput placeholder="Something else…" aria-label="Another answer" className="h-14 px-3" />
             </QuestionnaireChoices>
           </QuestionnaireItem>
         ))}
