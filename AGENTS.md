@@ -287,9 +287,9 @@ anything under `components/chat/`, conform to this and re-measure with React Sca
 
 ### The one rule
 
-> During streaming, the ONLY things that should do real render work are the
-> **streaming output itself** (the changed text/reasoning part) and the **live
-> usage ring**. The header, composer, selectors, task bar, and *settled* message
+> During streaming, the ONLY thing that should do real render work is the
+> **streaming output itself** (the changed text/reasoning part). The usage ring
+> reads the thread once a run has settled, not per frame. The header, composer, selectors, task bar, and *settled* message
 > cards (reasoning, tool, question, sub-agent) must NOT re-render per frame.
 
 ### Why it's hard (the mechanism)
@@ -316,8 +316,9 @@ Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
     `stop` is already stable from the hook.
   - **Live usage is decoupled**: `Composer` takes a `contextSlot` ReactNode, not a
     `usage` prop. `ThreadChat` passes a `useMemo`'d `<ThreadUsageRing threadId …/>`.
-    The ring self-subscribes to the chat store and re-renders alone for the live
-    token count — the composer stays memoized.
+    The ring self-subscribes to the chat store with an equality that ignores a
+    streaming thread, so it recomputes once per turn (when the status leaves
+    `streaming`) and re-renders alone — the composer stays memoized.
 - **`Composer`, `ThreadHeader`, `AgentSelector`, `ModelSelector`,
   `ReasoningEffortSelector`, `AttachmentButton`, `TaskBar`** are all `memo`'d.
 - **`MessageItem`** is `memo`'d on the message ref: only the message the frame
