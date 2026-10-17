@@ -15,7 +15,7 @@ import { CopyButton } from "@/components/library/copy-button";
 import { LibraryPage } from "@/components/library/library";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { API_URL } from "@/lib/api/client";
 import {
   type Skill,
@@ -152,7 +152,7 @@ function fileTree(paths: string[], dir = ""): ReactNode[] {
   ];
 }
 
-/** One of a skill's files under its path, to preview or edit: Markdown
+/** One of a skill's files under its path, in Preview and Edit tabs: Markdown
  *  rendered (SKILL.md's frontmatter as YAML), code highlighted, or the file as
  *  written in an editor, saved from the header. Preview shows unsaved edits.
  *  A file that is not text is a link. */
@@ -171,78 +171,81 @@ function SkillFile({ skill, path }: { skill: Skill; path: string }) {
   };
 
   return (
-    <CodeBlockContainer language={language(path) ?? "text"} className="self-start">
-      <CodeBlockHeader>
-        <CodeBlockFilename>{path}</CodeBlockFilename>
-        {editable && (
-          <CodeBlockActions className="gap-1">
-            <ToggleGroup type="single" size="sm" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)}>
-              <ToggleGroupItem value="preview">Preview</ToggleGroupItem>
-              <ToggleGroupItem value="edit">
-                <PencilIcon /> Edit
-              </ToggleGroupItem>
-            </ToggleGroup>
-            {mode === "edit" || isDirty ? (
-              <>
-                <Button type="button" variant="ghost" size="sm" onClick={cancel}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  form={formId}
-                  size="sm"
-                  className="ai-gradient-strong text-white hover:opacity-90"
-                  disabled={!isDirty || write.isPending}
-                >
-                  {write.isPending ? "Saving…" : "Save"}
-                </Button>
-              </>
-            ) : (
-              <CopyButton text={text} />
+    <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)} className="gap-0 self-start">
+      <CodeBlockContainer language={language(path) ?? "text"}>
+        <CodeBlockHeader>
+          <CodeBlockFilename>{path}</CodeBlockFilename>
+          {editable && (
+            <CodeBlockActions className="gap-1">
+              <TabsList aria-label="View">
+                <TabsTrigger value="preview">Preview</TabsTrigger>
+                <TabsTrigger value="edit">
+                  <PencilIcon /> Edit
+                </TabsTrigger>
+              </TabsList>
+              {mode === "edit" || isDirty ? (
+                <>
+                  <Button type="button" variant="ghost" size="sm" onClick={cancel}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    form={formId}
+                    size="sm"
+                    className="ai-gradient-strong text-white hover:opacity-90"
+                    disabled={!isDirty || write.isPending}
+                  >
+                    {write.isPending ? "Saving…" : "Save"}
+                  </Button>
+                </>
+              ) : (
+                <CopyButton text={text} />
+              )}
+            </CodeBlockActions>
+          )}
+        </CodeBlockHeader>
+        {error ? (
+          <p className="p-6 text-sm text-destructive">{error.message}</p>
+        ) : isPending ? (
+          <p className="p-6 text-sm text-muted-foreground">Loading…</p>
+        ) : !editable ? (
+          <a
+            className="block p-6 text-sm underline"
+            href={API_URL + skillFilePath(skill.id, path)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open {path}
+          </a>
+        ) : (
+          <form
+            id={formId}
+            className="flex flex-col gap-3 p-6"
+            onSubmit={form.handleSubmit(({ content }) =>
+              write.mutate({ skill, path, content }, { onSuccess: () => setMode("preview") }),
             )}
-          </CodeBlockActions>
+          >
+            {write.error && (
+              <p role="alert" className="text-sm text-destructive">
+                {write.error.message}
+              </p>
+            )}
+            <TabsContent value="edit">
+              <Textarea
+                {...form.register("content")}
+                aria-label={`Edit ${path}`}
+                spellCheck={false}
+                autoFocus
+                className="min-h-80 font-mono text-xs md:text-xs"
+              />
+            </TabsContent>
+            <TabsContent value="preview">
+              <FilePreview path={path} text={content} />
+            </TabsContent>
+          </form>
         )}
-      </CodeBlockHeader>
-      {error ? (
-        <p className="p-6 text-sm text-destructive">{error.message}</p>
-      ) : isPending ? (
-        <p className="p-6 text-sm text-muted-foreground">Loading…</p>
-      ) : !editable ? (
-        <a
-          className="block p-6 text-sm underline"
-          href={API_URL + skillFilePath(skill.id, path)}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Open {path}
-        </a>
-      ) : (
-        <form
-          id={formId}
-          className="flex flex-col gap-3 p-6"
-          onSubmit={form.handleSubmit(({ content }) =>
-            write.mutate({ skill, path, content }, { onSuccess: () => setMode("preview") }),
-          )}
-        >
-          {write.error && (
-            <p role="alert" className="text-sm text-destructive">
-              {write.error.message}
-            </p>
-          )}
-          {mode === "edit" ? (
-            <Textarea
-              {...form.register("content")}
-              aria-label={`Edit ${path}`}
-              spellCheck={false}
-              autoFocus
-              className="min-h-80 font-mono text-xs md:text-xs"
-            />
-          ) : (
-            <FilePreview path={path} text={content} />
-          )}
-        </form>
-      )}
-    </CodeBlockContainer>
+      </CodeBlockContainer>
+    </Tabs>
   );
 }
 
