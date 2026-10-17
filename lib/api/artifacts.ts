@@ -20,12 +20,12 @@ export function useThreadArtifacts(threadId: string) {
 }
 
 /** An artifact's body: from the event in threads from before artifacts were
- *  stored, else fetched once per version. A url artifact has none. Reload it
- *  by invalidating ["artifact-body", threadId, id]. */
-export function useArtifactBody(threadId: string, artifact: Artifact) {
+ *  stored, else fetched once per version (once `enabled`). A url artifact has
+ *  none. Reload it by invalidating ["artifact-body", threadId, id]. */
+export function useArtifactBody(threadId: string, artifact: Artifact, enabled = true) {
   const query = useQuery({
     queryKey: ["artifact-body", threadId, artifact.id, artifact.version ?? 0],
-    enabled: artifact.kind !== "url" && artifact.content == null,
+    enabled: enabled && artifact.kind !== "url" && artifact.content == null,
     staleTime: Infinity,
     queryFn: () => apiText(`${threadPath(threadId)}/artifacts/${encodeURIComponent(artifact.id)}/content`),
   });

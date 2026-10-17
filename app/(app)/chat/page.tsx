@@ -1,5 +1,11 @@
 import { LandingView } from "@/components/chat/landing-view";
+import { Suspense } from "react";
 
 export default function ChatLandingPage() {
-  return <LandingView />;
+  // The view reads a draft prompt from the URL.
+  return (
+    <Suspense>
+      <LandingView />
+    </Suspense>
+  );
 }

@@ -57,8 +57,8 @@ app/
     layout.tsx            # app shell: SidebarProvider + AppSidebar + SidebarInset
     chat/page.tsx         # <LandingView> — centered composer for a new chat
     chat/[threadId]/page.tsx   # <ThreadView> — awaits params (Next 16), renders the chat
-    artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts (GET /v1/artifacts)
-    skills/page.tsx       # <SkillsView> — the skills library (GET/POST/DELETE /v1/skills)
+    artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts as cards (GET /v1/artifacts)
+    skills/page.tsx       # <SkillsView> — the skills library: categories, sources, cards (/v1/skills)
 ```
 
 - Root + `(app)` layouts are **Server Components**; every interactive surface is
@@ -86,8 +86,17 @@ components/
   right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
                               #   sources-view, usage-view, model-view, agent-details-view,
                               #   connector-details-view
-  artifacts/artifacts-view.tsx  # the all-artifacts page: paged list + the open one beside it
-  skills/skills-view.tsx      # the skills page: filtered list, upload, the open skill's files
+  library/                    # the Spaces-style frame both pages share: LibraryPage (top bar,
+                              #   optional nav column), LibraryToolbar (title, search, actions,
+                              #   grid/list toggle), LibraryItems/LibraryItem (card or row),
+                              #   NavSection/NavItem; creatable-combobox (pick or create a value)
+  artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
+                              #   once the card is in view), kind tabs, search; ?open=root/id
+                              #   opens one full-page
+  skills/skills-view.tsx      # categories and sources (with counts) on the left, search, Create
+                              #   (with an agent: /chat?prompt=…; or upload), cards; ?skill=name
+                              #   opens one full-page: details, npx command, files
+  skills/skill-dialogs.tsx    # upload (Dice UI file-upload drop area + details) and edit details
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
@@ -136,10 +145,13 @@ for reads and admin:
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
 - `GET /v1/artifacts?after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
   every conversation's artifacts for `/artifacts`, newest first; `next` is the cursor for `after`
-- `GET /v1/skills` → `{data: [{name, description, files: [{path}], updated_at}]}`: the skills
-  library, for `/skills`, the composer's `/` menu and the `/name` chip;
-  `POST /v1/skills` with a zip of a skill or its SKILL.md as the body (no multipart),
-  `DELETE /v1/skills/{name}`, and `GET /v1/skills/{name}/files/{path}` (one file, as written)
+- `GET /v1/skills?q=&category=&source=` → `{data: [{name, title?, description, category?,
+  source?, files: [{path}], created_at, updated_at}], categories, sources}` (`[{value, count}]`):
+  the skills library, for `/skills`, the composer's `/` menu and the `/name` chip;
+  `POST /v1/skills` as a multipart form (`file`: a skill's zip or its SKILL.md; optional
+  `title`, `description`, `category`, `source`), `PATCH /v1/skills/{name}` (JSON details;
+  a new description rewrites the SKILL.md), `DELETE /v1/skills/{name}`, and
+  `GET /v1/skills/{name}/files/{path}` (one file, as written)
 - `GET /v1/threads/{id}/sources` and `GET /v1/threads/{id}/sources/{n}` (what `[source:n]`
   refers to; each chip reads its source from the list, and one not listed yet is fetched
   when its citation is opened); the list is refetched when a run ends
@@ -268,14 +280,15 @@ leaves the part `denied`.
 ## 7. State management
 
 - **Zustand UI store** (`stores/ui-store.ts`): `selectedModel`, `selectedAgentId`,
-  `selectedConnectors` (null = all), `sidepanel`. Model and agent are **persisted to
+  `selectedConnectors` (null = all), `sidepanel`, `libraryView` (grid or list on the
+  artifacts and skills pages). Model, agent and view are **persisted to
   localStorage**; the rest are ephemeral. "New chat" clears the panel and the connectors.
 - **Zustand chat store** (`lib/chat/store.ts`): `threads[threadId]` for every
   thread opened in this tab (main view and side panel alike) and `connected`.
   Only `useThread` and `ThreadUsageRing` read it.
 - **TanStack Query** (`lib/api/*`) for REST: keys `['agents']`, `['models']`,
-  `['connectors']` (cached 5 min), `['skills']` (refetched after an upload or a delete)
-  and `['threads']` (refetched on run status changes and window focus). A skill's file
+  `['connectors']` (cached 5 min), `['skills', filter]` (every filter refetched after an
+  upload, an edit or a delete; the previous result stays while the next loads) and `['threads']` (refetched on run status changes and window focus). A skill's file
   is `['skill-file', name, updated_at, path]`. Deleting a thread invalidates `['threads']` and
   `['recent-artifacts']`. Per conversation: `['artifacts', id]`, `['sources', id]`
   (one list; chips `select` their own source), `['sources', id, n]` (one source not

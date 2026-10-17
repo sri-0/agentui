@@ -13,7 +13,7 @@ import { type KeyboardEvent, useState } from "react";
  */
 export function useSkillMenu() {
   const { textInput } = usePromptInputController();
-  const { data: skills = [] } = useSkills();
+  const skills = useSkills().data?.data ?? [];
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState<string>();
 

@@ -21,7 +21,7 @@ export const SkillLoaded = memo(function SkillLoaded({ data }: { data: SkillUse 
 
 /** What the user typed; a leading /name that is a skill shows as a chip. */
 export function UserText({ text }: { text: string }) {
-  const { data: skills = [] } = useSkills();
+  const skills = useSkills().data?.data ?? [];
   const m = /^\/([a-z0-9-]+)(?:\s+|$)/.exec(text);
   if (!m || !skills.some((s) => s.name === m[1])) return <Markdown>{text}</Markdown>;
   const rest = text.slice(m[0].length);

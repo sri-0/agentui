@@ -29,18 +29,21 @@ type ComposerProps = {
   // doesn't take a per-token `usage` prop (which would defeat this memo).
   contextSlot?: ReactNode;
   autoFocus?: boolean;
+  placeholder?: string;
+  /** text the composer starts with, e.g. from a link */
+  initialText?: string;
 };
 
 // The provider holds the text, so the skill menu can follow what is typed.
 export const Composer = memo(function Composer(props: ComposerProps) {
   return (
-    <PromptInputProvider>
+    <PromptInputProvider initialInput={props.initialText}>
       <ComposerInput {...props} />
     </PromptInputProvider>
   );
 });
 
-function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus }: ComposerProps) {
+function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder }: ComposerProps) {
   const idle = status === "ready";
   const { onKeyDown, ...menu } = useSkillMenu();
 
@@ -63,7 +66,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus }: Com
             autoFocus={autoFocus}
             onKeyDown={onKeyDown}
             className="max-h-56 min-h-[60px] resize-none border-0 bg-transparent px-6 pt-5 text-[15px] leading-relaxed shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
-            placeholder="Ask anything, or pick an agent…"
+            placeholder={placeholder ?? "Ask anything, or pick an agent…"}
           />
         </PromptInputBody>
         <PromptInputFooter className="flex-wrap gap-3 px-3 pb-3 pt-1">
