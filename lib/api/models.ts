@@ -20,6 +20,15 @@ export function useModels() {
   });
 }
 
+/** The image models, for the Images page. */
+export function useImageModels() {
+  return useQuery({
+    queryKey: ["models", "image"],
+    staleTime: 5 * 60_000,
+    queryFn: async () => (await apiFetch<ListResponse<Model>>("/v1/models")).data.filter((m) => m.type === "image"),
+  });
+}
+
 /** The currently-selected model object (or undefined while loading / unset). */
 export function useSelectedModel(): Model | undefined {
   const { data: models = [] } = useModels();

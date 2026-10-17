@@ -62,6 +62,7 @@ app/
     chat/page.tsx         # <LandingView> — centered composer for a new chat
     chat/[threadId]/page.tsx   # <ThreadView> — awaits params (Next 16), renders the chat
     artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts as cards (GET /v1/artifacts)
+    images/page.tsx, images/[threadId]/page.tsx  # <ImagesView> — the Images page (POST /v1/images)
     skills/page.tsx       # <SkillsView> — the skills library: categories, sources, cards (/v1/skills)
 ```
 
@@ -89,7 +90,8 @@ components/
                               #   AI Elements inline citation), compaction-divider,
                               #   message-reasoning, message-actions, message-meta,
                               #   skill (SkillLoaded, UserText: the /name chip)
-      tools/                  # tool renderers: registry.ts (name → component), slides-call
+      tools/                  # tool renderers: registry.ts (name → component), slides-call,
+                              #   image-call (generate_image: a placeholder, then the image)
   right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
                               #   sources-view, usage-view, model-view, agent-details-view,
                               #   connector-details-view
@@ -100,7 +102,10 @@ components/
   common/copy-button.tsx      # a copy-to-clipboard icon button for any page
   artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
                               #   once the card is in view), kind tabs, search; ?open=root/id
-                              #   opens one full-page
+                              #   opens one full-page; an image card shows the image
+  images/images-view.tsx      # the Images page: a prompt and an image model in, an image out, kept as an
+                              #   artifact of the page's conversation; Edit makes the next prompt change
+                              #   an image (its next version)
   skills/skills-view.tsx      # categories and sources (with counts) on the left, search, Create
                               #   (with an agent: /chat?prompt=…; or upload), cards; ?skill=name
                               #   opens one full-page: details, npx command, files
@@ -151,6 +156,10 @@ for reads and admin:
 - `GET /v1/threads/{id}` (its `connectors` set the composer's toggles), `PATCH`, `DELETE`
 - `GET /v1/threads/{id}/artifacts` (the conversation's artifacts, no bodies) and
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
+- `POST /v1/images {prompt, model?, threadId?, edit?}` → `{threadId, artifact}`: the Images page; its
+  conversations have `agent_id: "images"`, and `/chat/<id>` of one goes to `/images/<id>`.
+  Image models come from `useImageModels` (`['models', 'image']`); the page's model is
+  `selectedImageModel` (persisted; null is the server's default)
 - `GET /v1/artifacts?after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
   every conversation's artifacts for `/artifacts`, newest first; `next` is the cursor for `after`
 - `GET /v1/skills?q=&category=&source=` → `{data: [{name, title?, description, category?,
@@ -188,8 +197,9 @@ Data part payloads: `data-agent` is the backend's agent activity
 (`subagentRunId, childThreadId, name, description?, status: running | waiting | done | error, startedAt, durationMs?, error?, progress?, log?, text?, interrupts?`; `interrupts` are the child's pending AG-UI interrupts while `waiting`).
 When a run ends, cards still `running` or `waiting` are settled as `error`.
 `data-task-list` is `{tasks:[{id, title, status}]}`, `data-artifact` is `{id, title, kind, version, language?, url?}`
-with kind `markdown | code | json | csv | url` (no body: `ArtifactView` fetches it; kind `url` embeds the
-page; old threads carry `content`). `data-compaction` is `{status: running | completed | failed | declined,
+with kind `markdown | code | json | csv | url | image` (no body: `ArtifactView` fetches it; kind `url` embeds the
+page; kind `image` is shown from its content URL, `artifactUrl`, and in the chat by its `generate_image` call
+rather than the button; old threads carry `content`). `data-compaction` is `{status: running | completed | failed | declined,
 summary?, inputTokens?, outputTokens?, durationMs?, error?}`, one per compaction of the model's context.
 `data-model` is `{from, to}`: the turn ran on another model than the thread's previous turn.
 `data-skill` is `{name, description}`: the skill a message starting with `/name` loaded; the

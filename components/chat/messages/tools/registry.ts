@@ -1,6 +1,7 @@
 import type { ToolPart } from "@/lib/chat/types";
 import type { ComponentType } from "react";
 
+import { ImageCall } from "./image-call";
 import { SlidesCall } from "./slides-call";
 
 /** UI renderers for tool calls, by the name the backend puts on the call
@@ -9,4 +10,5 @@ import { SlidesCall } from "./slides-call";
  *  renders as the plain ToolLine. */
 export const toolRenderers: Record<string, ComponentType<{ part: ToolPart }>> = {
   slides: SlidesCall,
+  generate_image: ImageCall,
 };

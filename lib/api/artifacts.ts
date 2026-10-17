@@ -4,10 +4,15 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import type { Artifact } from "@/lib/chat/types";
 
-import { apiFetch, apiText } from "./client";
+import { API_URL, apiFetch, apiText } from "./client";
 import type { ListResponse } from "./types";
 
 const threadPath = (threadId: string) => `/v1/threads/${encodeURIComponent(threadId)}`;
+
+/** Where an artifact's body is served, for an <img> (each version its own URL). */
+export function artifactUrl(threadId: string, artifact: Pick<Artifact, "id" | "version">) {
+  return `${API_URL}${threadPath(threadId)}/artifacts/${encodeURIComponent(artifact.id)}/content?v=${artifact.version ?? 0}`;
+}
 
 /** The artifacts of a thread's conversation (none for ""), newest first,
  *  without bodies. Refetched when a run ends (ThreadChat) and when an artifact
@@ -22,11 +27,12 @@ export function useThreadArtifacts(threadId: string) {
 
 /** An artifact's body: from the event in threads from before artifacts were
  *  stored, else fetched once per version (once `enabled`). A url artifact has
- *  none. Reload it by invalidating ["artifact-body", threadId, id]. */
+ *  none, and an image is shown from its URL. Reload it by invalidating
+ *  ["artifact-body", threadId, id]. */
 export function useArtifactBody(threadId: string, artifact: Artifact, enabled = true) {
   const query = useQuery({
     queryKey: ["artifact-body", threadId, artifact.id, artifact.version ?? 0],
-    enabled: enabled && artifact.kind !== "url" && artifact.content == null,
+    enabled: enabled && artifact.kind !== "url" && artifact.kind !== "image" && artifact.content == null,
     staleTime: Infinity,
     queryFn: () => apiText(`${threadPath(threadId)}/artifacts/${encodeURIComponent(artifact.id)}/content`),
   });

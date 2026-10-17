@@ -162,6 +162,8 @@ const MessageItem = memo(function MessageItem({
       case "data-skill":
         return <SkillLoaded key={key} data={part.data} />;
       case "data-artifact":
+        // An image shows in its generate_image call.
+        if (part.data.kind === "image") return null;
         return (
           <Button
             key={key}

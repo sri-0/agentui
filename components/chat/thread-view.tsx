@@ -23,6 +23,7 @@ import { useChatStore } from "@/lib/chat/store";
 import { ThreadIdContext } from "@/lib/chat/thread-context";
 import { useUiStore } from "@/stores/ui-store";
 import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { BookOpenIcon, FileTextIcon, LoaderIcon } from "lucide-react";
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -50,9 +51,14 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   // This view is keyed by thread: leaving it closes its side panel, and
   // opening it shows the connectors the thread remembers.
   useEffect(() => closeSidepanel, [closeSidepanel]);
+  // An Images page conversation opens there (the sidebar links every thread here).
+  const router = useRouter();
   useEffect(() => {
-    fetchThread(threadId).then((t) => setConnectors(t.connectors ?? null), () => {});
-  }, [threadId, setConnectors]);
+    fetchThread(threadId).then((t) => {
+      if (t.agent_id === "images") router.replace(`/images/${threadId}`);
+      else setConnectors(t.connectors ?? null);
+    }, () => {});
+  }, [threadId, setConnectors, router]);
   const connected = useChatStore((s) => s.connected);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
