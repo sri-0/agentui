@@ -53,6 +53,16 @@ export const InlineCitationCard = (props: InlineCitationCardProps) => (
   <HoverCard closeDelay={0} openDelay={0} {...props} />
 );
 
+/** A source's host, or the source as it is when it is no URL (agentlite:
+ *  records cite the system they came from). */
+const hostname = (source: string) => {
+  try {
+    return new URL(source).hostname;
+  } catch {
+    return source;
+  }
+};
+
 export type InlineCitationCardTriggerProps = ComponentProps<typeof Badge> & {
   sources: string[];
 };
@@ -70,7 +80,7 @@ export const InlineCitationCardTrigger = ({
     >
       {sources[0] ? (
         <>
-          {new URL(sources[0]).hostname}{" "}
+          {hostname(sources[0])}{" "}
           {sources.length > 1 && `+${sources.length - 1}`}
         </>
       ) : (

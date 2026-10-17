@@ -78,8 +78,10 @@ components/
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, skill-menu (the / menu)
-    messages/                 # message-list (+ pipeline stage cards), tool-line, question-card,
-                              #   agent-card, markdown (+ source-chip), compaction-divider,
+    messages/                 # message-list (+ pipeline stage cards), tool-line, question-card
+                              #   (QuestionPanel: shadcn questionnaire; QuestionCard: the line or
+                              #   recap in the thread), agent-card, markdown (+ source-citation:
+                              #   AI Elements inline citation), compaction-divider,
                               #   message-reasoning, message-actions, message-meta,
                               #   skill (SkillLoaded, UserText: the /name chip)
       tools/                  # tool renderers: registry.ts (name → component), slides-call
@@ -153,8 +155,8 @@ for reads and admin:
   a new description rewrites the SKILL.md), `DELETE /v1/skills/{name}`, and
   `GET /v1/skills/{name}/files/{path}` (one file, as written)
 - `GET /v1/threads/{id}/sources` and `GET /v1/threads/{id}/sources/{n}` (what `[source:n]`
-  refers to; each chip reads its source from the list, and one not listed yet is fetched
-  when its citation is opened); the list is refetched when a run ends
+  refers to; each citation reads its sources from the list, and one not listed yet is
+  fetched when its card opens); the list is refetched when a run ends
 - `GET /v1/threads/{id}/messages` → `{data: [{id, thread_id, role, seq, created_at, text, events}], cursor}`;
   `events` are the AG-UI events of that turn, `cursor` is the log id to subscribe from (`""` when idle)
 
@@ -166,7 +168,9 @@ There is no identity header yet and no temporary mode: every thread is persisted
 
 `reduce(thread, event)` is a pure function over `@ag-ui/core` events producing
 `ThreadState = {messages, status, error?, loaded}`. Messages are our own part
-shapes (`lib/chat/types.ts`); nothing depends on the AI SDK. Part types: `text`,
+shapes (`lib/chat/types.ts`); nothing depends on the AI SDK. A `TOOL_CALL_START` for a
+call the last message already holds is ignored, so a replay that overlaps the thread (a
+resubscribe, a hot reload) cannot show the call twice. Part types: `text`,
 `reasoning`, `tool` (state `running | done | error | approval | denied`), `step-start`,
 and `data-agent | data-task-list | data-artifact | data-compaction | data-model | data-skill`. An interrupt is stamped onto the
 tool part it holds (`state: "approval"`, `approval.id` = the interrupt id), for an
@@ -210,12 +214,14 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
        ├─ ThreadHeader (memo)
        ├─ MessageList  ← the intended re-render
        │     └─ MessageItem (memo on the message ref — the reducer shares untouched messages)
-       │           ├─ text          → Markdown (streamdown; [source:N] → SourceChip: the source's
-       │           │                  connector icon and name, and a popover). `streaming` while the
-       │           │                  part is open, static once done (see §8)
+       │           ├─ text          → Markdown (streamdown; a run of [source:N] → SourceCitation, the
+       │           │                  AI Elements inline citation: a badge with the first source's
+       │           │                  host or system and "+N", a hover card to page through them).
+       │           │                  `streaming` while the part is open, static once done (see §8)
        │           ├─ reasoning     → MessageReasoning
        │           ├─ tool          → the renderer `toolRenderers[part.ui]` names (SlidesCall), else
-       │           │                  ToolLine (one line; approvals open it) / QuestionCard (`question`)
+       │           │                  ToolLine (one line; approvals open it) / QuestionCard (`question`:
+       │           │                  "N questions are waiting" with Answer while open, then a recap)
        │           ├─ data-agent    → AgentCard → side panel opens the child thread
        │           ├─ data-artifact → inline button → the artifact in the right panel
        │           ├─ data-compaction → CompactionDivider: a rule where the context was compacted
@@ -226,7 +232,8 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
        │           └─ step-start    → consecutive steps by one agent form a stage; in a pipeline every
        │                              stage but the last collapses into a StageCard
        ├─ TaskBar (memo)  ← latest data-task-list
-       └─ Composer (memo) + ThreadUsageRing (self-subscribes to the thread)
+       └─ Composer (memo) + ThreadUsageRing (self-subscribes to the thread), or QuestionPanel
+          while a question waits and has not been put away
   └─ RightPanel (agent = AgentView(useThread(childThreadId)) / artifacts / artifact / sources /
                  usage / model / agent-details / connector)
 ```
@@ -254,7 +261,9 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
 ## 6. Human-in-the-loop (approvals and questions)
 
 Both pause the run with `RUN_FINISHED{outcome:{type:"interrupt", interrupts}}`
-(thread status `awaiting_input`; the composer shows Stop). The reducer stamps
+(thread status `awaiting_input`). A message sent while the run waits cancels it first
+(`stop` resolves once the server has), so the thread never refuses it as busy; the
+composer says so in its placeholder. The reducer stamps
 each interrupt onto its tool part (`state: "approval"`, `approval.id` = the
 interrupt id). The answer is an `answer` frame on that thread;
 the continuation starts with `RUN_STARTED` for the same `turnId`, so it folds
@@ -265,10 +274,15 @@ leaves the part `denied`.
   Approve / Deny, and calls `approve(interruptId, approved, justification)`. The
   backend echoes the decision as `CUSTOM approval`.
 - **Question** (the `question` tool): the part carries `request: {toolName:
-  "question", args}`; `QuestionCard` renders `request.args.questions` and calls
-  `answer(interruptId, {answers, text})`.
+  "question", args}`. `QuestionPanel` takes the composer's place: shadcn's
+  `questionnaire` (one question at a time, "Question 1 of 2", number keys pick an
+  option, a "Something else" box, Previous / Skip / Next / Submit) and calls
+  `answer(interruptId, {answers, skipped?})`: one list per question, empty for one
+  skipped, `skipped` when all were. Skip all answers that at once; the ✕ puts the
+  panel away unanswered, and the thread's "questions are waiting" line has Answer to
+  bring it back.
 - **A sub-agent's request** shows on its `AgentCard` in the parent thread (status
-  "Needs you", the card's `interrupts`), with the same `ToolLine` or `QuestionCard`
+  "Needs you", the card's `interrupts`), with the same `ToolLine` or `QuestionPanel`
   controls, built by `interruptPart` in the reducer. The answer (`answerSubagent`)
   is an `answer` frame on the child's thread; the controls stay disabled while it
   is in flight and a refusal shows under them. The child resumes and the card
