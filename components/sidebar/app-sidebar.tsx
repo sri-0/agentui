@@ -24,6 +24,7 @@ import { useUiStore } from "@/stores/ui-store";
 import {
   BookOpenIcon,
   CircleAlertIcon,
+  ImageIcon,
   LayersIcon,
   MoonIcon,
   PenSquareIcon,
@@ -95,6 +96,14 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Images" isActive={pathname.startsWith("/images")} className="h-9 gap-2.5">
+                  <Link href="/images">
+                    <ImageIcon />
+                    <span>Images</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Skills" isActive={pathname.startsWith("/skills")} className="h-9 gap-2.5">
                   <Link href="/skills">
                     <BookOpenIcon />
@@ -148,6 +157,7 @@ export function AppSidebar() {
                     <ThreadRow
                       key={t.id}
                       id={t.id}
+                      href={t.agent_id === "images" ? `/images/${t.id}` : `/chat/${t.id}`}
                       title={threadTitle(t)}
                       active={t.id === activeId}
                       runStatus={t.run_status}
@@ -186,11 +196,14 @@ function StatusDot() {
 
 function ThreadRow({
   id,
+  href,
   title,
   active,
   runStatus,
 }: {
   id: string;
+  /** the chat, or the Images page for one of its conversations */
+  href: string;
   title: string;
   active: boolean;
   /** present while a run owns the thread */
@@ -202,7 +215,7 @@ function ThreadRow({
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={active} className="h-9">
-        <Link href={`/chat/${id}`}>
+        <Link href={href}>
           <span className="truncate">{title}</span>
         </Link>
       </SidebarMenuButton>

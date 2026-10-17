@@ -8,16 +8,21 @@ import { useUiStore } from "@/stores/ui-store";
 import { apiFetch } from "./client";
 import type { ListResponse, Model } from "./types";
 
+/** Every model the server lists, of every type; one request for all of them. */
+const allModels = {
+  queryKey: ["models"],
+  staleTime: 5 * 60_000,
+  queryFn: async () => (await apiFetch<ListResponse<Model>>("/v1/models")).data ?? [],
+};
+
 export function useModels() {
-  return useQuery({
-    queryKey: ["models"],
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const res = await apiFetch<ListResponse<Model>>("/v1/models");
-      // only chat-capable models are selectable in the composer
-      return (res.data ?? []).filter((m) => m.type === "llm" || !m.type);
-    },
-  });
+  // only chat-capable models are selectable in the composer
+  return useQuery({ ...allModels, select: (models: Model[]) => models.filter((m) => m.type === "llm" || !m.type) });
+}
+
+/** The image models, for the Images page. */
+export function useImageModels() {
+  return useQuery({ ...allModels, select: (models: Model[]) => models.filter((m) => m.type === "image") });
 }
 
 /** The currently-selected model object (or undefined while loading / unset). */

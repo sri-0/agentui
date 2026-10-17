@@ -28,6 +28,8 @@ type UiState = {
   artifactRefresh: Record<string, number>;
   /** How the artifacts and skills pages lay out their items. */
   libraryView: "grid" | "list";
+  /** the Images page's model, or null for the server's default */
+  selectedImageModel: string | null;
 
   setModel: (id: string | null) => void;
   setAgent: (id: string | null) => void;
@@ -37,6 +39,7 @@ type UiState = {
   refreshArtifact: (id: string) => void;
   requestNewChat: () => void;
   setLibraryView: (view: "grid" | "list") => void;
+  setImageModel: (id: string | null) => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -48,6 +51,7 @@ export const useUiStore = create<UiState>()(
       sidepanel: null,
       artifactRefresh: {},
       libraryView: "grid",
+      selectedImageModel: null,
 
       setModel: (id) => set({ selectedModel: id }),
       setAgent: (id) => set({ selectedAgentId: id }),
@@ -58,6 +62,7 @@ export const useUiStore = create<UiState>()(
         set((s) => ({ artifactRefresh: { ...s.artifactRefresh, [id]: (s.artifactRefresh[id] ?? 0) + 1 } })),
       requestNewChat: () => set({ sidepanel: null, selectedConnectors: null }),
       setLibraryView: (view) => set({ libraryView: view }),
+      setImageModel: (id) => set({ selectedImageModel: id }),
     }),
     {
       name: "agentui-ui",
@@ -66,6 +71,7 @@ export const useUiStore = create<UiState>()(
         selectedModel: s.selectedModel,
         selectedAgentId: s.selectedAgentId,
         libraryView: s.libraryView,
+        selectedImageModel: s.selectedImageModel,
       }),
     },
   ),

@@ -12,7 +12,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type RecentArtifact, useArtifactBody, useRecentArtifacts, useThreadArtifacts } from "@/lib/api/artifacts";
+import {
+  artifactUrl,
+  type RecentArtifact,
+  useArtifactBody,
+  useRecentArtifacts,
+  useThreadArtifacts,
+} from "@/lib/api/artifacts";
 import type { Artifact } from "@/lib/chat/types";
 import dayjs from "@/lib/dayjs";
 import { ThreadIdContext } from "@/lib/chat/thread-context";
@@ -33,6 +39,7 @@ const KINDS: { label: string; kinds?: Artifact["kind"][] }[] = [
   { label: "Code", kinds: ["code"] },
   { label: "Data", kinds: ["json", "csv"] },
   { label: "Pages", kinds: ["url"] },
+  { label: "Images", kinds: ["image"] },
 ];
 
 /**
@@ -133,13 +140,16 @@ export function ArtifactsView() {
 }
 
 /** The top of an artifact as a small page, fetched once its card is seen,
- *  with what kind it is; a url artifact shows its address. */
+ *  with what kind it is; a url artifact shows its address, an image itself. */
 function ArtifactPreview({ artifact }: { artifact: RecentArtifact }) {
   const ref = useRef<HTMLSpanElement>(null);
   const seen = useInView(ref, { once: true });
   const { body } = useArtifactBody(artifact.root_id, artifact, seen);
   // A card shows no citations: they open cards of their own.
   const text = body && stripCitations(body.slice(0, 1200));
+  if (artifact.kind === "image") {
+    return <ImagePreview artifact={artifact} />;
+  }
   return (
     <span ref={ref} className="relative flex w-full justify-center overflow-hidden px-5 pt-10">
       <span className="w-full overflow-hidden rounded-t-md border border-b-0 bg-background px-3 pt-3 shadow-sm">
@@ -173,6 +183,28 @@ function ArtifactPreview({ artifact }: { artifact: RecentArtifact }) {
         <ArtifactIcon kind={artifact.kind} />
         {ARTIFACT_KINDS[artifact.kind]?.label ?? artifact.kind}
       </Badge>
+    </span>
+  );
+}
+
+/** An image card's picture; its icon when the image cannot be served (its
+ *  conversation was deleted). */
+function ImagePreview({ artifact }: { artifact: RecentArtifact }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <span className="relative flex size-full items-center justify-center overflow-hidden">
+      {broken ? (
+        <ArtifactIcon kind="image" className="size-6" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- served by the API, any size
+        <img
+          src={artifactUrl(artifact.root_id, artifact)}
+          alt=""
+          loading="lazy"
+          onError={() => setBroken(true)}
+          className="size-full object-cover"
+        />
+      )}
     </span>
   );
 }
