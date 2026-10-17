@@ -79,6 +79,10 @@ export type Compaction = {
  *  `model` activity): ids of the form <provider>/<model>. */
 export type ModelChange = { from: string; to: string };
 
+/** A skill a /name loaded into its turn (the `skill` activity); turns stored
+ *  before skills had ids have none. */
+export type SkillUse = { id?: string; name: string; title?: string; description: string };
+
 export type TextPart = { type: "text"; id: string; text: string; done: boolean };
 
 export type ReasoningPart = {
@@ -125,7 +129,8 @@ export type DataPart =
   | { type: "data-task-list"; id: string; data: { tasks: Task[] } }
   | { type: "data-artifact"; id: string; data: Artifact }
   | { type: "data-compaction"; id: string; data: Compaction }
-  | { type: "data-model"; id: string; data: ModelChange };
+  | { type: "data-model"; id: string; data: ModelChange }
+  | { type: "data-skill"; id: string; data: SkillUse };
 
 export type ChatPart = TextPart | ReasoningPart | ToolPart | StepPart | DataPart;
 

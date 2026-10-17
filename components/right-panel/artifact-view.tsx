@@ -9,9 +9,20 @@ import { useArtifactBody } from "@/lib/api/artifacts";
 import { downloadArtifact } from "@/lib/chat/artifacts";
 import type { Artifact } from "@/lib/chat/types";
 import dayjs from "@/lib/dayjs";
+import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import { useQueryClient } from "@tanstack/react-query";
-import { AppWindowIcon, DownloadIcon, ExternalLinkIcon, FileTextIcon, RotateCwIcon } from "lucide-react";
+import {
+  AppWindowIcon,
+  BracesIcon,
+  CodeIcon,
+  DownloadIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
+  type LucideIcon,
+  RotateCwIcon,
+  TableIcon,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -61,9 +72,19 @@ function postTheme(frame: HTMLIFrameElement | null, theme?: string) {
   if (frame?.contentWindow && theme) frame.contentWindow.postMessage({ type: "open-slide:theme", theme }, "*");
 }
 
-/** An artifact's icon: a page or a document. */
+/** What each kind of artifact is called, with its icon and colour. */
+export const ARTIFACT_KINDS: Record<Artifact["kind"], { label: string; icon: LucideIcon; color: string }> = {
+  markdown: { label: "Document", icon: FileTextIcon, color: "text-sky-600 dark:text-sky-400" },
+  code: { label: "Code", icon: CodeIcon, color: "text-violet-600 dark:text-violet-400" },
+  json: { label: "Data", icon: BracesIcon, color: "text-emerald-600 dark:text-emerald-400" },
+  csv: { label: "Table", icon: TableIcon, color: "text-emerald-600 dark:text-emerald-400" },
+  url: { label: "Page", icon: AppWindowIcon, color: "text-amber-600 dark:text-amber-400" },
+};
+
+/** An artifact's icon, in its kind's colour. */
 export function ArtifactIcon({ kind, className }: { kind: Artifact["kind"]; className?: string }) {
-  return kind === "url" ? <AppWindowIcon className={className} /> : <FileTextIcon className={className} />;
+  const { icon: Icon, color } = ARTIFACT_KINDS[kind] ?? ARTIFACT_KINDS.markdown;
+  return <Icon className={cn(color, className)} />;
 }
 
 /** What an artifact is, its version and when it last changed. */

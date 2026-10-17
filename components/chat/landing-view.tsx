@@ -3,7 +3,7 @@
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { createThread } from "@/lib/api/threads";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { Composer } from "./composer/composer";
@@ -18,6 +18,9 @@ const SUGGESTIONS = [
 
 export function LandingView() {
   const router = useRouter();
+  // ?prompt= starts the composer with a draft, e.g. the skills page's
+  // "Create with agent".
+  const draft = useSearchParams().get("prompt") ?? undefined;
 
   const [error, setError] = useState<string | null>(null);
 
@@ -53,9 +56,11 @@ export function LandingView() {
 
         <div className="w-full">
           <Composer
+            key={draft}
             autoFocus
             onSubmit={start}
             status="ready"
+            initialText={draft}
           />
         </div>
 

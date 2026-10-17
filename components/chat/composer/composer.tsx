@@ -4,8 +4,8 @@ import {
   PromptInput,
   PromptInputBody,
   PromptInputFooter,
+  PromptInputProvider,
   PromptInputSubmit,
-  PromptInputTextarea,
   PromptInputTools,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
@@ -15,17 +15,12 @@ import { memo, type ReactNode } from "react";
 import { AgentSelector } from "./agent-selector";
 import { ConnectorSelector } from "./connector-selector";
 import { ModelSelector } from "./model-selector";
+import { SkillTextarea } from "./skill-menu";
 
 /** What the submit button shows; the names the AI Elements input uses. */
 export type ComposerStatus = "ready" | "submitted" | "streaming";
 
-export const Composer = memo(function Composer({
-  onSubmit,
-  status,
-  onStop,
-  contextSlot,
-  autoFocus,
-}: {
+type ComposerProps = {
   onSubmit: (message: PromptInputMessage) => void;
   status: ComposerStatus;
   onStop?: () => void;
@@ -33,7 +28,21 @@ export const Composer = memo(function Composer({
   // doesn't take a per-token `usage` prop (which would defeat this memo).
   contextSlot?: ReactNode;
   autoFocus?: boolean;
-}) {
+  placeholder?: string;
+  /** text the composer starts with, e.g. from a link */
+  initialText?: string;
+};
+
+// The provider holds the text, so the skill menu can follow what is typed.
+export const Composer = memo(function Composer(props: ComposerProps) {
+  return (
+    <PromptInputProvider initialInput={props.initialText}>
+      <ComposerInput {...props} />
+    </PromptInputProvider>
+  );
+});
+
+function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder }: ComposerProps) {
   const idle = status === "ready";
 
   return (
@@ -50,10 +59,10 @@ export const Composer = memo(function Composer({
         )}
       >
         <PromptInputBody>
-          <PromptInputTextarea
+          <SkillTextarea
             autoFocus={autoFocus}
             className="max-h-56 min-h-[60px] resize-none border-0 bg-transparent px-6 pt-5 text-[15px] leading-relaxed shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
-            placeholder="Ask anything, or pick an agent…"
+            placeholder={placeholder ?? "Ask anything, or pick an agent…"}
           />
         </PromptInputBody>
         <PromptInputFooter className="flex-wrap gap-3 px-3 pb-3 pt-1">
@@ -67,14 +76,11 @@ export const Composer = memo(function Composer({
             <PromptInputSubmit
               status={status}
               onStop={onStop}
-              className={cn(
-                "size-9 rounded-full border-0",
-                idle && "ai-gradient-strong text-white hover:opacity-90",
-              )}
+              className={cn("size-9 rounded-full border-0", idle && "ai-gradient-strong text-white hover:opacity-90")}
             />
           </div>
         </PromptInputFooter>
       </PromptInput>
     </div>
   );
-});
+}
