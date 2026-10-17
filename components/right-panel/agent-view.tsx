@@ -49,8 +49,7 @@ export function AgentStatusBadge({
 /** A sub-agent's own thread, live: the same transcript as the main view,
  *  without a composer. */
 export function AgentView({ threadId }: { threadId: string }) {
-  const { messages, status, loaded, approve, answer } =
-    useThread(threadId);
+  const { messages, status, loaded, approve } = useThread(threadId);
 
   return (
     <Conversation className="flex-1">
@@ -64,7 +63,6 @@ export function AgentView({ threadId }: { threadId: string }) {
             messages={messages}
             status={status}
             approve={approve}
-            answer={answer}
           />
         )}
       </ConversationContent>

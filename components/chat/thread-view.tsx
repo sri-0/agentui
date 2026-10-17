@@ -24,12 +24,13 @@ import { ThreadIdContext } from "@/lib/chat/thread-context";
 import { useUiStore } from "@/stores/ui-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { BookOpenIcon, FileTextIcon, LoaderIcon } from "lucide-react";
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Composer, type ComposerStatus } from "./composer/composer";
 import { ThreadUsageRing } from "./composer/thread-usage-ring";
 import { ConversationSkeleton } from "./loading";
 import { MessageList } from "./messages/message-list";
+import { pendingQuestion, QuestionPanel } from "./messages/question-card";
 import { TaskBar } from "./task-bar";
 import { useThread } from "./use-thread";
 
@@ -67,13 +68,27 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   const contextWindow =
     models.find((m) => m.id === selectedModel)?.context_length ?? 128_000;
 
+  // The question the run waits on takes the composer's place until it is
+  // answered or put away (by its interrupt id); the thread can bring it back.
+  // Once answered the run streams again: no second answer while the question
+  // part catches up, and the panel comes back if the answer fails.
+  const question = pendingQuestion(messages);
+  const questionId = question && (question.approval?.id ?? question.toolCallId);
+  const [putAway, setPutAway] = useState<string>();
+  const asking = status !== "streaming" && question && putAway !== questionId ? question : undefined;
+  const onReopenQuestion = useCallback(() => setPutAway(undefined), []);
+
   // Stable handlers keep the memoized Composer and header out of the
   // per-frame re-render path. See AGENTS.md "Thread & chat-stream performance".
+  // A message sent while the run waits for an answer or an approval cancels
+  // that request first: the thread takes one run at a time.
   const onSubmit = useCallback(
-    (message: PromptInputMessage) => {
-      if (message.text.trim()) send(message.text);
+    async (message: PromptInputMessage) => {
+      if (!message.text.trim()) return;
+      if (useChatStore.getState().threads[threadId]?.status === "awaiting_input") await stop();
+      send(message.text);
     },
-    [send],
+    [threadId, send, stop],
   );
   const onOpenUsage = useCallback(
     () => openSidepanel({ kind: "usage" }),
@@ -131,14 +146,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
     );
   }
 
-  // While the run waits for an answer or approval the composer shows the
-  // stop button instead of accepting a second message.
-  const composerStatus: ComposerStatus =
-    streaming
-      ? "streaming"
-      : status === "awaiting_input"
-        ? "submitted"
-        : "ready";
+  const composerStatus: ComposerStatus = streaming ? "streaming" : "ready";
 
   return (
     <ResizablePanelGroup
@@ -159,7 +167,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
                 messages={messages}
                 status={status}
                 approve={approve}
-                answer={answer}
+                onReopenQuestion={question && putAway === questionId ? onReopenQuestion : undefined}
               />
             </ConversationContent>
             <ConversationScrollButton />
@@ -171,12 +179,17 @@ export function ThreadChat({ threadId }: { threadId: string }) {
               {status === "error" && error && (
                 <p className="mb-2 text-center text-xs text-destructive">{error}</p>
               )}
-              <Composer
-                onSubmit={onSubmit}
-                status={composerStatus}
-                onStop={stop}
-                contextSlot={contextSlot}
-              />
+              {asking ? (
+                <QuestionPanel key={questionId} part={asking} onAnswer={answer} onCancel={() => setPutAway(questionId)} autoFocus />
+              ) : (
+                <Composer
+                  onSubmit={onSubmit}
+                  status={composerStatus}
+                  onStop={stop}
+                  contextSlot={contextSlot}
+                  placeholder={status === "awaiting_input" ? "Send a message to cancel the open request…" : undefined}
+                />
+              )}
               <p className="mt-2 text-center text-xs text-muted-foreground">
                 AI can make mistakes. Always validate responses.
               </p>

@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { memo, useState } from "react";
 
-import { QuestionCard } from "./question-card";
+import { QuestionPanel } from "./question-card";
 import { ToolLine } from "./tool-line";
 
 /**
@@ -155,11 +155,11 @@ function ChildRequest({ childThreadId, interrupt }: { childThreadId: string; int
   return (
     <div className="flex flex-col gap-1">
       {question ? (
-        <QuestionCard
-          part={{ ...part, toolName: "question", input: part.request?.args }}
-          pending={!sent}
-          onAnswer={(_, output) => send({ output })}
-        />
+        sent ? (
+          <p className="text-xs text-muted-foreground">Answer sent</p>
+        ) : (
+          <QuestionPanel part={part} onAnswer={(_, output) => send({ output })} />
+        )
       ) : (
         <ToolLine
           part={sent ? { ...part, state: "running" } : part}

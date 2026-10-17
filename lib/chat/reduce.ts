@@ -99,6 +99,9 @@ export function reduce(state: ThreadState, event: AgUiEvent): ThreadState {
       }));
 
     case EventType.TOOL_CALL_START:
+      // A replayed start of a call the turn holds (a hot reload in development
+      // re-delivers a paused turn's call) must not add it twice.
+      if (state.messages.at(-1)?.parts.some(isTool(event.toolCallId))) return state;
       return withLast(state, (m) =>
         push(m, {
           type: "tool",
