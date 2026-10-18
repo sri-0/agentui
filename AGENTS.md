@@ -59,10 +59,10 @@ app/
   globals.css             # Tailwind v4 @theme, OKLCH tokens, .ai-gradient/.ai-glow helpers
   (app)/
     layout.tsx            # app shell: SidebarProvider + AppSidebar + SidebarInset
-    chat/page.tsx         # <LandingView> — centered composer for a new chat
+    chat/page.tsx         # <LandingView> — centered composer for a new chat (Chat mode)
     chat/[threadId]/page.tsx   # <ThreadView> — awaits params (Next 16), renders the chat
     artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts as cards (GET /v1/artifacts)
-    images/page.tsx, images/[threadId]/page.tsx  # <ImagesView> — the Images page (POST /v1/images)
+    images/page.tsx       # <LandingView mode="images"> — the same page in Images mode
     skills/page.tsx       # <SkillsView> — the skills library: categories, sources, cards (/v1/skills)
     files/page.tsx        # <FilesView> — the user's uploaded files, by workspace (/v1/files)
 ```
@@ -71,10 +71,18 @@ app/
   `'use client'`.
 - **No `app/api/*` routes** — all network calls go directly to the Go backend.
 - Landing flow: the first message on `/chat` is `POST /v1/agent/chat`
-  (`createThread` in `lib/api/threads.ts`); the server creates the thread, starts
-  the run and replies `201 {threadId, runId, seq}` once the thread is stored. The
-  page navigates to `/chat/[threadId]`, which opens it, subscribes and replays the
-  turn from its start. Every later turn is a `run` frame on the socket.
+  (`useStartChat` in `landing-view.tsx`, `createThread` in `lib/api/threads.ts`); the
+  server creates the thread, starts the run and replies `201 {threadId, runId, seq}`
+  once the thread is stored. The page navigates to `/chat/[threadId]`, which opens it,
+  subscribes and replays the turn from its start. Every later turn is a `run` frame on
+  the socket. `/images` is the same page in Images mode and starts the thread with
+  `agentId: "images"`; inside a thread there is no toggle, the thread's agent sets the mode.
+- Images conversations: a thread whose `agent_id` is `images` (`IMAGES_AGENT`,
+  `lib/api/agents.ts`) is an ordinary chat whose composer is in its images mode
+  (`<Composer images>`: `ModelSelector use="image"`, no agent or connector selectors), and
+  its turns keep `agentId: "images"`. Every turn sends `imageModel`, the picked image model
+  (`selectedImageModel`, persisted), which `generate_image` uses; `ImageCall` shows the
+  image in the thread, and a follow-up such as "make it blue" edits it.
 
 ```
 components/
@@ -82,7 +90,10 @@ components/
   chat/
     use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
     reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
-    landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
+    landing-view.tsx          # the new-conversation page: a Chat | Images toggle (shadcn Tabs; it
+                              #   switches /chat and /images), one composer whose mode it sets,
+                              #   suggestions or the image carousel; useStartChat
+    thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
                               #   voice (the voice prompt: the mic button and the dictation bar),
@@ -108,9 +119,8 @@ components/
   artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
                               #   once the card is in view), kind tabs, search; ?open=root/id
                               #   opens one full-page; an image card shows the image
-  images/images-view.tsx      # the Images page: a prompt and an image model in, an image out, kept as an
-                              #   artifact of the page's conversation; Edit makes the next prompt change
-                              #   an image (its next version)
+  images/recent-images.tsx    # Images mode's scrolling carousel of the latest images (embla auto-scroll),
+                              #   each opening its conversation
   skills/skills-view.tsx      # categories and sources (with counts) on the left, search, Create
                               #   (with an agent: /chat?prompt=…; or upload), cards; ?skill=name
                               #   opens one full-page: details, npx command, files
@@ -173,12 +183,10 @@ for reads and admin:
   `DELETE /v1/workspaces/{id}` (its conversations stay, outside any workspace)
 - `GET /v1/threads/{id}/artifacts` (the conversation's artifacts, no bodies) and
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
-- `POST /v1/images {prompt, model?, threadId?, edit?}` → `{threadId, artifact}`: the Images page; its
-  conversations have `agent_id: "images"`, and `/chat/<id>` of one goes to `/images/<id>`.
-  Image models come from `useImageModels` (`['models', 'image']`); the page's model is
-  `selectedImageModel` (persisted; null is the server's default)
-- `GET /v1/artifacts?after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
-  every conversation's artifacts for `/artifacts`, newest first; `next` is the cursor for `after`
+- `GET /v1/artifacts?kind=&after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
+  every conversation's artifacts (of one kind, when set) for `/artifacts` and the Images page's
+  carousel (`kind=image`), newest first; `next` is the cursor for `after`. Image models come
+  from `useModels("image")`
 - `POST /v1/voice/transcriptions` (multipart `file`, a 16 kHz mono WAV made by `lib/audio/wav.ts`)
   → `{text}`: the voice prompt; the text is appended to the composer and sent as typed
 - `GET /v1/skills?q=&category=&source=` → `{data: [{name, title?, description, category?,

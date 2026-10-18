@@ -31,6 +31,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "dayjs": "^1.11.21",
+    "embla-carousel-auto-scroll": "8.6.0",
     "embla-carousel-react": "^8.6.0",
     "lucide-react": "^1.18.0",
     "media-chrome": "^4.19.2",
