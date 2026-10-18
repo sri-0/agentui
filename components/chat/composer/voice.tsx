@@ -1,13 +1,13 @@
 "use client";
 
 import { PromptInputButton } from "@/components/ai-elements/prompt-input";
+import { LiveWaveform } from "@/components/ui/live-waveform";
 import { ApiError } from "@/lib/api/client";
 import { transcribe } from "@/lib/api/voice";
 import type { Editor } from "@tiptap/react";
 import { ArrowUpIcon, LoaderIcon, MicIcon, SquareIcon, XIcon } from "lucide-react";
 import { memo, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Waveform } from "./waveform";
 
 /** The microphone button that starts dictation, with the last one's error beside it. */
 export const VoiceButton = memo(function VoiceButton({ error, onStart }: { error?: string; onStart: () => void }) {
@@ -34,7 +34,8 @@ export const VoiceButton = memo(function VoiceButton({ error, onStart }: { error
  * Dictation, in place of the composer's footer while it runs: the
  * microphone's live waveform, X to drop the recording, stop to have it
  * transcribed into the text, and send to transcribe and send at once. The
- * server transcribes whole recordings, so nothing shows while speaking.
+ * server transcribes whole recordings, so nothing shows while speaking. The
+ * waveform opens the microphone, and the recording is taken from its stream.
  */
 export const DictationBar = memo(function DictationBar({
   editorRef,
@@ -47,7 +48,6 @@ export const DictationBar = memo(function DictationBar({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const endedRef = useRef(false); // dropped, or the bar is gone: a late transcript is ignored
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const [transcribing, setTranscribing] = useState(false);
 
   const end = useCallback(
@@ -58,30 +58,31 @@ export const DictationBar = memo(function DictationBar({
     [onEnd],
   );
 
-  // Opens the microphone and records. In development effects run twice: each
-  // run closes its own microphone, even one that opens after it was undone.
+  // Stable, or the waveform would open the microphone again on each render.
+  // In development effects run twice, so the waveform can open it twice: only
+  // the last stream is recorded, and an earlier one is closed.
+  const record = useCallback((stream: MediaStream) => {
+    if (recorderRef.current) close(recorderRef.current);
+    if (endedRef.current) {
+      // dropped while the microphone was opening; the waveform has let go of it
+      for (const track of stream.getTracks()) track.stop();
+      return;
+    }
+    const recorder = new MediaRecorder(stream);
+    chunksRef.current = [];
+    recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
+    recorder.start();
+    recorderRef.current = recorder;
+  }, []);
+  const micFailed = useCallback(() => end("Couldn't use the microphone"), [end]);
+
   useEffect(() => {
-    let undone = false;
     endedRef.current = false;
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(
-      (mic) => {
-        if (undone) return void stopTracks(mic);
-        const recorder = new MediaRecorder(mic);
-        chunksRef.current = [];
-        recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
-        recorder.start();
-        recorderRef.current = recorder;
-        setStream(mic);
-      },
-      () => !undone && end("Couldn't use the microphone"),
-    );
     return () => {
-      undone = true;
       endedRef.current = true;
       if (recorderRef.current) close(recorderRef.current);
-      recorderRef.current = null;
     };
-  }, [end]);
+  }, []);
 
   const cancel = () => {
     if (recorderRef.current) close(recorderRef.current);
@@ -92,7 +93,6 @@ export const DictationBar = memo(function DictationBar({
     const recorder = recorderRef.current;
     if (recorder?.state !== "recording") return end(); // the microphone isn't open yet
     recorder.onstop = async () => {
-      stopTracks(recorder.stream);
       let text: string;
       try {
         text = await transcribe(new Blob(chunksRef.current, { type: recorder.mimeType }));
@@ -106,7 +106,7 @@ export const DictationBar = memo(function DictationBar({
       end();
       insert(editorRef.current, text, send);
     };
-    recorder.stop();
+    recorder.stop(); // before the waveform, on the next render, stops the stream
     setTranscribing(true);
   };
 
@@ -118,7 +118,22 @@ export const DictationBar = memo(function DictationBar({
       <div className="relative h-9 min-w-0 flex-1">
         {/* silence, under the bars: a dotted line */}
         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dotted border-muted-foreground/25" />
-        <Waveform stream={transcribing ? null : stream} className="relative text-muted-foreground" />
+        <LiveWaveform
+          active={!transcribing}
+          processing={transcribing}
+          mode="scrolling"
+          height={36}
+          barWidth={3}
+          barGap={3}
+          barRadius={1.5}
+          barHeight={3}
+          sensitivity={1.5}
+          historySize={200}
+          updateRate={50}
+          onStreamReady={record}
+          onError={micFailed}
+          className="text-muted-foreground"
+        />
       </div>
       <PromptInputButton
         tooltip="Stop and edit"
@@ -147,12 +162,7 @@ function close(recorder: MediaRecorder) {
   recorder.ondataavailable = null;
   recorder.onstop = null;
   if (recorder.state === "recording") recorder.stop();
-  stopTracks(recorder.stream);
-}
-
-/** Closes a microphone. */
-function stopTracks(stream: MediaStream) {
-  for (const track of stream.getTracks()) track.stop();
+  for (const track of recorder.stream.getTracks()) track.stop();
 }
 
 /** Appends a transcript to the composer's text, as a text node so dictated
