@@ -83,7 +83,7 @@ components/
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with / and @ chips),
-                              #   voice-button (the voice prompt: AI Elements' SpeechInput, always recording)
+                              #   voice (the voice prompt: the mic button and the dictation bar)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card
                               #   (QuestionPanel: shadcn questionnaire; QuestionCard: the line or
                               #   recap in the thread), agent-card, markdown (+ source-citation:
@@ -489,13 +489,15 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
-- **The voice prompt** (`composer/voice-button.tsx`) is AI Elements' `SpeechInput` with
-  `mode="media-recorder"` (the changes to it: a mode prop, an `onRecordingError` prop, and a
-  guard against opening the microphone twice), so it always records rather
-  than using the browser's speech recognition, which needs its vendor's servers. The
-  recording goes to the server as WAV (`lib/audio/wav.ts`; browsers record WebM, which
-  Voxtral refuses), and the text is appended through the editor `ComposerInput` hands both
-  `ReferenceInput` and the button (`editorRef`). Errors show beside the button.
+- **The voice prompt** (`composer/voice.tsx`): the mic button turns the composer's footer
+  into a dictation bar, as in ChatGPT: X drops the recording, stop transcribes it into the
+  text, send transcribes and sends. The waveform is ElevenLabs UI's `live-waveform` (shadcn
+  registry, `components/ui/live-waveform.tsx`); it opens the microphone, and a `MediaRecorder`
+  records its stream. The server transcribes whole recordings, so no text shows while
+  speaking. The recording goes to the server as WAV (`lib/audio/wav.ts`; browsers record
+  WebM, which Voxtral refuses), and the text is appended through the editor `ComposerInput`
+  hands both `ReferenceInput` and the bar (`editorRef`); send commits it (`flushSync`) before
+  submitting the form. Errors show beside the mic button.
 - **References are chips in the text** (`composer/references.tsx`): the composer's text is a
   Tiptap editor whose Mention nodes are the chips (`chat/reference-chip.tsx`: the text's font,
   the list's coloured icon), with one list (shadcn's Command in a popover, stock styling, an
