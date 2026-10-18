@@ -98,6 +98,7 @@ components/
     mode-toggle.tsx           # the Chat | Images toggle (shadcn Tabs) in the new-conversation
                               #   page's top bar: switches /chat and /images
     thread-view.tsx (ThreadChat), task-bar.tsx
+    next-prompts.tsx          # next-prompt suggestions above the composer (AI Elements Suggestions)
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
                               #   voice (the voice prompt: the mic button and the dictation bar), waveform,
@@ -154,7 +155,8 @@ lib/
          types.ts (ChatMessage/parts) · usage.ts · artifacts.ts · tasks.ts ·
          thread-context.ts (the thread a view shows, for citations)
   api/   client.ts (apiFetch, apiText) · agents.ts · models.ts · threads.ts · connectors.ts ·
-         artifacts.ts · sources.ts · types.ts · voice.ts (transcribe a recording)
+         artifacts.ts · sources.ts · types.ts · voice.ts (transcribe a recording) ·
+         suggestions.ts (next prompts for an answer)
   audio/ wav.ts (a recording → 16 kHz mono WAV)
   providers.ts · group-threads.ts · dayjs.ts · utils.ts
 stores/ ui-store.ts            # Zustand UI state
@@ -539,6 +541,13 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
+- **Next-prompt suggestions** (`chat/next-prompts.tsx`): once a run that streamed in this
+  view ends with an answer (not stopped, failed, or waiting on a question), three follow-ups
+  from `POST /v1/threads/{id}/suggestions` (`lib/api/suggestions.ts`, cached per answer;
+  a 409, the answer not stored yet, is tried again) show above the composer as AI Elements'
+  `Suggestions`; picking one sends it like a typed message. Reopening a thread shows none.
+  The composer's `above` slot shows them only while its text is empty (`WhileEmpty`, apart
+  so a keystroke re-renders only it).
 - **The voice prompt** (`composer/voice.tsx`): the mic button turns the composer's footer
   into a dictation bar, as in ChatGPT: X drops the recording, stop transcribes it into the
   text, send transcribes and sends. The bar opens the microphone and records it with a

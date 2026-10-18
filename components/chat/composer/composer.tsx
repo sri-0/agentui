@@ -8,6 +8,7 @@ import {
   PromptInputSubmit,
   PromptInputTools,
   type PromptInputMessage,
+  usePromptInputController,
 } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
@@ -36,6 +37,8 @@ type ComposerProps = {
   initialText?: string;
   /** an images composer: it picks the image model, and no agent or connectors */
   images?: boolean;
+  /** shown above the input while it is empty, e.g. next-prompt suggestions */
+  above?: ReactNode;
 };
 
 // The provider holds the text the form sends; the editor writes it on each edit.
@@ -47,7 +50,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   );
 });
 
-function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder, images }: ComposerProps) {
+function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder, images, above }: ComposerProps) {
   const idle = status === "ready";
   const editorRef = useRef<Editor | null>(null); // the voice prompt writes into it
   const [dictating, setDictating] = useState(false);
@@ -69,6 +72,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
 
   return (
     <>
+      {above && <WhileEmpty>{above}</WhileEmpty>}
       <div className="relative" {...attach.handlers}>
         <div className="ai-glow" />
         <PromptInput
@@ -126,4 +130,11 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
       {attach.dialog}
     </>
   );
+}
+
+/** Its children while the input is empty: typing puts them away. Apart from
+ *  ComposerInput, so a keystroke re-renders only this. */
+function WhileEmpty({ children }: { children: ReactNode }) {
+  const { textInput } = usePromptInputController();
+  return textInput.value.trim() ? null : children;
 }

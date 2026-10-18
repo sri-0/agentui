@@ -31,6 +31,7 @@ import { Composer, type ComposerStatus } from "./composer/composer";
 import { ThreadUsageRing } from "./composer/thread-usage-ring";
 import { ConversationSkeleton } from "./loading";
 import { MessageList } from "./messages/message-list";
+import { NextPrompts } from "./next-prompts";
 import { pendingQuestion, QuestionPanel } from "./messages/question-card";
 import { TaskBar } from "./task-bar";
 import { useThread } from "./use-thread";
@@ -98,6 +99,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
     },
     [threadId, send, stop, images],
   );
+  const onPick = useCallback((text: string) => onSubmit({ text, files: [] }), [onSubmit]);
   const onOpenUsage = useCallback(
     () => openSidepanel({ kind: "usage" }),
     [openSidepanel],
@@ -115,6 +117,20 @@ export function ThreadChat({ threadId }: { threadId: string }) {
 
   // A run that ends may have published artifacts and cited sources.
   const streaming = status === "streaming";
+
+  // Next-prompt suggestions follow an answer that a run finished while this
+  // view was open (reopening a thread shows none): not a failed or stopped
+  // run, nor one waiting on a question.
+  const [sawRun, setSawRun] = useState(false);
+  if (streaming && !sawRun) setSawRun(true);
+  const last = messages.at(-1);
+  const answered =
+    sawRun && status === "idle" && !asking && last?.role === "assistant" && !last.metadata?.cancelled && !last.metadata?.error;
+  const suggestFor = answered ? last.id : undefined;
+  const nextPrompts = useMemo(
+    () => suggestFor && <NextPrompts threadId={threadId} messageId={suggestFor} onPick={onPick} />,
+    [threadId, suggestFor, onPick],
+  );
   const wasStreaming = useRef(streaming);
   useEffect(() => {
     if (wasStreaming.current && !streaming) {
@@ -195,6 +211,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
                     status={composerStatus}
                     onStop={stop}
                     contextSlot={contextSlot}
+                    above={nextPrompts}
                     images={images}
                     placeholder={
                       status === "awaiting_input"
