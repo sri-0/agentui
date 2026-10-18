@@ -85,7 +85,9 @@ app/
   its turns keep `agentId: "images"` and send no `model`, so the agent runs on the server's
   default LLM (`runOptions(IMAGES_AGENT)`). Every turn sends `imageModel`, the picked image
   model (`selectedImageModel`, persisted), which `generate_image` uses; `ImageCall` shows
-  the image in the thread, and a follow-up such as "make it blue" edits it.
+  the image in the thread, with a download button on hover (the bytes are fetched and saved:
+  the API is another origin, where `<a download>` would only open it), and a follow-up such
+  as "make it blue" edits it.
 
 ```
 components/
@@ -111,7 +113,7 @@ components/
                               #   skill (SkillLoaded), file (FileRead: the `file` activity),
                               #   user-text (UserText: the /name and #id chips in a sent message)
       tools/                  # tool renderers: registry.ts (name → component), slides-call,
-                              #   image-call (generate_image: a placeholder, then the image)
+                              #   image-call (generate_image: a placeholder, then the image; download on hover)
   right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
                               #   sources-view, usage-view, model-view, agent-details-view,
                               #   connector-details-view
@@ -546,14 +548,16 @@ before large changes:
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
 - **Next-prompt suggestions** (`chat/next-prompts.tsx`, the composer's `suggest` prop):
-  three prompts from `POST /v1/suggestions` (`lib/api/suggestions.ts`) above the composer,
-  as AI Elements' `Suggestions`. In a thread, with the input empty, they follow its last
-  answer (`{threadId}`, cached per answer; a thread just opened, stale ones too, and each
-  finished run; a 409, the answer not stored yet, is tried again). Once 3+ characters are
-  typed they follow the text (`{threadId?, text}`, 500 ms after the last keystroke; a
-  superseded request is aborted); on the new-chat page only the text. None while a run
-  streams or a question waits, nor for a stopped or failed run. Picking one replaces the
-  draft and sends it the way Enter does.
+  three prompts from `POST /v1/suggestions` (`lib/api/suggestions.ts`) as AI Elements'
+  `Suggestions`, floating just above the composer: in a thread over the conversation, which
+  fades out under their blurred chips (`scrollClassName`'s mask; `pb-16` keeps the last answer
+  clear of them), so nothing moves when they come and go. In a thread, with the input empty,
+  they follow its last turn (`{messages}`: the user's message and the answer as the UI shows
+  them, cached per answer; a thread just opened, and each finished run). Once 3+ characters
+  are typed they follow the text too (`{messages?, text}`); on the new-chat page only the
+  text. A request is sent once it has stayed the same for 1 s, and a superseded one is
+  aborted. None while a run streams or a question waits, nor for a stopped or failed run.
+  Picking one replaces the draft and sends it the way Enter does.
 - **The voice prompt** (`composer/voice.tsx`): the mic button turns the composer's footer
   into a dictation bar, as in ChatGPT: X drops the recording, stop transcribes it into the
   text, send transcribes and sends. The waveform is ElevenLabs UI's `live-waveform` (shadcn
