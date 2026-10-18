@@ -184,6 +184,8 @@ export function ReferenceInput({
           listItem: false,
           underline: false,
           link: false,
+          // a dropped file goes to the upload dialog (attach.tsx), not into the text
+          dropcursor: false,
         }),
         Placeholder.configure({ placeholder }),
         References.configure({

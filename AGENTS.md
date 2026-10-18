@@ -565,8 +565,10 @@ before large changes:
   from the `#` list, and an image's chip shows its thumbnail; a refused one stays in the
   dialog with the server's reason. The composer takes drops and pastes in the capture phase,
   so AI Elements' `PromptInput` doesn't also keep the file in its own attachments list, which
-  this app doesn't send; the dialog renders outside those handlers, since React events bubble
-  out of a portal. Add kinds to the table and their
+  this app doesn't send, nor the editor (its drop cursor is off); a file held over the
+  composer gives it a primary border. The dialog starts at the chat's workspace; files sent
+  to another one aren't put in the message (they wouldn't resolve). It renders outside those
+  handlers, since React events bubble out of a portal. Add kinds to the table and their
   choices to `useChoices`, not another menu.
 - **`components/ui/` is shadcn registry output only** (style `radix-nova`, as the CLI writes
   it) and `components/ai-elements/` the AI Elements registry. Hand-written shared pieces go

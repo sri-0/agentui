@@ -14,12 +14,13 @@ import { type ClipboardEvent, type DragEvent, type RefObject, useState } from "r
  * the conversation's workspace's files; each kept one goes into the text as
  * a # chip at the cursor, as if picked from the # list. Nothing uploads
  * without the dialog. `handlers` go on the composer: in the capture phase,
- * so AI Elements' form doesn't also keep a dropped file in its attachments,
- * which aren't sent.
+ * so neither the editor nor AI Elements' form (whose attachments aren't sent)
+ * takes a dropped file; `dragging` is true while a file is held over it.
  */
 export function useAttach(editorRef: RefObject<Editor | null>) {
   const workspaceId = useChatWorkspaceId();
   const [files, setFiles] = useState<File[]>(); // the dialog is open, with these to start
+  const [dragging, setDragging] = useState(false);
 
   const insert = (kept: UserFile[]) =>
     editorRef.current
@@ -38,8 +39,14 @@ export function useAttach(editorRef: RefObject<Editor | null>) {
   };
 
   const handlers = {
-    onDragOver: (e: DragEvent) => e.dataTransfer.types.includes("Files") && e.preventDefault(),
+    onDragOverCapture: (e: DragEvent) => {
+      if (!e.dataTransfer.types.includes("Files")) return;
+      e.preventDefault();
+      setDragging(true);
+    },
+    onDragLeave: (e: DragEvent) => !e.currentTarget.contains(e.relatedTarget as Node) && setDragging(false),
     onDropCapture: (e: DragEvent) => {
+      setDragging(false);
       if (!e.dataTransfer.files.length) return;
       e.preventDefault();
       e.stopPropagation();
@@ -53,9 +60,15 @@ export function useAttach(editorRef: RefObject<Editor | null>) {
     },
   };
   const dialog = files && (
-    <UploadDialog workspaceId={workspaceId} initialFiles={files} onUploaded={insert} onClose={close} />
+    <UploadDialog
+      workspaceId={workspaceId}
+      chatWorkspaceId={workspaceId}
+      initialFiles={files}
+      onUploaded={insert}
+      onClose={close}
+    />
   );
-  return { open: () => setFiles([]), handlers, dialog };
+  return { open: () => setFiles([]), handlers, dragging, dialog };
 }
 
 /** The paperclip: opens the upload dialog. */

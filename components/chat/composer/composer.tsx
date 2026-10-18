@@ -79,6 +79,8 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
             "[&_[data-slot=input-group]]:rounded-[26px] [&_[data-slot=input-group]]:border [&_[data-slot=input-group]]:border-border/70",
             "[&_[data-slot=input-group]]:bg-card/80 [&_[data-slot=input-group]]:shadow-xl [&_[data-slot=input-group]]:shadow-black/10 [&_[data-slot=input-group]]:backdrop-blur-xl",
             "[&_[data-slot=input-group]]:transition-colors [&_[data-slot=input-group]]:has-[.ProseMirror-focused]:border-border",
+            // a file held over the composer: the drop opens the upload dialog
+            attach.dragging && "[&_[data-slot=input-group]]:border-primary [&_[data-slot=input-group]]:ring-2 [&_[data-slot=input-group]]:ring-primary/25",
           )}
         >
           <PromptInputBody>
