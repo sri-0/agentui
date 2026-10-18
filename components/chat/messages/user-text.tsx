@@ -1,7 +1,7 @@
 "use client";
 
 import { ReferenceChip } from "@/components/chat/reference-chip";
-import { FileKindIcon } from "@/components/files/file-icon";
+import { FileChipIcon } from "@/components/files/file-icon";
 import { useFiles } from "@/lib/api/files";
 import { useSkillFacets, useSkills } from "@/lib/api/skills";
 import { BookOpenIcon } from "lucide-react";
@@ -26,7 +26,7 @@ export function UserText({ text }: { text: string }) {
     }
     if (word.startsWith("#")) {
       const f = fileById.get(word.slice(1));
-      return f && { icon: <FileKindIcon mediaType={f.media_type} />, label: f.name };
+      return f && { icon: <FileChipIcon file={f} />, label: f.name };
     }
   };
   const isRef = (word: string) => refOf(word) !== undefined;
@@ -47,7 +47,7 @@ export function UserText({ text }: { text: string }) {
   if (!words.slice(i).some(isRef)) {
     return (
       <>
-        {words.slice(0, i).filter(isRef).map(chip)}
+        <div className="flex flex-wrap gap-1">{words.slice(0, i).filter(isRef).map(chip)}</div>
         {rest && <Markdown>{rest}</Markdown>}
       </>
     );

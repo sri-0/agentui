@@ -2,7 +2,7 @@
 
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { ReferenceChip } from "@/components/chat/reference-chip";
-import { FileKindIcon } from "@/components/files/file-icon";
+import { FileChipIcon } from "@/components/files/file-icon";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useAgents } from "@/lib/api/agents";
@@ -358,7 +358,7 @@ function useChoices(): Record<string, Choice[]> {
       id: f.id,
       label: f.name,
       hint: f.status === "ready" ? "searchable" : "reference only",
-      icon: <FileKindIcon mediaType={f.media_type} />,
+      icon: <FileChipIcon file={f} />,
     })),
   };
 }

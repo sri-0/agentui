@@ -14,6 +14,7 @@ import type { Editor } from "@tiptap/react";
 import { memo, type ReactNode, useCallback, useRef, useState } from "react";
 
 import { AgentSelector } from "./agent-selector";
+import { AttachButton, Uploads, useAttach } from "./attach";
 import { ConnectorSelector } from "./connector-selector";
 import { ModelSelector } from "./model-selector";
 import { ReferenceInput } from "./references";
@@ -49,10 +50,14 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
   const editorRef = useRef<Editor | null>(null); // the voice prompt writes into it
   const [dictating, setDictating] = useState(false);
   const [voiceError, setVoiceError] = useState<string>();
-  // A chip that reads as nothing (an agent) can leave a space behind.
+  const attach = useAttach(editorRef);
+  const uploading = attach.uploads.length > 0;
+  // A chip that reads as nothing (an agent) can leave a space behind. Sending
+  // waits for the files being attached: refused, the text stays.
   const submit = useCallback(
-    (message: PromptInputMessage) => onSubmit({ ...message, text: message.text.trim() }),
-    [onSubmit],
+    (message: PromptInputMessage) =>
+      uploading ? Promise.reject(new Error("files uploading")) : onSubmit({ ...message, text: message.text.trim() }),
+    [onSubmit, uploading],
   );
   const startDictation = useCallback(() => {
     setVoiceError(undefined);
@@ -64,7 +69,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
   }, []);
 
   return (
-    <div className="relative">
+    <div className="relative" {...attach.handlers}>
       <div className="ai-glow" />
       <PromptInput
         onSubmit={submit}
@@ -77,6 +82,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
         )}
       >
         <PromptInputBody>
+          <Uploads uploads={attach.uploads} errors={attach.errors} />
           <ReferenceInput
             autoFocus={autoFocus}
             placeholder={placeholder ?? "Ask anything, or pick an agent…"}
@@ -89,6 +95,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
           ) : (
             <>
               <PromptInputTools className="flex-wrap gap-1">
+                <AttachButton onFiles={attach.add} />
                 <ModelSelector />
                 <AgentSelector />
                 <ConnectorSelector />
@@ -99,7 +106,12 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
                 <PromptInputSubmit
                   status={status}
                   onStop={onStop}
-                  className={cn("size-9 rounded-full border-0", idle && "ai-gradient-strong text-white hover:opacity-90")}
+                  // aria, not disabled: a disabled control fades the whole input group
+                  aria-disabled={(idle && uploading) || undefined}
+                  className={cn(
+                    "size-9 rounded-full border-0 aria-disabled:opacity-50",
+                    idle && "ai-gradient-strong text-white hover:opacity-90",
+                  )}
                 />
               </div>
             </>
