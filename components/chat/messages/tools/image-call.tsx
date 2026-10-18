@@ -1,16 +1,18 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { artifactUrl } from "@/lib/api/artifacts";
+import { downloadArtifact } from "@/lib/chat/artifacts";
 import { useThreadId } from "@/lib/chat/thread-context";
 import type { Artifact, ToolPart } from "@/lib/chat/types";
 import { useUiStore } from "@/stores/ui-store";
-import { LoaderIcon } from "lucide-react";
+import { DownloadIcon, LoaderIcon } from "lucide-react";
 import { memo } from "react";
 
 /**
  * A generate_image call: a placeholder while the image is made, then the
- * image (its artifact), which opens in the artifact panel. Memoized on the
- * part, like every part renderer.
+ * image (its artifact), which opens in the artifact panel, with a download
+ * button on hover. Memoized on the part, like every part renderer.
  */
 export const ImageCall = memo(function ImageCall({ part }: { part: ToolPart }) {
   const threadId = useThreadId();
@@ -28,15 +30,32 @@ export const ImageCall = memo(function ImageCall({ part }: { part: ToolPart }) {
       </div>
     );
   }
+  // The API is another origin, where <a download> only opens the image: save its bytes.
+  const download = async () => {
+    const res = await fetch(artifactUrl(threadId, image)).catch(() => undefined);
+    if (res?.ok) downloadArtifact(image, await res.blob());
+  };
   return (
-    <button
-      type="button"
-      title={image.title}
-      onClick={() => openSidepanel({ kind: "artifact", artifactId: image.id })}
-      className="my-2 block w-full max-w-sm overflow-hidden rounded-xl border transition-opacity hover:opacity-90"
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element -- served by the API, any size */}
-      <img src={artifactUrl(threadId, image)} alt={image.title} className="w-full" />
-    </button>
+    <div className="group/image relative my-2 w-full max-w-sm">
+      <button
+        type="button"
+        title={image.title}
+        onClick={() => openSidepanel({ kind: "artifact", artifactId: image.id })}
+        className="block w-full overflow-hidden rounded-xl border transition-opacity group-hover/image:opacity-90"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- served by the API, any size */}
+        <img src={artifactUrl(threadId, image)} alt={image.title} className="w-full" />
+      </button>
+      <Button
+        variant="secondary"
+        size="icon-sm"
+        title="Download"
+        aria-label="Download"
+        onClick={download}
+        className="absolute top-2 right-2 rounded-full opacity-0 shadow-sm transition-opacity group-hover/image:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+      >
+        <DownloadIcon />
+      </Button>
+    </div>
   );
 });

@@ -85,7 +85,9 @@ app/
   its turns keep `agentId: "images"` and send no `model`, so the agent runs on the server's
   default LLM (`runOptions(IMAGES_AGENT)`). Every turn sends `imageModel`, the picked image
   model (`selectedImageModel`, persisted), which `generate_image` uses; `ImageCall` shows
-  the image in the thread, and a follow-up such as "make it blue" edits it.
+  the image in the thread, with a download button on hover (the bytes are fetched and saved:
+  the API is another origin, where `<a download>` would only open it), and a follow-up such
+  as "make it blue" edits it.
 
 ```
 components/
@@ -109,7 +111,7 @@ components/
                               #   skill (SkillLoaded), file (FileRead: the `file` activity),
                               #   user-text (UserText: the /name and #id chips in a sent message)
       tools/                  # tool renderers: registry.ts (name → component), slides-call,
-                              #   image-call (generate_image: a placeholder, then the image)
+                              #   image-call (generate_image: a placeholder, then the image; download on hover)
   right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
                               #   sources-view, usage-view, model-view, agent-details-view,
                               #   connector-details-view
