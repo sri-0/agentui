@@ -77,9 +77,8 @@ app/
   subscribes and replays the turn from its start. Every later turn is a `run` frame on
   the socket. `/images` is the same page in Images mode and starts the thread with
   `agentId: "images"`. The Chat | Images toggle (`mode-toggle.tsx`) is pinned to the top
-  of both pages and of a thread, where it shows the thread's mode (its agent sets it) and
-  the other mode starts a new conversation. The sidebar has no Images item; the toggle is
-  the way in.
+  of the page and switches between the two; a thread has none (its agent sets its mode).
+  The sidebar has no Images item; the toggle is the way in.
 - Images conversations: a thread whose `agent_id` is `images` (`IMAGES_AGENT`,
   `lib/api/agents.ts`) is an ordinary chat whose composer is in its images mode
   (`<Composer images>`: `ModelSelector use="image"`, no agent or connector selectors), and
@@ -95,8 +94,8 @@ components/
     reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
     landing-view.tsx          # the new-conversation page, /chat or /images: one composer whose
                               #   mode the toggle sets, suggestions or the image carousel; useStartChat
-    mode-toggle.tsx           # the Chat | Images toggle (shadcn Tabs) in the top bar of the chat
-                              #   screens: switches /chat and /images, or from a thread starts one
+    mode-toggle.tsx           # the Chat | Images toggle (shadcn Tabs) in the new-conversation
+                              #   page's top bar: switches /chat and /images
     thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
@@ -117,7 +116,7 @@ components/
   library/                    # the Spaces-style frame the artifacts, skills and files pages share:
                               #   LibraryPage (top bar, optional nav column), LibraryToolbar (title,
                               #   search, actions, grid/list toggle), LibraryItems/LibraryItem (card
-                              #   or row; optionally opened in a new tab, with actions such as delete),
+                              #   or row, opened at its href or, without one, by nothing but its actions),
                               #   NavSection/NavItem; creatable-combobox (pick or create a value)
   common/copy-button.tsx      # a copy-to-clipboard icon button for any page
   artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
@@ -131,7 +130,8 @@ components/
   skills/skill-dialogs.tsx    # upload (a shadcn file input + details) and edit details
   files/files-view.tsx        # All files / No workspace / each workspace on the left, search, Upload (or a
                               #   drop on the list) into the workspace shown, cards (an image shows itself)
-                              #   with a Searchable / Reference only badge, delete; a file opens in a new tab
+                              #   with a Searchable / Reference only badge, download and delete; files are never
+                              #   opened in the browser (the server sends them as attachments)
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   sidebar/workspace-groups.tsx # workspaces: a folder of conversations each, new chat in one, rename, delete

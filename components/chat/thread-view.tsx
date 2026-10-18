@@ -31,7 +31,6 @@ import { Composer, type ComposerStatus } from "./composer/composer";
 import { ThreadUsageRing } from "./composer/thread-usage-ring";
 import { ConversationSkeleton } from "./loading";
 import { MessageList } from "./messages/message-list";
-import { type ChatMode, ModeToggle } from "./mode-toggle";
 import { pendingQuestion, QuestionPanel } from "./messages/question-card";
 import { TaskBar } from "./task-bar";
 import { useThread } from "./use-thread";
@@ -164,7 +163,6 @@ export function ThreadChat({ threadId }: { threadId: string }) {
       <ResizablePanel id="chat" minSize="40%">
         <div className="flex h-full flex-col overflow-hidden">
           <ThreadHeader
-            mode={images ? "images" : "chat"}
             artifactCount={artifacts.length}
             sourceCount={citedCount}
             reconnecting={!connected}
@@ -241,20 +239,17 @@ export function ThreadChat({ threadId }: { threadId: string }) {
 
 /** Static thread header — memoized so it never re-renders during streaming. */
 const ThreadHeader = memo(function ThreadHeader({
-  mode,
   artifactCount,
   sourceCount,
   reconnecting,
 }: {
-  mode: ChatMode;
   artifactCount: number;
   sourceCount: number;
   reconnecting: boolean;
 }) {
   return (
-    <header className="relative flex h-14 shrink-0 items-center gap-3 border-b px-4">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
       <SidebarTrigger className="text-muted-foreground" />
-      <ModeToggle mode={mode} />
       {reconnecting && (
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <LoaderIcon className="size-3.5 animate-spin" />

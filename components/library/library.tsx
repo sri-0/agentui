@@ -113,10 +113,10 @@ export function LibraryItems({ children }: { children: ReactNode }) {
 
 /** One item, opened at href: a card holding all of it, a preview on top when
  *  there is one (grid), or a row (list). The title is the link, stretched
- *  over the item, so the rest is read as its content; a preview is inert. */
+ *  over the item, so the rest is read as its content; a preview is inert.
+ *  Without href the item opens nothing (a file: its actions download it). */
 export function LibraryItem({
   href,
-  newTab,
   preview,
   icon,
   title,
@@ -125,9 +125,7 @@ export function LibraryItem({
   actions,
   children,
 }: {
-  href: string;
-  /** open href in a new tab, e.g. a file itself */
-  newTab?: boolean;
+  href?: string;
   preview?: ReactNode;
   icon: ReactNode;
   title: string;
@@ -144,13 +142,13 @@ export function LibraryItem({
     <div className="flex min-w-0 items-center gap-3">
       {icon}
       <div className="min-w-0 flex-1">
-        <Link
-          href={href}
-          {...(newTab && { target: "_blank", rel: "noopener noreferrer" })}
-          className="block truncate text-sm font-medium outline-none after:absolute after:inset-0"
-        >
-          {title}
-        </Link>
+        {href ? (
+          <Link href={href} className="block truncate text-sm font-medium outline-none after:absolute after:inset-0">
+            {title}
+          </Link>
+        ) : (
+          <span className="block truncate text-sm font-medium">{title}</span>
+        )}
         {subtitle && <div className="truncate text-xs text-muted-foreground">{subtitle}</div>}
       </div>
     </div>
@@ -166,7 +164,7 @@ export function LibraryItem({
       >
         {heading}
         {meta && <span className="ms-auto shrink-0 text-xs text-muted-foreground">{meta}</span>}
-        {actions && <div className="relative z-10 shrink-0">{actions}</div>}
+        {actions && <div className="relative z-10 flex shrink-0 gap-1">{actions}</div>}
       </div>
     );
   }
@@ -182,7 +180,7 @@ export function LibraryItem({
           {preview}
         </div>
       )}
-      {actions && <div className="absolute top-2 right-2 z-10">{actions}</div>}
+      {actions && <div className="absolute top-2 right-2 z-10 flex gap-1">{actions}</div>}
       <div className="flex flex-1 flex-col gap-3 p-4">
         {heading}
         {children}

@@ -14,7 +14,7 @@ import { fileContentUrl, type UserFile, useDeleteFile, useFiles, useUploadFile }
 import { useWorkspaces } from "@/lib/api/workspaces";
 import dayjs from "@/lib/dayjs";
 import { cn } from "@/lib/utils";
-import { FilesIcon, FolderIcon, InboxIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import { DownloadIcon, FilesIcon, FolderIcon, InboxIcon, Trash2Icon, UploadIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { type DragEvent, useRef, useState } from "react";
 
@@ -156,8 +156,6 @@ function FileItem({ file }: { file: UserFile }) {
   const del = useDeleteFile();
   return (
     <LibraryItem
-      href={fileContentUrl(file.id)}
-      newTab
       preview={
         file.media_type.startsWith("image/") ? (
           // eslint-disable-next-line @next/next/no-img-element -- served by the API, any size
@@ -177,17 +175,25 @@ function FileItem({ file }: { file: UserFile }) {
       subtitle={`${formatSize(file.size)} · ${file.media_type.split(";")[0]}`}
       meta={`Uploaded ${dayjs(file.created_at).fromNow()}`}
       actions={
-        <Button
-          variant="secondary"
-          size="icon-sm"
-          aria-label={`Delete ${file.name}`}
-          title="Delete"
-          disabled={del.isPending}
-          onClick={() => confirm(`Delete ${file.name}? Chats can no longer use it.`) && del.mutate(file.id)}
-          className="shadow-xs"
-        >
-          <Trash2Icon />
-        </Button>
+        <>
+          {/* The server sends it as a download (Content-Disposition), so it never opens in a tab. */}
+          <Button asChild variant="secondary" size="icon-sm" className="shadow-xs">
+            <a href={fileContentUrl(file.id)} download={file.name} aria-label={`Download ${file.name}`} title="Download">
+              <DownloadIcon />
+            </a>
+          </Button>
+          <Button
+            variant="secondary"
+            size="icon-sm"
+            aria-label={`Delete ${file.name}`}
+            title="Delete"
+            disabled={del.isPending}
+            onClick={() => confirm(`Delete ${file.name}? Chats can no longer use it.`) && del.mutate(file.id)}
+            className="shadow-xs"
+          >
+            <Trash2Icon />
+          </Button>
+        </>
       }
     >
       <Badge variant="outline" className="w-fit" title={STATUS[file.status].hint}>
