@@ -3,10 +3,9 @@
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { useSuggestions } from "@/lib/api/suggestions";
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 
 const TYPED_MIN = 3; // characters typed before the suggestions follow the text
-const TYPED_DELAY = 500; // ms after the last keystroke
 
 /**
  * What the user might send next, above the composer (AI Elements'
@@ -26,8 +25,7 @@ export const NextPrompts = memo(function NextPrompts({
   className?: string;
 }) {
   const typing = usePromptInputController().textInput.value.trim();
-  const settled = useDebounced(typing, TYPED_DELAY);
-  const text = settled.length >= TYPED_MIN ? settled : undefined;
+  const text = typing.length >= TYPED_MIN ? typing : undefined;
   const { data: prompts = [] } = useSuggestions({ threadId, messageId, text });
   // With nothing to go on (an empty input outside an answered thread), a
   // previous text's suggestions would linger.
@@ -42,13 +40,3 @@ export const NextPrompts = memo(function NextPrompts({
     </div>
   );
 });
-
-/** value, once it has stopped changing for ms. */
-function useDebounced<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), ms);
-    return () => clearTimeout(timer);
-  }, [value, ms]);
-  return settled;
-}

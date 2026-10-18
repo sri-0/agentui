@@ -171,6 +171,7 @@ plans/  00–06 + agent-ui-redesign.md   # design docs (see §9)
 | Var | Default | Used by |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | REST (`lib/api/client.ts`) and the WebSocket (`lib/chat/socket.ts`, `http` → `ws`) |
+| `NEXT_PUBLIC_SUGGESTIONS` | on | `off` stops next-prompt suggestions above the composer (`lib/api/suggestions.ts`) |
 
 WebSocket `GET /v1/agent/chat?v=1` (`lib/chat/socket.ts`), one per tab and shared
 by every thread, carries everything between the UI and its agents on existing
