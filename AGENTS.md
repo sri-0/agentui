@@ -54,7 +54,7 @@ the fetch error above the composer, and the socket keeps retrying with backoff.
 
 ```
 app/
-  layout.tsx              # root: Geist fonts + <Providers> (Query, Theme, Tooltip, react-scan)
+  layout.tsx              # root: Geist fonts (the `geist` npm package, bundled: no font CDN) + <Providers> (Query, Theme, Tooltip, react-scan)
   page.tsx                # redirect → /chat
   globals.css             # Tailwind v4 @theme, OKLCH tokens, .ai-gradient/.ai-glow helpers
   (app)/
