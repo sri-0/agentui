@@ -39,10 +39,12 @@ const MIME: Record<string, string> = {
   csv: "text/csv",
 };
 
-/** Save an artifact's body as a file (csv opens in Excel, and so on). */
-export function downloadArtifact(a: Artifact, body: string) {
-  const ext = a.kind === "code" ? (a.language ?? "txt") : (EXT[a.kind] ?? "txt");
-  const url = URL.createObjectURL(new Blob([body], { type: MIME[a.kind] ?? "text/plain" }));
+/** Save an artifact's body as a file (csv opens in Excel, an image as its
+ *  own type, and so on). */
+export function downloadArtifact(a: Artifact, body: string | Blob) {
+  const blob = typeof body === "string" ? new Blob([body], { type: MIME[a.kind] ?? "text/plain" }) : body;
+  const ext = a.kind === "image" ? blob.type.split("/")[1] : a.kind === "code" ? (a.language ?? "txt") : (EXT[a.kind] ?? "txt");
+  const url = URL.createObjectURL(blob);
   const el = document.createElement("a");
   el.href = url;
   el.download = `${a.title.replace(/[^a-z0-9-_]+/gi, "-").toLowerCase() || "artifact"}.${ext}`;
