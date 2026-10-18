@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,14 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TagsInput, TagsInputInput, TagsInputItem, TagsInputList } from "@/components/ui/tags-input";
 import { type UserFile, useFiles, useUploadFile } from "@/lib/api/files";
 import { useWorkspaces } from "@/lib/api/workspaces";
 import { cn } from "@/lib/utils";
 import { CheckIcon, LoaderIcon, UploadIcon, XIcon } from "lucide-react";
-import { useState } from "react";
-import { type Accept, type FileRejection, useDropzone } from "react-dropzone";
+import { useRef, useState } from "react";
 
 import { FileKindIcon, formatSize } from "./file-icon";
 
@@ -28,7 +28,7 @@ const MAX_TAG = 40;
 /** What the server takes: only what a model or the embedding model reads as
  *  it is, nothing converted (agentlite docs/FILES.md). Code is text; browsers
  *  give most code files no type (or .ts a video one), so extensions count. */
-const ACCEPT: Accept = {
+const ACCEPT: Record<string, string[]> = {
   "text/*": [
     ...[".txt", ".md", ".csv", ".json", ".log", ".yaml", ".yml", ".toml", ".xml", ".html", ".css", ".sql", ".sh"],
     ...[".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".java", ".rb", ".rs", ".c", ".h", ".cpp", ".cs", ".php"],
@@ -43,6 +43,8 @@ const ACCEPT: Accept = {
   "video/mp4": [".mp4"],
   "application/pdf": [".pdf"],
 };
+/** ACCEPT as the file input's accept attribute. */
+const ACCEPT_ATTR = Object.entries(ACCEPT).flat(2).join(",");
 
 type Entry = { file: File; state: "ready" | "uploading" | "failed"; error?: string };
 
@@ -77,23 +79,18 @@ export function UploadDialog({
   const [notice, setNotice] = useState<string>(); // uploaded elsewhere: said instead of chips
   const known = useKnownTags();
   const upload = useUploadFile();
-  const [{ entries, refused }, setPicked] = useState(() => pick(initialFiles, []));
+  const [{ entries, refused }, setPicked] = useState(() => pick(initialFiles));
   const [tags, setTags] = useState<string[]>([]);
   const busy = entries.some((e) => e.state === "uploading");
 
-  const add = (accepted: File[], rejections: FileRejection[]) =>
+  const browse = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const add = (files: File[]) =>
     setPicked((p) => {
-      const next = pick(accepted, rejections);
+      const next = pick(files);
       const fresh = next.entries.filter((n) => !p.entries.some((e) => same(e.file, n.file)));
       return { entries: [...p.entries, ...fresh], refused: next.refused };
     });
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: ACCEPT,
-    maxSize: MAX_BYTES,
-    multiple: true,
-    disabled: busy,
-    onDrop: add,
-  });
   const set = (file: File, entry: Partial<Entry>) =>
     setPicked((p) => ({ ...p, entries: p.entries.map((e) => (e.file === file ? { ...e, ...entry } : e)) }));
 
@@ -159,19 +156,41 @@ export function UploadDialog({
               )}
             </div>
 
-            <div
-              {...getRootProps()}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => browse.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                add([...e.dataTransfer.files]);
+              }}
               className={cn(
-                "flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed px-4 py-6 text-center transition-colors hover:bg-accent/40",
-                isDragActive && "border-primary/60 bg-accent/60",
-                busy && "pointer-events-none opacity-60",
+                "flex flex-col items-center gap-1.5 rounded-xl border border-dashed px-4 py-6 text-center transition-colors hover:bg-accent/40 disabled:opacity-60",
+                dragging && "border-primary/60 bg-accent/60",
               )}
             >
-              <input {...getInputProps()} aria-label="Choose files" />
               <UploadIcon className="size-5 text-muted-foreground" />
-              <p className="text-sm font-medium">{isDragActive ? "Drop them here" : "Drop files here or browse"}</p>
-              <p className="text-xs text-muted-foreground">Text & code, PNG, JPEG, WebP, GIF, WAV, MP3, MP4, PDF · up to 25 MB each</p>
-            </div>
+              <span className="text-sm font-medium">{dragging ? "Drop them here" : "Drop files here or browse"}</span>
+              <span className="text-xs text-muted-foreground">Text & code, PNG, JPEG, WebP, GIF, WAV, MP3, MP4, PDF · up to 25 MB each</span>
+            </button>
+            <input
+              ref={browse}
+              type="file"
+              multiple
+              hidden
+              accept={ACCEPT_ATTR}
+              aria-label="Choose files"
+              onChange={(e) => {
+                add([...(e.target.files ?? [])]);
+                e.target.value = ""; // the same file can be picked again
+              }}
+            />
 
             {refused.length > 0 && (
               <ul role="alert" className="flex flex-col gap-0.5 text-xs text-destructive">
@@ -212,26 +231,7 @@ export function UploadDialog({
               <span className="text-sm font-medium" id="upload-tags">
                 Tags <span className="font-normal text-muted-foreground">(optional, for all of them)</span>
               </span>
-              <TagsInput
-                value={tags}
-                onValueChange={setTags}
-                // as the server takes them: at most 40 characters, no repeat in any case
-                onValidate={(t) => t.length <= MAX_TAG && !tags.some((x) => x.toLowerCase() === t.toLowerCase())}
-                max={MAX_TAGS}
-                addOnPaste
-                blurBehavior="add"
-                className="w-full"
-                aria-labelledby="upload-tags"
-              >
-                <TagsInputList>
-                  {tags.map((t) => (
-                    <TagsInputItem key={t} value={t}>
-                      {t}
-                    </TagsInputItem>
-                  ))}
-                  <TagsInputInput placeholder={tags.length ? "" : "Type a tag, then Enter"} disabled={busy} />
-                </TagsInputList>
-              </TagsInput>
+              <TagsField tags={tags} onChange={setTags} disabled={busy} />
               {known.filter((t) => !tags.includes(t)).length > 0 && (
                 <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
                   Used before:
@@ -277,20 +277,18 @@ export function UploadDialog({
 }
 
 /** Picked files as entries, and why any were refused, in words. */
-function pick(accepted: File[], rejections: FileRejection[]) {
-  const okay = accepted.filter((f) => f.size <= MAX_BYTES && accepts(f));
-  const refused = [
-    ...accepted.filter((f) => !okay.includes(f)).map((f) => f.name),
-    ...rejections.map((r) => r.file.name),
-  ].map((name) => `${name}: not a kind of file that can be uploaded, or over 25 MB`);
+function pick(files: File[]) {
+  const okay = files.filter((f) => f.size <= MAX_BYTES && accepts(f));
+  const refused = files
+    .filter((f) => !okay.includes(f))
+    .map((f) => `${f.name}: ${f.size > MAX_BYTES ? "over 25 MB" : "not a kind of file that can be uploaded"}`);
   return { entries: okay.map((file): Entry => ({ file, state: "ready" })), refused };
 }
 
 /** The same file picked twice. */
 const same = (a: File, b: File) => a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
 
-/** Whether a file passed in from elsewhere (a drop on the composer, a paste)
- *  is one ACCEPT lets through, by type or extension, as the dropzone checks. */
+/** Whether a file is one ACCEPT lets through, by type or extension. */
 function accepts(file: File) {
   const ext = file.name.includes(".") ? `.${file.name.split(".").pop()!.toLowerCase()}` : "";
   return Object.entries(ACCEPT).some(
@@ -304,4 +302,65 @@ function useKnownTags() {
   const counts = new Map<string, number>();
   for (const t of files.flatMap((f) => f.tags ?? [])) counts.set(t, (counts.get(t) ?? 0) + 1);
   return [...counts].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+}
+
+/**
+ * Tags as chips before a text box: Enter, a comma or leaving the box adds what
+ * is typed; Backspace in an empty box removes the last; ✕ removes one. As the
+ * server takes them: at most 10, each at most 40 characters, no repeat in any
+ * case.
+ */
+function TagsField({ tags, onChange, disabled }: { tags: string[]; onChange: (tags: string[]) => void; disabled: boolean }) {
+  const [draft, setDraft] = useState("");
+  const add = (words: string[]) => {
+    const next = [...tags];
+    for (const w of words.map((w) => w.trim())) {
+      if (w && w.length <= MAX_TAG && next.length < MAX_TAGS && !next.some((t) => t.toLowerCase() === w.toLowerCase())) next.push(w);
+    }
+    if (next.length !== tags.length) onChange(next);
+  };
+  return (
+    <div className="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border bg-transparent px-2 py-1 focus-within:ring-3 focus-within:ring-ring/50">
+      {tags.map((t) => (
+        <Badge key={t} variant="secondary" className="gap-1 pe-1">
+          {t}
+          <button
+            type="button"
+            aria-label={`Remove tag ${t}`}
+            disabled={disabled}
+            onClick={() => onChange(tags.filter((x) => x !== t))}
+            className="rounded-sm opacity-60 hover:opacity-100"
+          >
+            <XIcon className="size-3" />
+          </button>
+        </Badge>
+      ))}
+      <Input
+        aria-labelledby="upload-tags"
+        value={draft}
+        disabled={disabled || tags.length >= MAX_TAGS}
+        placeholder={tags.length ? "" : "Type a tag, then Enter"}
+        className="h-7 min-w-24 flex-1 border-0 px-1 shadow-none focus-visible:ring-0"
+        onChange={(e) => {
+          // a comma, typed or pasted, ends a tag
+          const parts = e.target.value.split(",");
+          if (parts.length > 1) add(parts.slice(0, -1));
+          setDraft(parts.at(-1) ?? "");
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add([draft]);
+            setDraft("");
+          } else if (e.key === "Backspace" && !draft && tags.length) {
+            onChange(tags.slice(0, -1));
+          }
+        }}
+        onBlur={() => {
+          add([draft]);
+          setDraft("");
+        }}
+      />
+    </div>
+  );
 }

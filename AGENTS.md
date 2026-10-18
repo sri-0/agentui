@@ -133,10 +133,11 @@ components/
                               #   workspace shown, cards (an image shows itself) with a Searchable / Reference
                               #   only badge and the tags, download and delete; files are never opened in the
                               #   browser (the server sends them as attachments)
-  files/upload-dialog.tsx     # THE way files are uploaded: a dropzone (react-dropzone) for several at once,
-                              #   what's accepted said plainly (and refused before upload), the workspace (a
-                              #   Select, starting at the chat's or the page's), tags for the batch (Dice UI
-                              #   tags-input, earlier tags offered), per-file progress and the server's
+  files/upload-dialog.tsx     # THE way files are uploaded: a drop area (native drag events + a file input)
+                              #   for several at once, what's accepted said plainly (and refused before
+                              #   upload), the workspace (a Select, starting at the chat's or the page's), tags
+                              #   for the batch (TagsField: shadcn Input + Badge chips, earlier tags offered),
+                              #   per-file progress and the server's
                               #   reasons; each kept file in the chat's workspace goes to onUploaded, and
                               #   files sent to another workspace are said to be unusable in the chat
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
@@ -530,6 +531,9 @@ before large changes:
 - **Keep `lib/chat/reduce.ts` in sync with `agentlite/docs/AG-UI-RENDERING.md`.** A new
   AG-UI event or activity type needs a reducer case, a part type in
   `lib/chat/types.ts` and a renderer in `message-list.tsx`.
+- **UI components are shadcn and AI Elements only** (the `shadcn` CLI with its own and the
+  `@ai-elements` registry). No other component libraries or registries (no Dice UI, no
+  ElevenLabs UI, no dropzone packages): compose shadcn primitives, or write the small piece.
 - **No AI SDK in the chat layer.** The view model is our own; only the vendored
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
