@@ -42,13 +42,13 @@ export const WorkspaceBar = memo(function WorkspaceBar({ threadId }: { threadId?
   };
 
   return (
-    <div className="relative z-0 mx-auto -mt-4 flex w-[calc(100%-2.75rem)] items-center rounded-b-2xl border border-t-0 border-border bg-muted px-2 pt-5 pb-1.5">
+    <div className="relative z-0 mx-auto -mt-4 flex w-[calc(100%-2.75rem)] items-center rounded-b-2xl border border-t-0 border-neutral-300 bg-neutral-200 px-2 pt-5 pb-1.5 dark:border-neutral-700 dark:bg-neutral-800">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
             aria-label={`Workspace: ${current?.name ?? "none"}`}
-            className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-foreground/80 transition-colors hover:bg-background hover:text-foreground"
+            className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-300/70 hover:text-foreground dark:text-neutral-300 dark:hover:bg-neutral-700"
           >
             <FolderIcon className="size-3.5" />
             <span className="max-w-[240px] truncate">{current?.name ?? "No workspace"}</span>
