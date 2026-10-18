@@ -81,9 +81,10 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
         <ModeToggle mode={mode} />
       </header>
 
-      {/* The heading and composer are centred in the window; what a mode adds
-          hangs below them, so switching modes doesn't move the composer. */}
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-10">
+      {/* The heading and composer are centred, lifted by the extra bottom padding
+          so they and what a mode adds below them sit in the middle together; what
+          a mode adds hangs below, so switching modes doesn't move the composer. */}
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 pt-10 pb-[20vh]">
         <div className="relative w-full">
           <div className="mb-10 text-center">
             <h1 className="text-balance text-4xl font-semibold tracking-tight">{MODES[mode].title}</h1>
