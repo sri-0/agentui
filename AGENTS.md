@@ -81,9 +81,10 @@ app/
 - Images conversations: a thread whose `agent_id` is `images` (`IMAGES_AGENT`,
   `lib/api/agents.ts`) is an ordinary chat whose composer is in its images mode
   (`<Composer images>`: `ModelSelector use="image"`, no agent or connector selectors), and
-  its turns keep `agentId: "images"`. Every turn sends `imageModel`, the picked image model
-  (`selectedImageModel`, persisted), which `generate_image` uses; `ImageCall` shows the
-  image in the thread, and a follow-up such as "make it blue" edits it.
+  its turns keep `agentId: "images"` and send no `model`, so the agent runs on the server's
+  default LLM (`runOptions(IMAGES_AGENT)`). Every turn sends `imageModel`, the picked image
+  model (`selectedImageModel`, persisted), which `generate_image` uses; `ImageCall` shows
+  the image in the thread, and a follow-up such as "make it blue" edits it.
 
 ```
 components/
