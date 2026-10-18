@@ -2,7 +2,7 @@
 
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import { useSuggestions } from "@/lib/api/suggestions";
+import { type SuggestMessage, useSuggestions } from "@/lib/api/suggestions";
 import { memo } from "react";
 
 const TYPED_MIN = 3; // characters typed before the suggestions follow the text
@@ -14,19 +14,19 @@ const TYPED_MIN = 3; // characters typed before the suggestions follow the text
  * of the draft. Nothing shows while they load or if they fail.
  */
 export const NextPrompts = memo(function NextPrompts({
-  threadId,
   messageId,
+  messages,
   onPick,
   className,
 }: {
-  threadId?: string;
   messageId?: string;
+  messages?: SuggestMessage[];
   onPick: (prompt: string) => void;
   className?: string;
 }) {
   const typing = usePromptInputController().textInput.value.trim();
   const text = typing.length >= TYPED_MIN ? typing : undefined;
-  const { data: prompts = [] } = useSuggestions({ threadId, messageId, text });
+  const { data: prompts = [] } = useSuggestions({ messageId, messages, text });
   // With nothing to go on (an empty input outside an answered thread), a
   // previous text's suggestions would linger.
   if (!prompts.length || (!typing && !messageId)) return null;

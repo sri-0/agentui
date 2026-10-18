@@ -53,8 +53,9 @@ export function useStartChat(agentId?: string) {
   return { start, error };
 }
 
-/** A new chat's suggestions follow what is typed; it has no thread yet. */
-const NEW_CHAT_SUGGEST = {};
+/** A new chat's suggestions follow what is typed (it has no thread yet),
+ *  floating above the centred composer. */
+const NEW_CHAT_SUGGEST = { floating: true };
 
 const MODES = {
   chat: { title: "How can I help?", hint: "Choose a model or an agent, then ask anything." },

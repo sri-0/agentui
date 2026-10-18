@@ -9,6 +9,7 @@ import {
   PromptInputTools,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
+import type { SuggestFor } from "@/lib/api/suggestions";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
 import { memo, type ReactNode, useCallback, useRef, useState } from "react";
@@ -39,9 +40,10 @@ type ComposerProps = {
   initialText?: string;
   /** an images composer: it picks the image model, and no agent or connectors */
   images?: boolean;
-  /** next-prompt suggestions above the input: for the thread's last answer
-   *  (messageId) and for what is typed; {} on a new chat, for the typed text */
-  suggest?: { threadId?: string; messageId?: string };
+  /** next-prompt suggestions above the input: for the thread's last turn
+   *  (the answer's messageId and the turn's messages) and for what is typed;
+   *  on a new chat (`floating`) for the typed text only */
+  suggest?: SuggestFor & { floating?: boolean };
 };
 
 // The provider holds the text the form sends; the editor writes it on each edit.
@@ -85,8 +87,13 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
       {suggest && !dictating && (
         // Without a thread (the centred new-chat page) they float above the
         // input, so the page doesn't move when they come and go.
-        <div className={cn(!suggest.threadId && "relative")}>
-          <NextPrompts {...suggest} onPick={pick} className={cn(!suggest.threadId && "absolute inset-x-0 bottom-0")} />
+        <div className={cn(suggest.floating && "relative")}>
+          <NextPrompts
+            messageId={suggest.messageId}
+            messages={suggest.messages}
+            onPick={pick}
+            className={cn(suggest.floating && "absolute inset-x-0 bottom-0")}
+          />
         </div>
       )}
       <div className="relative" {...attach.handlers}>

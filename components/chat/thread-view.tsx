@@ -17,6 +17,7 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { IMAGES_AGENT } from "@/lib/api/agents";
 import { useModels } from "@/lib/api/models";
+import type { SuggestFor, SuggestMessage } from "@/lib/api/suggestions";
 import { useThreadSources } from "@/lib/api/sources";
 import { fetchThread, useThreadRecord } from "@/lib/api/threads";
 import { collectArtifacts, useArtifacts } from "@/lib/chat/artifacts";
@@ -30,6 +31,7 @@ import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState
 import { Composer, type ComposerStatus } from "./composer/composer";
 import { ThreadUsageRing } from "./composer/thread-usage-ring";
 import { ConversationSkeleton } from "./loading";
+import { messageText } from "./messages/message-actions";
 import { MessageList } from "./messages/message-list";
 import { pendingQuestion, QuestionPanel } from "./messages/question-card";
 import { TaskBar } from "./task-bar";
@@ -116,14 +118,21 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   // A run that ends may have published artifacts and cited sources.
   const streaming = status === "streaming";
 
-  // Next-prompt suggestions for the last answer, also of a thread just
-  // opened; not for a failed or stopped run, nor while one runs or waits on
-  // a question (then there are none, typed text included).
+  // Next-prompt suggestions for the last turn, also of a thread just opened,
+  // sent as shown here (the user's message and the answer); not for a failed
+  // or stopped run, nor while one runs or waits on a question (then there are
+  // none, typed text included).
   const last = messages.at(-1);
-  const answered = last?.role === "assistant" && !last.metadata?.cancelled && !last.metadata?.error;
-  const suggestFor = answered ? last.id : undefined;
+  const asked = messages.at(-2);
+  const answered = last?.role === "assistant" && !last.metadata?.cancelled && !last.metadata?.error ? last : undefined;
   const idle = status === "idle" && !asking;
-  const suggest = useMemo(() => (idle ? { threadId, messageId: suggestFor } : undefined), [idle, threadId, suggestFor]);
+  const suggest = useMemo((): SuggestFor | undefined => {
+    if (!idle) return undefined;
+    if (!answered) return {};
+    const turn: SuggestMessage[] = [{ role: "assistant", content: messageText(answered) }];
+    if (asked?.role === "user") turn.unshift({ role: "user", content: messageText(asked) });
+    return { messageId: answered.id, messages: turn };
+  }, [idle, answered, asked]);
   const wasStreaming = useRef(streaming);
   useEffect(() => {
     if (wasStreaming.current && !streaming) {
