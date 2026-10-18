@@ -39,7 +39,7 @@ export function useStartChat(agentId?: string) {
       let threadId: string;
       try {
         const workspaceId = useUiStore.getState().newChatWorkspaceId ?? undefined;
-        threadId = (await createThread(message.text, { ...runOptions(), ...(agentId && { agentId }), workspaceId }))
+        threadId = (await createThread(message.text, { ...runOptions(agentId), workspaceId }))
           .threadId;
       } catch (err) {
         setError((err as Error).message);

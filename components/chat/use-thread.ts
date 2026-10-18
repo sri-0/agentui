@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect } from "react";
 
+import { IMAGES_AGENT } from "@/lib/api/agents";
 import { emptyThread } from "@/lib/chat/reduce";
 import { cancelRun, closeThread, openThread, resumeRun, sendMessage, useChatStore } from "@/lib/chat/store";
 import { useUiStore } from "@/stores/ui-store";
@@ -18,12 +19,14 @@ function agentIdFor(selected: string | null): string | undefined {
   return selected;
 }
 
-/** What the composer's selectors currently ask for on a run. */
-export function runOptions() {
+/** What the composer's selectors currently ask for on a run, with agentId
+ *  instead of the picked agent when given. An images conversation runs on the
+ *  server's default model; only its image model is picked. */
+export function runOptions(agentId?: string) {
   const { selectedAgentId, selectedModel, selectedConnectors, selectedImageModel } = useUiStore.getState();
   return {
-    agentId: agentIdFor(selectedAgentId),
-    model: selectedModel ?? undefined,
+    agentId: agentId ?? agentIdFor(selectedAgentId),
+    model: agentId === IMAGES_AGENT ? undefined : (selectedModel ?? undefined),
     connectors: selectedConnectors,
     imageModel: selectedImageModel ?? undefined,
   };
@@ -44,7 +47,7 @@ export function useThread(threadId: string) {
 
   // agentId keeps a thread on its own agent (an images conversation) whatever the picker says.
   const send = useCallback(
-    (text: string, agentId?: string) => void sendMessage(threadId, text, { ...runOptions(), ...(agentId && { agentId }) }),
+    (text: string, agentId?: string) => void sendMessage(threadId, text, runOptions(agentId)),
     [threadId],
   );
   const approve = useCallback(
