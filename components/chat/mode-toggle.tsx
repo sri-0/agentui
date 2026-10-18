@@ -25,10 +25,10 @@ export const ModeToggle = memo(function ModeToggle({ mode }: { mode: ChatMode })
       className="sm:absolute sm:left-1/2 sm:-translate-x-1/2"
     >
       <TabsList className="h-9 rounded-full p-1">
-        <TabsTrigger value="chat" className="rounded-full px-3 sm:px-4">
+        <TabsTrigger value="chat" className="rounded-full px-3 sm:px-4 dark:data-active:border-transparent">
           <MessageSquareIcon className="hidden sm:block" /> Chat
         </TabsTrigger>
-        <TabsTrigger value="images" className="rounded-full px-3 sm:px-4">
+        <TabsTrigger value="images" className="rounded-full px-3 sm:px-4 dark:data-active:border-transparent">
           <ImageIcon className="hidden sm:block" /> Images
         </TabsTrigger>
       </TabsList>

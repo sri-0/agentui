@@ -35,6 +35,7 @@ import { messageText } from "./messages/message-actions";
 import { MessageList } from "./messages/message-list";
 import { pendingQuestion, QuestionPanel } from "./messages/question-card";
 import { TaskBar } from "./task-bar";
+import { ThreadMenu } from "./thread-menu";
 import { useThread } from "./use-thread";
 import { WorkspaceBar } from "./workspace-bar";
 
@@ -282,6 +283,7 @@ const ThreadHeader = memo(function ThreadHeader({
         {artifactCount > 0 && (
           <PanelButton panel="artifacts" icon={<FileTextIcon className="size-4" />} label="Artifacts" count={artifactCount} />
         )}
+        <ThreadMenu />
       </div>
     </header>
   );
