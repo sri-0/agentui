@@ -134,9 +134,11 @@ components/
                               #   only badge and the tags, download and delete; files are never opened in the
                               #   browser (the server sends them as attachments)
   files/upload-dialog.tsx     # THE way files are uploaded: a dropzone (react-dropzone) for several at once,
-                              #   what's accepted said plainly (and refused before upload), tags for the batch
-                              #   (Dice UI tags-input, earlier tags offered), per-file progress and the
-                              #   server's reasons; each kept file goes to onUploaded
+                              #   what's accepted said plainly (and refused before upload), the workspace (a
+                              #   Select, starting at the chat's or the page's), tags for the batch (Dice UI
+                              #   tags-input, earlier tags offered), per-file progress and the server's
+                              #   reasons; each kept file in the chat's workspace goes to onUploaded, and
+                              #   files sent to another workspace are said to be unusable in the chat
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   sidebar/workspace-groups.tsx # workspaces: a folder of conversations each, new chat in one, rename, delete

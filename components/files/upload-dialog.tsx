@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TagsInput, TagsInputInput, TagsInputItem, TagsInputList } from "@/components/ui/tags-input";
 import { type UserFile, useFiles, useUploadFile } from "@/lib/api/files";
 import { useWorkspaces } from "@/lib/api/workspaces";
@@ -45,25 +46,35 @@ const ACCEPT: Accept = {
 
 type Entry = { file: File; state: "ready" | "uploading" | "failed"; error?: string };
 
+/** The workspace select's value for none (a Select item can't be ""). */
+const NONE = "none";
+
 /**
- * Upload files into a workspace (null: none): drop or pick several, tag them
- * all, upload. Each one that is kept goes to onUploaded straight away; one the
- * server refuses stays listed with its reason, to remove or retry. The parent
- * mounts it while open, so every batch starts afresh.
+ * Upload files: drop or pick several, choose their workspace (workspaceId to
+ * start; null is none), tag them all, upload. From a chat (chatWorkspaceId
+ * set), each kept file in the chat's workspace goes to onUploaded straight
+ * away; files sent to another workspace can't be used there, which it says
+ * instead. One the server refuses stays listed with its reason, to remove or
+ * retry. The parent mounts it while open, so every batch starts afresh.
  */
 export function UploadDialog({
   workspaceId,
+  chatWorkspaceId,
   initialFiles = [],
   onUploaded,
   onClose,
 }: {
   workspaceId: string | null;
+  chatWorkspaceId?: string | null;
   initialFiles?: File[];
   onUploaded?: (files: UserFile[]) => void;
   onClose: () => void;
 }) {
   const { data: workspaces = [] } = useWorkspaces();
-  const workspace = workspaces.find((w) => w.id === workspaceId)?.name;
+  const [target, setTarget] = useState(workspaceId);
+  const nameOf = (id: string | null) => workspaces.find((w) => w.id === id)?.name ?? "No workspace";
+  const elsewhere = chatWorkspaceId !== undefined && target !== chatWorkspaceId;
+  const [notice, setNotice] = useState<string>(); // uploaded elsewhere: said instead of chips
   const known = useKnownTags();
   const upload = useUploadFile();
   const [{ entries, refused }, setPicked] = useState(() => pick(initialFiles, []));
@@ -91,7 +102,7 @@ export function UploadDialog({
     for (const { file } of todo) set(file, { state: "uploading", error: undefined });
     const results = await Promise.all(
       todo.map(({ file }) =>
-        upload.mutateAsync({ file, workspaceId, tags }).then(
+        upload.mutateAsync({ file, workspaceId: target, tags }).then(
           (record) => {
             setPicked((p) => ({ ...p, entries: p.entries.filter((e) => e.file !== file) }));
             return record;
@@ -104,8 +115,10 @@ export function UploadDialog({
       ),
     );
     const kept = results.filter((r): r is UserFile => r !== null);
-    if (kept.length) onUploaded?.(kept);
-    if (kept.length === todo.length) onClose();
+    if (kept.length && !elsewhere) onUploaded?.(kept);
+    if (kept.length < todo.length) return; // the refused ones stay listed
+    if (elsewhere) setNotice(`Uploaded to ${nameOf(target)}; files in another workspace can't be used in this chat.`);
+    else onClose();
   };
 
   return (
@@ -113,117 +126,150 @@ export function UploadDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Upload files</DialogTitle>
-          <DialogDescription>
-            Into {workspace ? <strong className="font-medium text-foreground">{workspace}</strong> : "no workspace"}:
-            chats there can name them with #.
-          </DialogDescription>
+          <DialogDescription>Chats in the workspace can name them with #.</DialogDescription>
         </DialogHeader>
 
-        <div
-          {...getRootProps()}
-          className={cn(
-            "flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed px-4 py-6 text-center transition-colors hover:bg-accent/40",
-            isDragActive && "border-primary/60 bg-accent/60",
-            busy && "pointer-events-none opacity-60",
-          )}
-        >
-          <input {...getInputProps()} aria-label="Choose files" />
-          <UploadIcon className="size-5 text-muted-foreground" />
-          <p className="text-sm font-medium">{isDragActive ? "Drop them here" : "Drop files here, or click to choose"}</p>
-          <p className="text-xs text-balance text-muted-foreground">
-            Text and code (.txt, .md, .csv, .json, …), images (PNG, JPEG, WebP, GIF), audio (WAV, MP3) and video
-            (MP4) are searchable; a PDF can be named with # but not searched. Up to 25 MB each.
+        {notice ? (
+          <p role="status" className="text-sm">
+            {notice}
           </p>
-        </div>
-
-        {refused.length > 0 && (
-          <ul role="alert" className="flex flex-col gap-0.5 text-xs text-destructive">
-            {refused.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
-        )}
-
-        {entries.length > 0 && (
-          <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto" aria-label="Files to upload">
-            {entries.map(({ file, state, error }) => (
-              <li key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center gap-2.5 rounded-lg bg-muted/50 px-2.5 py-1.5 text-sm">
-                <FileKindIcon mediaType={file.type} className="size-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{file.name}</span>
-                  {error && <span className="block text-xs text-destructive">{error}</span>}
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground">{formatSize(file.size)}</span>
-                {state === "uploading" ? (
-                  <LoaderIcon className="size-4 shrink-0 animate-spin text-muted-foreground" aria-label="Uploading" />
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={`Remove ${file.name}`}
-                    onClick={() => setPicked((p) => ({ ...p, entries: p.entries.filter((e) => e.file !== file) }))}
-                  >
-                    <XIcon />
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium" id="upload-tags">
-            Tags <span className="font-normal text-muted-foreground">(optional, for all of them)</span>
-          </span>
-          <TagsInput
-            value={tags}
-            onValueChange={setTags}
-            // as the server takes them: at most 40 characters, no repeat in any case
-            onValidate={(t) => t.length <= MAX_TAG && !tags.some((x) => x.toLowerCase() === t.toLowerCase())}
-            max={MAX_TAGS}
-            addOnPaste
-            blurBehavior="add"
-            className="w-full"
-            aria-labelledby="upload-tags"
-          >
-            <TagsInputList>
-              {tags.map((t) => (
-                <TagsInputItem key={t} value={t}>
-                  {t}
-                </TagsInputItem>
-              ))}
-              <TagsInputInput placeholder={tags.length ? "" : "Type a tag, then Enter"} disabled={busy} />
-            </TagsInputList>
-          </TagsInput>
-          {known.filter((t) => !tags.includes(t)).length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-              Used before:
-              {known
-                .filter((t) => !tags.includes(t))
-                .slice(0, 8)
-                .map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    disabled={busy || tags.length >= MAX_TAGS}
-                    onClick={() => setTags((ts) => [...ts, t])}
-                    className="rounded-md border px-1.5 py-0.5 hover:bg-accent hover:text-foreground"
-                  >
-                    {t}
-                  </button>
-                ))}
+        ) : (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium" id="upload-workspace">
+                Workspace
+              </span>
+              <Select value={target ?? NONE} onValueChange={(v) => setTarget(v === NONE ? null : v)} disabled={busy}>
+                <SelectTrigger className="w-full" aria-labelledby="upload-workspace">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>No workspace</SelectItem>
+                  {workspaces.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {elsewhere && (
+                <p className="text-xs text-muted-foreground">
+                  Files in another workspace can&apos;t be used in this chat; they won&apos;t be added to your message.
+                </p>
+              )}
             </div>
-          )}
-        </div>
+
+            <div
+              {...getRootProps()}
+              className={cn(
+                "flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed px-4 py-6 text-center transition-colors hover:bg-accent/40",
+                isDragActive && "border-primary/60 bg-accent/60",
+                busy && "pointer-events-none opacity-60",
+              )}
+            >
+              <input {...getInputProps()} aria-label="Choose files" />
+              <UploadIcon className="size-5 text-muted-foreground" />
+              <p className="text-sm font-medium">{isDragActive ? "Drop them here" : "Drop files here or browse"}</p>
+              <p className="text-xs text-muted-foreground">Text & code, PNG, JPEG, WebP, GIF, WAV, MP3, MP4, PDF · up to 25 MB each</p>
+            </div>
+
+            {refused.length > 0 && (
+              <ul role="alert" className="flex flex-col gap-0.5 text-xs text-destructive">
+                {refused.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            )}
+
+            {entries.length > 0 && (
+              <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto" aria-label="Files to upload">
+                {entries.map(({ file, state, error }) => (
+                  <li key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center gap-2.5 rounded-lg bg-muted/50 px-2.5 py-1.5 text-sm">
+                    <FileKindIcon mediaType={file.type} className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{file.name}</span>
+                      {error && <span className="block text-xs text-destructive">{error}</span>}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatSize(file.size)}</span>
+                    {state === "uploading" ? (
+                      <LoaderIcon className="size-4 shrink-0 animate-spin text-muted-foreground" aria-label="Uploading" />
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`Remove ${file.name}`}
+                        onClick={() => setPicked((p) => ({ ...p, entries: p.entries.filter((e) => e.file !== file) }))}
+                      >
+                        <XIcon />
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium" id="upload-tags">
+                Tags <span className="font-normal text-muted-foreground">(optional, for all of them)</span>
+              </span>
+              <TagsInput
+                value={tags}
+                onValueChange={setTags}
+                // as the server takes them: at most 40 characters, no repeat in any case
+                onValidate={(t) => t.length <= MAX_TAG && !tags.some((x) => x.toLowerCase() === t.toLowerCase())}
+                max={MAX_TAGS}
+                addOnPaste
+                blurBehavior="add"
+                className="w-full"
+                aria-labelledby="upload-tags"
+              >
+                <TagsInputList>
+                  {tags.map((t) => (
+                    <TagsInputItem key={t} value={t}>
+                      {t}
+                    </TagsInputItem>
+                  ))}
+                  <TagsInputInput placeholder={tags.length ? "" : "Type a tag, then Enter"} disabled={busy} />
+                </TagsInputList>
+              </TagsInput>
+              {known.filter((t) => !tags.includes(t)).length > 0 && (
+                <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                  Used before:
+                  {known
+                    .filter((t) => !tags.includes(t))
+                    .slice(0, 8)
+                    .map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        disabled={busy || tags.length >= MAX_TAGS}
+                        onClick={() => setTags((ts) => [...ts, t])}
+                        className="rounded-md border px-1.5 py-0.5 hover:bg-accent hover:text-foreground"
+                      >
+                        {t}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
+
+          </>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button onClick={start} disabled={busy || entries.length === 0}>
-            {busy ? <LoaderIcon className="animate-spin" /> : <CheckIcon />}
-            {entries.some((e) => e.state === "failed") ? "Try again" : `Upload ${entries.length || ""}`.trim()}
-          </Button>
+          {notice ? (
+            <Button onClick={onClose}>Done</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose} disabled={busy}>
+                Cancel
+              </Button>
+              <Button onClick={start} disabled={busy || entries.length === 0}>
+                {busy ? <LoaderIcon className="animate-spin" /> : <CheckIcon />}
+                {entries.some((e) => e.state === "failed") ? "Try again" : `Upload ${entries.length || ""}`.trim()}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
