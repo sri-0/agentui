@@ -77,9 +77,8 @@ app/
   subscribes and replays the turn from its start. Every later turn is a `run` frame on
   the socket. `/images` is the same page in Images mode and starts the thread with
   `agentId: "images"`. The Chat | Images toggle (`mode-toggle.tsx`) is pinned to the top
-  of both pages and of a thread, where it shows the thread's mode (its agent sets it) and
-  the other mode starts a new conversation. The sidebar has no Images item; the toggle is
-  the way in.
+  of the page and switches between the two; a thread has none (its agent sets its mode).
+  The sidebar has no Images item; the toggle is the way in.
 - Images conversations: a thread whose `agent_id` is `images` (`IMAGES_AGENT`,
   `lib/api/agents.ts`) is an ordinary chat whose composer is in its images mode
   (`<Composer images>`: `ModelSelector use="image"`, no agent or connector selectors), and
@@ -95,8 +94,8 @@ components/
     reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
     landing-view.tsx          # the new-conversation page, /chat or /images: one composer whose
                               #   mode the toggle sets, suggestions or the image carousel; useStartChat
-    mode-toggle.tsx           # the Chat | Images toggle (shadcn Tabs) in the top bar of the chat
-                              #   screens: switches /chat and /images, or from a thread starts one
+    mode-toggle.tsx           # the Chat | Images toggle (shadcn Tabs) in the new-conversation
+                              #   page's top bar: switches /chat and /images
     thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
