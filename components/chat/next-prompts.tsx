@@ -34,7 +34,7 @@ export const NextPrompts = memo(function NextPrompts({
     <div className={className}>
       <Suggestions className="px-1 pb-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
         {prompts.map((p) => (
-          <Suggestion key={p} suggestion={p} onClick={onPick} className="bg-card/80 font-normal text-muted-foreground" />
+          <Suggestion key={p} suggestion={p} onClick={onPick} className="pointer-events-auto bg-card/70 font-normal text-muted-foreground backdrop-blur-md" />
         ))}
       </Suggestions>
     </div>

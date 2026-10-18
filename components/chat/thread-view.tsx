@@ -186,8 +186,13 @@ export function ThreadChat({ threadId }: { threadId: string }) {
             reconnecting={!connected}
           />
 
+          {/* The suggestions float over its foot, where it fades out; pb-16
+              keeps the last answer clear of them. */}
           <Conversation className="flex-1">
-            <ConversationContent className="px-4 py-6">
+            <ConversationContent
+              className="px-4 pt-6 pb-16"
+              scrollClassName="[mask-image:linear-gradient(to_bottom,black_calc(100%-3rem),transparent)]"
+            >
               <MessageList
                 messages={messages}
                 status={status}
@@ -195,7 +200,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
                 onReopenQuestion={question && putAway === questionId ? onReopenQuestion : undefined}
               />
             </ConversationContent>
-            <ConversationScrollButton />
+            <ConversationScrollButton className="bottom-12" />
           </Conversation>
 
           <div className="px-4 pb-5 pt-2">

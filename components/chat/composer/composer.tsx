@@ -42,8 +42,8 @@ type ComposerProps = {
   images?: boolean;
   /** next-prompt suggestions above the input: for the thread's last turn
    *  (the answer's messageId and the turn's messages) and for what is typed;
-   *  on a new chat (`floating`) for the typed text only */
-  suggest?: SuggestFor & { floating?: boolean };
+   *  on a new chat for the typed text only */
+  suggest?: SuggestFor;
 };
 
 // The provider holds the text the form sends; the editor writes it on each edit.
@@ -85,14 +85,14 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
   return (
     <>
       {suggest && !dictating && (
-        // Without a thread (the centred new-chat page) they float above the
-        // input, so the page doesn't move when they come and go.
-        <div className={cn(suggest.floating && "relative")}>
+        // They float above the input, over the conversation, so nothing moves
+        // when they come and go; only the chips take clicks.
+        <div className="relative">
           <NextPrompts
             messageId={suggest.messageId}
             messages={suggest.messages}
             onPick={pick}
-            className={cn(suggest.floating && "absolute inset-x-0 bottom-0")}
+            className="pointer-events-none absolute inset-x-0 bottom-0"
           />
         </div>
       )}
