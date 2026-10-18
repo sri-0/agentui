@@ -46,7 +46,7 @@ export function useThreads() {
  *  socket. */
 export function createThread(
   text: string,
-  opts: { agentId?: string; model?: string; connectors?: string[] | null; workspaceId?: string },
+  opts: { agentId?: string; model?: string; connectors?: string[] | null; imageModel?: string; workspaceId?: string },
 ) {
   return apiFetch<{ threadId: string; runId: string; seq: string }>("/v1/agent/chat", {
     method: "POST",

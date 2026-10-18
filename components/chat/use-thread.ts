@@ -20,8 +20,13 @@ function agentIdFor(selected: string | null): string | undefined {
 
 /** What the composer's selectors currently ask for on a run. */
 export function runOptions() {
-  const { selectedAgentId, selectedModel, selectedConnectors } = useUiStore.getState();
-  return { agentId: agentIdFor(selectedAgentId), model: selectedModel ?? undefined, connectors: selectedConnectors };
+  const { selectedAgentId, selectedModel, selectedConnectors, selectedImageModel } = useUiStore.getState();
+  return {
+    agentId: agentIdFor(selectedAgentId),
+    model: selectedModel ?? undefined,
+    connectors: selectedConnectors,
+    imageModel: selectedImageModel ?? undefined,
+  };
 }
 
 /**
@@ -37,7 +42,11 @@ export function useThread(threadId: string) {
     return () => closeThread(threadId);
   }, [threadId]);
 
-  const send = useCallback((text: string) => void sendMessage(threadId, text, runOptions()), [threadId]);
+  // agentId keeps a thread on its own agent (an images conversation) whatever the picker says.
+  const send = useCallback(
+    (text: string, agentId?: string) => void sendMessage(threadId, text, { ...runOptions(), ...(agentId && { agentId }) }),
+    [threadId],
+  );
   const approve = useCallback(
     (interruptId: string, approved: boolean, justification?: string) =>
       void resumeRun(threadId, interruptId, { approved, justification }),

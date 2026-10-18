@@ -15,15 +15,15 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { IMAGES_AGENT } from "@/lib/api/agents";
 import { useModels } from "@/lib/api/models";
 import { useThreadSources } from "@/lib/api/sources";
-import { fetchThread } from "@/lib/api/threads";
+import { fetchThread, useThreadRecord } from "@/lib/api/threads";
 import { collectArtifacts, useArtifacts } from "@/lib/chat/artifacts";
 import { useChatStore } from "@/lib/chat/store";
 import { ThreadIdContext } from "@/lib/chat/thread-context";
 import { useUiStore } from "@/stores/ui-store";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { BookOpenIcon, FileTextIcon, LoaderIcon } from "lucide-react";
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -53,16 +53,14 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   // opening it shows the connectors the thread remembers.
   useEffect(() => closeSidepanel, [closeSidepanel]);
   const queryClient = useQueryClient();
-  // An Images page conversation opens there, from any link to /chat.
-  const router = useRouter();
   useEffect(() => {
     queryClient
       .fetchQuery({ queryKey: ["thread", threadId], queryFn: () => fetchThread(threadId) })
-      .then((t) => {
-        if (t.agent_id === "images") router.replace(`/images/${threadId}`);
-        else setConnectors(t.connectors ?? null);
-      }, () => {});
-  }, [threadId, setConnectors, queryClient, router]);
+      .then((t) => setConnectors(t.connectors ?? null), () => {});
+  }, [threadId, setConnectors, queryClient]);
+  // An images conversation (from the Images page) keeps its agent, and its
+  // composer picks the image model.
+  const images = useThreadRecord(threadId).data?.agent_id === IMAGES_AGENT;
   const connected = useChatStore((s) => s.connected);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
@@ -96,9 +94,9 @@ export function ThreadChat({ threadId }: { threadId: string }) {
     async (message: PromptInputMessage) => {
       if (!message.text.trim()) return;
       if (useChatStore.getState().threads[threadId]?.status === "awaiting_input") await stop();
-      send(message.text);
+      send(message.text, images ? IMAGES_AGENT : undefined);
     },
-    [threadId, send, stop],
+    [threadId, send, stop, images],
   );
   const onOpenUsage = useCallback(
     () => openSidepanel({ kind: "usage" }),
@@ -197,7 +195,14 @@ export function ThreadChat({ threadId }: { threadId: string }) {
                     status={composerStatus}
                     onStop={stop}
                     contextSlot={contextSlot}
-                    placeholder={status === "awaiting_input" ? "Send a message to cancel the open request…" : undefined}
+                    images={images}
+                    placeholder={
+                      status === "awaiting_input"
+                        ? "Send a message to cancel the open request…"
+                        : images
+                          ? "Describe a change, or another image…"
+                          : undefined
+                    }
                   />
                   <WorkspaceBar threadId={threadId} />
                 </>

@@ -85,7 +85,7 @@ export function closeThread(threadId: string) {
   stage(threadId, { ...current(threadId), loaded: false });
 }
 
-type RunOptions = { agentId?: string; model?: string; connectors?: string[] | null };
+type RunOptions = { agentId?: string; model?: string; connectors?: string[] | null; imageModel?: string };
 
 /** Send a turn and follow it. */
 export async function sendMessage(threadId: string, text: string, opts: RunOptions) {

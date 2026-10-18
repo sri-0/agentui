@@ -47,15 +47,16 @@ export type RecentArtifact = Artifact & {
   updated_at: string;
 };
 
-/** Artifacts across every conversation, newest first, a page at a time; a
- *  full page names the cursor of the next. Marked stale when a run ends. */
-export function useRecentArtifacts() {
+/** Artifacts across every conversation (of one kind, when given), newest
+ *  first, a page at a time; a full page names the cursor of the next. Marked
+ *  stale when a run ends. */
+export function useRecentArtifacts(kind?: Artifact["kind"]) {
   return useInfiniteQuery({
-    queryKey: ["recent-artifacts"],
+    queryKey: ["recent-artifacts", kind],
     initialPageParam: "",
     queryFn: ({ pageParam }) =>
       apiFetch<ListResponse<RecentArtifact> & { next?: string }>(
-        `/v1/artifacts?${new URLSearchParams(pageParam ? { after: pageParam } : {})}`,
+        `/v1/artifacts?${new URLSearchParams({ ...(kind && { kind }), ...(pageParam && { after: pageParam }) })}`,
       ),
     getNextPageParam: (page) => page.next || undefined,
   });
