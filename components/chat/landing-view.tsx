@@ -81,14 +81,15 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
         <ModeToggle mode={mode} />
       </header>
 
-      {/* From the top, not centred: the heading stays put when a mode is taller. */}
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center px-4 pt-[max(2rem,14vh)] pb-16">
-        <div className="mb-10 text-center">
-          <h1 className="text-balance text-4xl font-semibold tracking-tight">{MODES[mode].title}</h1>
-          <p className="mt-3 text-[15px] text-muted-foreground">{error ?? MODES[mode].hint}</p>
-        </div>
+      {/* The heading and composer are centred in the window; what a mode adds
+          hangs below them, so switching modes doesn't move the composer. */}
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-10">
+        <div className="relative w-full">
+          <div className="mb-10 text-center">
+            <h1 className="text-balance text-4xl font-semibold tracking-tight">{MODES[mode].title}</h1>
+            <p className="mt-3 text-[15px] text-muted-foreground">{error ?? MODES[mode].hint}</p>
+          </div>
 
-        <div className="w-full">
           <Composer
             key={draft}
             autoFocus
@@ -99,24 +100,26 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
             placeholder={images ? "Describe an image…" : undefined}
           />
           <WorkspaceBar />
-        </div>
 
-        {images ? (
-          <RecentImages />
-        ) : (
-          <div className="mt-6 flex flex-wrap justify-center gap-2.5">
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => start({ text: s, files: [] })}
-                className="rounded-full border bg-card px-4 py-2 text-[13px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent hover:text-foreground"
-              >
-                {s}
-              </button>
-            ))}
+          <div className="absolute inset-x-0 top-full pb-10">
+            {images ? (
+              <RecentImages />
+            ) : (
+              <div className="mt-6 flex flex-wrap justify-center gap-2.5">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => start({ text: s, files: [] })}
+                    className="rounded-full border bg-card px-4 py-2 text-[13px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-accent hover:text-foreground"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
