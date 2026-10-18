@@ -128,10 +128,15 @@ components/
                               #   (with an agent: /chat?prompt=…; or upload), cards; ?skill=name
                               #   opens one full-page: details, npx command, files
   skills/skill-dialogs.tsx    # upload (a shadcn file input + details) and edit details
-  files/files-view.tsx        # All files / No workspace / each workspace on the left, search, Upload (or a
-                              #   drop on the list) into the workspace shown, cards (an image shows itself)
-                              #   with a Searchable / Reference only badge, download and delete; files are never
-                              #   opened in the browser (the server sends them as attachments)
+  files/files-view.tsx        # All files / No workspace / each workspace on the left, search (names and
+                              #   tags), Upload (or a drop on the list) opens the upload dialog for the
+                              #   workspace shown, cards (an image shows itself) with a Searchable / Reference
+                              #   only badge and the tags, download and delete; files are never opened in the
+                              #   browser (the server sends them as attachments)
+  files/upload-dialog.tsx     # THE way files are uploaded: a dropzone (react-dropzone) for several at once,
+                              #   what's accepted said plainly (and refused before upload), tags for the batch
+                              #   (Dice UI tags-input, earlier tags offered), per-file progress and the
+                              #   server's reasons; each kept file goes to onUploaded
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   sidebar/workspace-groups.tsx # workspaces: a folder of conversations each, new chat in one, rename, delete
@@ -546,7 +551,9 @@ before large changes:
   thread's agent as the selector does and the chip stays out of the text. `#` lists the files
   of the conversation's workspace (`useChatWorkspaceId`: the thread's, or the workspace card's
   on a new chat; unfiled files when there is none) and reads as `#id`; the backend gives the
-  model the file (agentlite docs/FILES.md). A sent message shows each `#id` as a chip with the
+  model the file (agentlite docs/FILES.md). Its heading names that workspace, and with no
+  files it still opens, to say so (an empty list would look broken). The placeholder names
+  the three sigils. A sent message shows each `#id` as a chip with the
   file's name, and the sidebar shows a title's `#id`s as names (`useFileNames`): a title is the
   first message as typed. Backspace after a chip takes it.
 - **Attachments are files** (`composer/attach.tsx`, Feature 2): the paperclip, a drop on the

@@ -10,21 +10,23 @@ import {
 } from "@/components/library/library";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fileContentUrl, type UserFile, useDeleteFile, useFiles, useUploadFile } from "@/lib/api/files";
+import { fileContentUrl, type UserFile, useDeleteFile, useFiles } from "@/lib/api/files";
 import { useWorkspaces } from "@/lib/api/workspaces";
 import dayjs from "@/lib/dayjs";
 import { cn } from "@/lib/utils";
 import { DownloadIcon, FilesIcon, FolderIcon, InboxIcon, Trash2Icon, UploadIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { type DragEvent, useRef, useState } from "react";
+import { type DragEvent, useState } from "react";
 
 import { FileKindIcon, formatSize } from "./file-icon";
+import { UploadDialog } from "./upload-dialog";
 
 /**
  * The files the user uploaded, newest first, as cards (or rows): all of
- * them, the unfiled ones, or one workspace's (?workspace=<id>|none). Upload
- * (the button, or a drop anywhere on the list) files them under the
- * workspace shown, or under none; a file opens itself in a new tab.
+ * them, the unfiled ones, or one workspace's (?workspace=<id>|none); search
+ * matches names and tags. Upload (the button, or a drop anywhere on the
+ * list) opens the upload dialog for the workspace shown, or none. A file is
+ * downloaded, never opened in the browser.
  */
 export function FilesView() {
   const param = useSearchParams().get("workspace");
@@ -33,17 +35,18 @@ export function FilesView() {
   const { data: files = [], error, isPending } = useFiles(workspaceId);
   const { data: all } = useFiles(); // the total
   const [search, setSearch] = useState("");
-  const { upload, uploading, failed } = useUploads(workspaceId ?? null);
+  const [uploading, setUploading] = useState<File[]>(); // the dialog is open, with these to start
   const [dragging, setDragging] = useState(false);
-  const picker = useRef<HTMLInputElement>(null);
 
   const workspace = workspaces.find((w) => w.id === workspaceId);
   const q = search.trim().toLowerCase();
-  const shown = files.filter((f) => !q || f.name.toLowerCase().includes(q));
+  const shown = files.filter(
+    (f) => !q || f.name.toLowerCase().includes(q) || f.tags?.some((t) => t.toLowerCase().includes(q)),
+  );
   const drop = (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    if (e.dataTransfer.files.length) upload(e.dataTransfer.files);
+    if (e.dataTransfer.files.length) setUploading(Array.from(e.dataTransfer.files));
   };
 
   const nav = (
@@ -83,40 +86,16 @@ export function FilesView() {
         onSearch={setSearch}
         placeholder="Search files"
         actions={
-          <>
-            <Button
-              onClick={() => picker.current?.click()}
-              title={`Upload into ${workspace ? `the workspace ${workspace.name}` : "no workspace"}`}
-            >
-              <UploadIcon /> Upload
-            </Button>
-            <input
-              ref={picker}
-              type="file"
-              multiple
-              hidden
-              aria-hidden
-              onChange={(e) => {
-                if (e.target.files?.length) upload(e.target.files);
-                e.target.value = ""; // the same file can be picked again
-              }}
-            />
-          </>
+          <Button
+            onClick={() => setUploading([])}
+            title={`Upload into ${workspace ? `the workspace ${workspace.name}` : "no workspace"}`}
+          >
+            <UploadIcon /> Upload
+          </Button>
         }
       />
-      {(uploading.length > 0 || failed.length > 0) && (
-        <div className="flex flex-col gap-1 text-sm" aria-live="polite">
-          {uploading.length > 0 && (
-            <p className="text-muted-foreground">
-              Uploading {uploading.join(", ")}… files are embedded before they are listed.
-            </p>
-          )}
-          {failed.map((f) => (
-            <p key={f} role="alert" className="text-destructive">
-              {f}
-            </p>
-          ))}
-        </div>
+      {uploading && (
+        <UploadDialog workspaceId={workspaceId ?? null} initialFiles={uploading} onClose={() => setUploading(undefined)} />
       )}
       <div
         onDragOver={(e) => {
@@ -150,8 +129,8 @@ export function FilesView() {
   );
 }
 
-/** One file: an image shows itself, anything else its icon; the badge says
- *  whether search_userfiles finds it. */
+/** One file: an image shows itself, anything else its icon; the first badge
+ *  says whether search_userfiles finds it, the rest are its tags. */
 function FileItem({ file }: { file: UserFile }) {
   const del = useDeleteFile();
   return (
@@ -196,9 +175,16 @@ function FileItem({ file }: { file: UserFile }) {
         </>
       }
     >
-      <Badge variant="outline" className="w-fit" title={STATUS[file.status].hint}>
-        {STATUS[file.status].label}
-      </Badge>
+      <div className="flex flex-wrap gap-1">
+        <Badge variant="outline" title={STATUS[file.status].hint}>
+          {STATUS[file.status].label}
+        </Badge>
+        {file.tags?.map((t) => (
+          <Badge key={t} variant="secondary">
+            {t}
+          </Badge>
+        ))}
+      </div>
     </LibraryItem>
   );
 }
@@ -207,23 +193,3 @@ const STATUS: Record<UserFile["status"], { label: string; hint: string }> = {
   ready: { label: "Searchable", hint: "Embedded: chats in its workspace find it with search_userfiles" },
   stored: { label: "Reference only", hint: "Not embedded: name it with # to give it to the model" },
 };
-
-/** Uploads files into a workspace, one request each, with the names still
- *  uploading and the failures ("name: why"). */
-function useUploads(workspaceId: string | null) {
-  const mutation = useUploadFile();
-  const [uploading, setUploading] = useState<string[]>([]);
-  const [failed, setFailed] = useState<string[]>([]);
-  const upload = (files: FileList) => {
-    setFailed([]);
-    for (const file of Array.from(files)) {
-      setUploading((u) => [...u, file.name]);
-      // mutateAsync: mutate's own callbacks fire for the last call only
-      mutation
-        .mutateAsync({ file, workspaceId })
-        .catch((e: Error) => setFailed((f) => [...f, `${file.name}: ${e.message}`]))
-        .finally(() => setUploading((u) => u.toSpliced(u.indexOf(file.name), 1)));
-    }
-  };
-  return { upload, uploading, failed };
-}
