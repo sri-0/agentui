@@ -2,10 +2,13 @@
 
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { ReferenceChip } from "@/components/chat/reference-chip";
+import { FileKindIcon } from "@/components/files/file-icon";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useAgents } from "@/lib/api/agents";
+import { useFiles } from "@/lib/api/files";
 import { useSkillFacets, useSkills } from "@/lib/api/skills";
+import { useChatWorkspaceId } from "@/lib/api/workspaces";
 import { colorsOf } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
@@ -23,7 +26,7 @@ import {
   useEditor,
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { BookOpenIcon, BotIcon, type LucideIcon, SparklesIcon } from "lucide-react";
+import { BookOpenIcon, BotIcon, FileIcon, type LucideIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
 /**
@@ -45,6 +48,8 @@ const KINDS: Kind[] = [
   // The server does not resolve `@agent` yet (agentlite internal/refs), so an
   // agent chip sets the thread's agent when picked and stays out of the text.
   { char: "@", heading: "Agents", icon: BotIcon, text: () => "" },
+  // The server gives the model the file `#id` names (agentlite docs/FILES.md).
+  { char: "#", heading: "Files", icon: FileIcon, text: (a) => `#${a.id}` },
 ];
 
 const kindOf = (char?: string | null) => KINDS.find((k) => k.char === char) ?? KINDS[0];
@@ -322,6 +327,8 @@ function useChoices(): Record<string, Choice[]> {
   const colorOf = colorsOf(categories);
   const { data: agents = [] } = useAgents();
   const setAgent = useUiStore((s) => s.setAgent);
+  // the conversation's workspace's files: the ones its search_userfiles sees
+  const { data: files = [] } = useFiles(useChatWorkspaceId());
   return {
     "/": skills.map((s) => ({
       id: s.name,
@@ -347,5 +354,11 @@ function useChoices(): Record<string, Choice[]> {
         onPick: () => setAgent(a.id),
       })),
     ],
+    "#": files.map((f) => ({
+      id: f.id,
+      label: f.name,
+      hint: f.status === "ready" ? "searchable" : "reference only",
+      icon: <FileKindIcon mediaType={f.media_type} />,
+    })),
   };
 }

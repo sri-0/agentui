@@ -64,6 +64,7 @@ app/
     artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts as cards (GET /v1/artifacts)
     images/page.tsx, images/[threadId]/page.tsx  # <ImagesView> — the Images page (POST /v1/images)
     skills/page.tsx       # <SkillsView> — the skills library: categories, sources, cards (/v1/skills)
+    files/page.tsx        # <FilesView> — the user's uploaded files, by workspace (/v1/files)
 ```
 
 - Root + `(app)` layouts are **Server Components**; every interactive surface is
@@ -83,22 +84,24 @@ components/
     reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
-                              #   connector-icon, thread-usage-ring, references (the text, with / and @ chips),
+                              #   connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
                               #   voice (the voice prompt: the mic button and the dictation bar)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card
                               #   (QuestionPanel: shadcn questionnaire; QuestionCard: the line or
                               #   recap in the thread), agent-card, markdown (+ source-citation:
                               #   AI Elements inline citation), compaction-divider,
                               #   message-reasoning, message-actions, message-meta,
-                              #   skill (SkillLoaded, UserText: the /name chip)
+                              #   skill (SkillLoaded), file (FileRead: the `file` activity),
+                              #   user-text (UserText: the /name and #id chips in a sent message)
       tools/                  # tool renderers: registry.ts (name → component), slides-call,
                               #   image-call (generate_image: a placeholder, then the image)
   right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
                               #   sources-view, usage-view, model-view, agent-details-view,
                               #   connector-details-view
-  library/                    # the Spaces-style frame both pages share: LibraryPage (top bar,
-                              #   optional nav column), LibraryToolbar (title, search, actions,
-                              #   grid/list toggle), LibraryItems/LibraryItem (card or row),
+  library/                    # the Spaces-style frame the artifacts, skills and files pages share:
+                              #   LibraryPage (top bar, optional nav column), LibraryToolbar (title,
+                              #   search, actions, grid/list toggle), LibraryItems/LibraryItem (card
+                              #   or row; optionally opened in a new tab, with actions such as delete),
                               #   NavSection/NavItem; creatable-combobox (pick or create a value)
   common/copy-button.tsx      # a copy-to-clipboard icon button for any page
   artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
@@ -111,6 +114,10 @@ components/
                               #   (with an agent: /chat?prompt=…; or upload), cards; ?skill=name
                               #   opens one full-page: details, npx command, files
   skills/skill-dialogs.tsx    # upload (a shadcn file input + details) and edit details
+  files/files-view.tsx        # All files / No workspace / each workspace on the left, search, Upload (or a
+                              #   drop on the list) into the workspace shown, cards (an image shows itself)
+                              #   with a Searchable / Reference only badge, delete; a file opens in a new tab
+  files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   sidebar/workspace-groups.tsx # workspaces: a folder of conversations each, new chat in one, rename, delete
   sidebar/thread-row.tsx      # one conversation row: status dot, delete on hover
@@ -180,6 +187,13 @@ for reads and admin:
   `title`, `description`, `category`, `source`), `PATCH /v1/skills/{name}` (JSON details;
   a new description rewrites the SKILL.md), `DELETE /v1/skills/{name}`, and
   `GET /v1/skills/{name}/files/{path}` (one file, as written)
+- `GET /v1/files?workspace=<id>|none` → `{data: [{id, name, media_type, size, workspace_id?, status,
+  created_at}]}` (newest first; no `workspace` is every file), `POST /v1/files` as a multipart form
+  (`file`, optional `workspaceId`; the reply comes once the file is embedded; 415 for a type the
+  server doesn't take, 413 over 25 MiB, 502 when the embedding model refuses it),
+  `GET /v1/files/{id}/content` (the file itself) and `DELETE /v1/files/{id}`. `status` is `ready`
+  (embedded: `search_userfiles` finds it in its workspace's chats) or `stored` (a PDF: only `#id`
+  gives it to the model). A sent `#id` makes a `file` activity `{id, name, mediaType}` in the turn
 - `GET /v1/threads/{id}/sources` and `GET /v1/threads/{id}/sources/{n}` (what `[source:n]`
   refers to; each citation reads its sources from the list, and one not listed yet is
   fetched when its card opens); the list is refetched when a run ends
@@ -322,7 +336,7 @@ leaves the part `denied`.
 
 - **Zustand UI store** (`stores/ui-store.ts`): `selectedModel`, `selectedAgentId`,
   `selectedConnectors` (null = all), `sidepanel`, `libraryView` (grid or list on the
-  artifacts and skills pages), `newChatWorkspaceId` (the workspace the next new
+  artifacts, skills and files pages), `newChatWorkspaceId` (the workspace the next new
   conversation is filed under). Model, agent and view are **persisted to
   localStorage**; the rest are ephemeral. "New chat" clears the panel and the connectors,
   and files the chat under the workspace it was started from (none from the header).
@@ -332,7 +346,8 @@ leaves the part `denied`.
 - **TanStack Query** (`lib/api/*`) for REST: keys `['agents']`, `['models']`,
   `['connectors']` (cached 5 min), `['skills', filter]` (every filter refetched after an
   upload, an edit or a delete; the previous result stays while the next loads) and `['threads']` (refetched on run status changes, window focus and a new conversation);
-  `['workspaces']`, and one thread as stored, `['thread', id]` (the workspace card's; moving a
+  `['workspaces']`, `['files', workspace]` (`""` every file, `"none"` the unfiled ones; an upload,
+  a delete or a deleted workspace refetches them all), and one thread as stored, `['thread', id]` (the workspace card's; moving a
   thread sets it and refetches `['threads']`). A skill's file
   is `['skill-file', name, updated_at, path]`. Deleting a thread invalidates `['threads']` and
   `['recent-artifacts']`. Per conversation: `['artifacts', id]`, `['sources', id]`
@@ -513,10 +528,14 @@ before large changes:
   the list's coloured icon), with one list (shadcn's Command in a popover, stock styling, an
   icon per row) for every sigil in its `KINDS` table. `/` lists
   the skills a message can load; the chip reads as `/name` in the text sent, wherever it
-  sits, which the backend resolves (`agentlite/internal/refs`: `/` is the only sigil so far,
-  `@agent` and `#id` are planned, there is no `$`). `@` lists the agents; since `@agent` is
-  not resolved yet, picking one sets the thread's agent as the selector does and the chip
-  stays out of the text. Backspace after a chip takes it. Add kinds to the table and their
+  sits, which the backend resolves (`agentlite/internal/refs`; `@agent` is planned, there is
+  no `$`). `@` lists the agents; since `@agent` is not resolved yet, picking one sets the
+  thread's agent as the selector does and the chip stays out of the text. `#` lists the files
+  of the conversation's workspace (`useChatWorkspaceId`: the thread's, or the workspace card's
+  on a new chat; unfiled files when there is none) and reads as `#id`; the backend gives the
+  model the file (agentlite docs/FILES.md). A sent message shows each `#id` as a chip with the
+  file's name, and the sidebar shows a title's `#id`s as names (`useFileNames`): a title is the
+  first message as typed. Backspace after a chip takes it. Add kinds to the table and their
   choices to `useChoices`, not another menu.
 - **`components/ui/` is shadcn registry output only** (style `radix-nova`, as the CLI writes
   it) and `components/ai-elements/` the AI Elements registry. Hand-written shared pieces go

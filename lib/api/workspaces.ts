@@ -1,10 +1,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useContext } from "react";
 
+import { ThreadIdContext } from "@/lib/chat/thread-context";
 import { useUiStore } from "@/stores/ui-store";
 
 import { apiFetch } from "./client";
+import { useThreadRecord } from "./threads";
 import type { ListResponse, Thread, Workspace } from "./types";
 
 const path = (id: string) => `/v1/workspaces/${encodeURIComponent(id)}`;
@@ -45,9 +48,11 @@ export function useDeleteWorkspace() {
       // The next new conversation no longer has it to go into.
       const ui = useUiStore.getState();
       if (ui.newChatWorkspaceId === id) ui.setNewChatWorkspace(null);
+      // Its conversations and files stay, unfiled.
       return Promise.all([
         qc.invalidateQueries({ queryKey: ["workspaces"] }),
         qc.invalidateQueries({ queryKey: ["threads"] }),
+        qc.invalidateQueries({ queryKey: ["files"] }),
       ]);
     },
   });
@@ -67,4 +72,13 @@ export function useMoveThread() {
       return qc.invalidateQueries({ queryKey: ["threads"] });
     },
   });
+}
+
+/** The workspace of the conversation being written in (null: none): its
+ *  thread's, or for a new conversation the one the workspace bar picked. */
+export function useChatWorkspaceId(): string | null {
+  const threadId = useContext(ThreadIdContext);
+  const { data: thread } = useThreadRecord(threadId ?? undefined);
+  const newChatWorkspaceId = useUiStore((s) => s.newChatWorkspaceId);
+  return threadId ? (thread?.workspace_id ?? null) : newChatWorkspaceId;
 }

@@ -22,6 +22,7 @@ import { groupThreads, threadTitle } from "@/lib/group-threads";
 import { useUiStore } from "@/stores/ui-store";
 import {
   BookOpenIcon,
+  FilesIcon,
   ImageIcon,
   LayersIcon,
   MoonIcon,
@@ -117,6 +118,14 @@ export function AppSidebar() {
                   <Link href="/skills">
                     <BookOpenIcon />
                     <span>Skills</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Files" isActive={pathname.startsWith("/files")} className="h-9 gap-2.5">
+                  <Link href="/files">
+                    <FilesIcon />
+                    <span>Files</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

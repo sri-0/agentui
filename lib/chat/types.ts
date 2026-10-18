@@ -84,6 +84,9 @@ export type ModelChange = { from: string; to: string };
  *  before skills had ids have none. */
 export type SkillUse = { id?: string; name: string; title?: string; description: string };
 
+/** A file a #id gave the model in its turn (the `file` activity). */
+export type FileUse = { id: string; name: string; mediaType: string };
+
 export type TextPart = { type: "text"; id: string; text: string; done: boolean };
 
 export type ReasoningPart = {
@@ -131,7 +134,8 @@ export type DataPart =
   | { type: "data-artifact"; id: string; data: Artifact }
   | { type: "data-compaction"; id: string; data: Compaction }
   | { type: "data-model"; id: string; data: ModelChange }
-  | { type: "data-skill"; id: string; data: SkillUse };
+  | { type: "data-skill"; id: string; data: SkillUse }
+  | { type: "data-file"; id: string; data: FileUse };
 
 export type ChatPart = TextPart | ReasoningPart | ToolPart | StepPart | DataPart;
 
