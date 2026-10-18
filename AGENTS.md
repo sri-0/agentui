@@ -116,7 +116,7 @@ components/
   library/                    # the Spaces-style frame the artifacts, skills and files pages share:
                               #   LibraryPage (top bar, optional nav column), LibraryToolbar (title,
                               #   search, actions, grid/list toggle), LibraryItems/LibraryItem (card
-                              #   or row; optionally opened in a new tab, with actions such as delete),
+                              #   or row, opened at its href or, without one, by nothing but its actions),
                               #   NavSection/NavItem; creatable-combobox (pick or create a value)
   common/copy-button.tsx      # a copy-to-clipboard icon button for any page
   artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
@@ -130,7 +130,8 @@ components/
   skills/skill-dialogs.tsx    # upload (a shadcn file input + details) and edit details
   files/files-view.tsx        # All files / No workspace / each workspace on the left, search, Upload (or a
                               #   drop on the list) into the workspace shown, cards (an image shows itself)
-                              #   with a Searchable / Reference only badge, delete; a file opens in a new tab
+                              #   with a Searchable / Reference only badge, download and delete; files are never
+                              #   opened in the browser (the server sends them as attachments)
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   sidebar/workspace-groups.tsx # workspaces: a folder of conversations each, new chat in one, rename, delete
