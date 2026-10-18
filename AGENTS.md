@@ -64,7 +64,7 @@ app/
     artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts as cards (GET /v1/artifacts)
     images/page.tsx       # <LandingView mode="images"> — the same page in Images mode
     skills/page.tsx       # <SkillsView> — the skills library: categories, sources, cards (/v1/skills)
-    files/page.tsx        # <FilesView> — the user's uploaded files, by workspace (/v1/files)
+    files/page.tsx        # <FilesView> — the user's uploaded files, by workspace (/v1/rag/files)
 ```
 
 - Root + `(app)` layouts are **Server Components**; every interactive surface is
@@ -208,11 +208,11 @@ for reads and admin:
   `title`, `description`, `category`, `source`), `PATCH /v1/skills/{name}` (JSON details;
   a new description rewrites the SKILL.md), `DELETE /v1/skills/{name}`, and
   `GET /v1/skills/{name}/files/{path}` (one file, as written)
-- `GET /v1/files?workspace=<id>|none` → `{data: [{id, name, media_type, size, workspace_id?, status,
-  created_at}]}` (newest first; no `workspace` is every file), `POST /v1/files` as a multipart form
+- `GET /v1/rag/files?workspace=<id>|none` → `{data: [{id, name, media_type, size, workspace_id?, status,
+  created_at}]}` (newest first; no `workspace` is every file), `POST /v1/rag/files` as a multipart form
   (`file`, optional `workspaceId`; the reply comes once the file is embedded; 415 for a type the
   server doesn't take, 413 over 25 MiB, 502 when the embedding model refuses it),
-  `GET /v1/files/{id}/content` (the file itself) and `DELETE /v1/files/{id}`. `status` is `ready`
+  `GET /v1/rag/files/{id}/content` (the file itself) and `DELETE /v1/rag/files/{id}`. `status` is `ready`
   (embedded: `search_userfiles` finds it in its workspace's chats) or `stored` (a PDF: only `#id`
   gives it to the model). A sent `#id` makes a `file` activity `{id, name, mediaType}` in the turn
 - `GET /v1/threads/{id}/sources` and `GET /v1/threads/{id}/sources/{n}` (what `[source:n]`
@@ -557,11 +557,12 @@ before large changes:
   the skills a message can load; the chip reads as `/name` in the text sent, wherever it
   sits, which the backend resolves (`agentlite/internal/refs`; `@agent` is planned, there is
   no `$`). `@` lists the agents; since `@agent` is not resolved yet, picking one sets the
-  thread's agent as the selector does and the chip stays out of the text. `#` lists the files
-  of the conversation's workspace (`useChatWorkspaceId`: the thread's, or the workspace card's
-  on a new chat; unfiled files when there is none) and reads as `#id`; the backend gives the
-  model the file (agentlite docs/FILES.md). Its heading names that workspace, and with no
-  files it still opens, to say so (an empty list would look broken). The placeholder names
+  thread's agent as the selector does and the chip stays out of the text. `#` lists every
+  workspace's files, the conversation's own first (`useChatWorkspaceId`: the thread's, or the
+  workspace card's on a new chat), each row with its workspace's name pinned right (typing a
+  workspace's name finds its files), and reads as `#id`; the backend gives the model the file,
+  whatever its workspace (agentlite docs/FILES.md). With no files it still opens, to say so
+  (an empty list would look broken). The placeholder names
   the three sigils. A sent message shows each `#id` as a chip with the
   file's name, and the sidebar shows a title's `#id`s as names (`useFileNames`): a title is the
   first message as typed. Backspace after a chip takes it. Add kinds to the table and their
