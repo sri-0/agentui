@@ -42,7 +42,7 @@ export const WorkspaceBar = memo(function WorkspaceBar({ threadId }: { threadId?
   };
 
   return (
-    <div className="relative z-0 mx-auto -mt-4 flex w-[calc(100%-2.75rem)] items-center rounded-b-2xl border border-t-0 border-neutral-300 bg-neutral-200 px-2 pt-5 pb-1.5 dark:border-neutral-700 dark:bg-neutral-800">
+    <div className="relative z-0 mx-auto -mt-4 flex w-[calc(100%-2.75rem)] items-center rounded-b-2xl bg-neutral-200/80 px-2 pt-5 pb-1.5 dark:bg-neutral-800">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
