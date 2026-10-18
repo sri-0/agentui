@@ -3,7 +3,7 @@
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { ReferenceChip } from "@/components/chat/reference-chip";
 import { FileChipIcon } from "@/components/files/file-icon";
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useAgents } from "@/lib/api/agents";
 import { useFiles } from "@/lib/api/files";
@@ -328,7 +328,7 @@ export function ReferenceInput({
                     {c.icon}
                     <span className="shrink-0">{c.label}</span>
                     {c.hint && <span className="truncate text-muted-foreground">{c.hint}</span>}
-                    {c.aside && <span className="ml-auto shrink-0 pl-2 text-xs text-muted-foreground">{c.aside}</span>}
+                    {c.aside && <CommandShortcut className="shrink-0 pl-2 tracking-normal">{c.aside}</CommandShortcut>}
                   </CommandItem>
                 ))}
               </CommandGroup>
