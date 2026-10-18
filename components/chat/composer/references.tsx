@@ -214,6 +214,16 @@ export function ReferenceInput({
     [],
   );
 
+  // The placeholder changes with the thread (an open request, an images
+  // conversation): the extension takes the new one, an empty transaction
+  // redraws it.
+  useEffect(() => {
+    const ext = editor?.extensionManager.extensions.find((e) => e.name === "placeholder");
+    if (!editor || !ext || ext.options.placeholder === placeholder) return;
+    ext.options.placeholder = placeholder;
+    editor.view.dispatch(editor.state.tr);
+  }, [editor, placeholder]);
+
   useEffect(() => {
     if (editorRef) editorRef.current = editor;
   }, [editor, editorRef]);

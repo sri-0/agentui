@@ -28,14 +28,11 @@ function StatusDot() {
 
 export function ThreadRow({
   id,
-  href,
   title,
   active,
   runStatus,
 }: {
   id: string;
-  /** the chat, or the Images page for one of its conversations */
-  href: string;
   title: string;
   active: boolean;
   /** present while a run owns the thread */
@@ -47,7 +44,7 @@ export function ThreadRow({
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={active} className="h-9">
-        <Link href={href}>
+        <Link href={`/chat/${id}`}>
           <span className="truncate">{title}</span>
         </Link>
       </SidebarMenuButton>

@@ -33,6 +33,8 @@ type ComposerProps = {
   placeholder?: string;
   /** text the composer starts with, e.g. from a link */
   initialText?: string;
+  /** an images composer: it picks the image model, and no agent or connectors */
+  images?: boolean;
 };
 
 // The provider holds the text the form sends; the editor writes it on each edit.
@@ -44,7 +46,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   );
 });
 
-function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder }: ComposerProps) {
+function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder, images }: ComposerProps) {
   const idle = status === "ready";
   const editorRef = useRef<Editor | null>(null); // the voice prompt writes into it
   // A chip that reads as nothing (an agent) can leave a space behind.
@@ -75,9 +77,15 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
         </PromptInputBody>
         <PromptInputFooter className="flex-wrap gap-3 px-3 pb-3 pt-1">
           <PromptInputTools className="flex-wrap gap-1">
-            <ModelSelector />
-            <AgentSelector />
-            <ConnectorSelector />
+            {images ? (
+              <ModelSelector use="image" />
+            ) : (
+              <>
+                <ModelSelector />
+                <AgentSelector />
+                <ConnectorSelector />
+              </>
+            )}
           </PromptInputTools>
           <div className="flex items-center gap-2">
             {contextSlot}

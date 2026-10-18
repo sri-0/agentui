@@ -30,7 +30,7 @@ type UiState = {
   libraryView: "grid" | "list";
   /** the workspace a new conversation is filed under, or null for none */
   newChatWorkspaceId: string | null;
-  /** the Images page's model, or null for the server's default */
+  /** the model generate_image uses, picked in an images composer; null for the server's default */
   selectedImageModel: string | null;
 
   setModel: (id: string | null) => void;

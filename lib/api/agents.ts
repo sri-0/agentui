@@ -5,6 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 import type { Agent, ListResponse } from "./types";
 
+/** The images agent (the backend's config/default/agents/images.md), whose one
+ *  tool makes images; the Images page starts its conversations. */
+export const IMAGES_AGENT = "images";
+
 export function useAgents(options: { select?: (agents: Agent[]) => Agent[] } = {}) {
   return useQuery({
     queryKey: ["agents"],

@@ -167,7 +167,6 @@ export function AppSidebar() {
                     <ThreadRow
                       key={t.id}
                       id={t.id}
-                      href={t.agent_id === "images" ? `/images/${t.id}` : `/chat/${t.id}`}
                       title={threadTitle(t)}
                       active={t.id === activeId}
                       runStatus={t.run_status}
