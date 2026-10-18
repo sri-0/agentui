@@ -78,10 +78,20 @@ export type Thread = {
   model?: string;
   /** connectors switched on; absent means all */
   connectors?: string[];
+  /** the workspace the conversation is filed under, if any */
+  workspace_id?: string;
   created_at?: string | number;
   updated_at?: string | number;
   /** present while a run owns the thread */
   run_status?: RunStatus;
+};
+
+/** A folder of conversations; later, what people share. */
+export type Workspace = {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
 };
 
 /** One stored turn: the AG-UI events that produced it. */
