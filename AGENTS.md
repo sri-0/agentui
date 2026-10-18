@@ -101,7 +101,7 @@ components/
     next-prompts.tsx          # next-prompt suggestions above the composer (AI Elements Suggestions)
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
-                              #   voice (the voice prompt: the mic button and the dictation bar), waveform,
+                              #   voice (the voice prompt: the mic button and the dictation bar),
                               #   attach (the paperclip, drops and pastes open the upload dialog; kept files become # chips)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card
                               #   (QuestionPanel: shadcn questionnaire; QuestionCard: the line or
@@ -536,7 +536,10 @@ before large changes:
   `lib/chat/types.ts` and a renderer in `message-list.tsx`.
 - **UI components are shadcn and AI Elements only** (the `shadcn` CLI with its own and the
   `@ai-elements` registry). No other component libraries or registries (no Dice UI, no
-  ElevenLabs UI, no dropzone packages): compose shadcn primitives, or write the small piece.
+  dropzone packages): compose shadcn primitives, or write the small piece. The one approved
+  exception is ElevenLabs UI's `live-waveform` (`components/ui/live-waveform.tsx`, added
+  with the shadcn CLI) for the dictation bar: neither has a waveform. It is plain browser
+  code and calls no service, so it works offline.
 - **No AI SDK in the chat layer.** The view model is our own; only the vendored
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
@@ -550,10 +553,10 @@ before large changes:
   so a keystroke re-renders only it).
 - **The voice prompt** (`composer/voice.tsx`): the mic button turns the composer's footer
   into a dictation bar, as in ChatGPT: X drops the recording, stop transcribes it into the
-  text, send transcribes and sends. The bar opens the microphone and records it with a
-  `MediaRecorder`; `composer/waveform.tsx` (ours: an `AnalyserNode` on that stream drawn as
-  bars on a canvas; no component library has one) only listens to it. The server transcribes
-  whole recordings, so no text shows while speaking. The recording goes to the server as WAV (`lib/audio/wav.ts`; browsers record
+  text, send transcribes and sends. The waveform is ElevenLabs UI's `live-waveform` (shadcn
+  registry, `components/ui/live-waveform.tsx`); it opens the microphone, and a `MediaRecorder`
+  records its stream. The server transcribes whole recordings, so no text shows while
+  speaking. The recording goes to the server as WAV (`lib/audio/wav.ts`; browsers record
   WebM, which Voxtral refuses), and the text is appended through the editor `ComposerInput`
   hands both `ReferenceInput` and the bar (`editorRef`); send commits it (`flushSync`) before
   submitting the form. Errors show beside the mic button.
