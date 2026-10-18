@@ -22,7 +22,7 @@ export type UserFile = {
 };
 
 /** The file itself, served with its own type. */
-export const fileContentUrl = (id: string) => `${API_URL}/v1/files/${encodeURIComponent(id)}/content`;
+export const fileContentUrl = (id: string) => `${API_URL}/v1/rag/files/${encodeURIComponent(id)}/content`;
 
 /** The files, newest first: every one (undefined), the unfiled ones (null),
  *  or one workspace's. */
@@ -32,7 +32,7 @@ export function useFiles(workspaceId?: string | null) {
     queryKey: ["files", workspace],
     staleTime: 30_000,
     queryFn: async () =>
-      (await apiFetch<ListResponse<UserFile>>(`/v1/files${workspace && `?workspace=${encodeURIComponent(workspace)}`}`))
+      (await apiFetch<ListResponse<UserFile>>(`/v1/rag/files${workspace && `?workspace=${encodeURIComponent(workspace)}`}`))
         .data,
   });
 }
@@ -60,7 +60,7 @@ export function useUploadFile() {
       form.set("file", file);
       if (workspaceId) form.set("workspaceId", workspaceId);
       for (const t of tags) form.append("tags", t);
-      return apiFetch<UserFile>("/v1/files", { method: "POST", body: form });
+      return apiFetch<UserFile>("/v1/rag/files", { method: "POST", body: form });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["files"] }),
   });
@@ -69,7 +69,7 @@ export function useUploadFile() {
 export function useDeleteFile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiFetch<void>(`/v1/files/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    mutationFn: (id: string) => apiFetch<void>(`/v1/rag/files/${encodeURIComponent(id)}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["files"] }),
   });
 }
