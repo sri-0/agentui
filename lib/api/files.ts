@@ -15,6 +15,8 @@ export type UserFile = {
   media_type: string;
   size: number;
   workspace_id?: string;
+  /** the uploader's, for finding it */
+  tags?: string[];
   status: "ready" | "stored";
   created_at: string;
 };
@@ -48,15 +50,16 @@ export function useFileNames() {
   );
 }
 
-/** Uploads a file into a workspace (null: none). The reply comes once the
- *  file is embedded. */
+/** Uploads a file into a workspace (null: none), with tags. The reply comes
+ *  once the file is embedded. */
 export function useUploadFile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ file, workspaceId }: { file: File; workspaceId: string | null }) => {
+    mutationFn: ({ file, workspaceId, tags = [] }: { file: File; workspaceId: string | null; tags?: string[] }) => {
       const form = new FormData();
       form.set("file", file);
       if (workspaceId) form.set("workspaceId", workspaceId);
+      for (const t of tags) form.append("tags", t);
       return apiFetch<UserFile>("/v1/files", { method: "POST", body: form });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["files"] }),

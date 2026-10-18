@@ -81,7 +81,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
         <PromptInputBody>
           <ReferenceInput
             autoFocus={autoFocus}
-            placeholder={placeholder ?? "Ask anything, or pick an agent…"}
+            placeholder={placeholder ?? "Ask anything — / for skills, @ for agents, # for files"}
             editorRef={editorRef}
           />
         </PromptInputBody>

@@ -3,12 +3,12 @@
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { ReferenceChip } from "@/components/chat/reference-chip";
 import { FileKindIcon } from "@/components/files/file-icon";
-import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useAgents } from "@/lib/api/agents";
 import { useFiles } from "@/lib/api/files";
 import { useSkillFacets, useSkills } from "@/lib/api/skills";
-import { useChatWorkspaceId } from "@/lib/api/workspaces";
+import { useChatWorkspaceId, useWorkspaces } from "@/lib/api/workspaces";
 import { colorsOf } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
@@ -147,6 +147,7 @@ export function ReferenceInput({
 }) {
   const { textInput } = usePromptInputController();
   const choices = useChoices();
+  const workspace = useWorkspaceName();
   // What the editor's callbacks read; the editor is configured once.
   const choicesRef = useRef<Record<string, Choice[]>>({});
   const setInputRef = useRef(textInput.setInput);
@@ -242,8 +243,11 @@ export function ReferenceInput({
   }, [editor, textInput.value]);
 
   const items = suggest?.items ?? [];
-  const open = !!suggest && suggest.query !== dismissed && items.length > 0;
   const kind = kindOf(suggest?.char);
+  const files = kind.char === "#";
+  // # opens on none too, to say why: files are the conversation's workspace's
+  const open = !!suggest && suggest.query !== dismissed && (items.length > 0 || files);
+  const heading = files ? `Files · ${workspace}` : kind.heading;
   const current = items.find((c) => c.id.toLowerCase() === selected.toLowerCase())?.id ?? items[0]?.id ?? "";
   const pick = (c: Choice) => {
     c.onPick?.();
@@ -252,7 +256,7 @@ export function ReferenceInput({
 
   useEffect(() => {
     keyRef.current = (e) => {
-      if (!open) return false;
+      if (!open || (!items.length && e.key !== "Escape")) return false;
       const index = items.findIndex((c) => c.id === current);
       switch (e.key) {
         case "ArrowDown":
@@ -305,8 +309,13 @@ export function ReferenceInput({
           className="w-(--radix-popover-trigger-width) p-0"
         >
           <Command shouldFilter={false} value={current} onValueChange={setSelected}>
-            <CommandList ref={setList} aria-label={kind.heading}>
-              <CommandGroup heading={kind.heading}>
+            <CommandList ref={setList} aria-label={heading}>
+              <CommandEmpty className="px-3 py-3 text-left text-xs text-muted-foreground">
+                {choices["#"]?.length
+                  ? "No file matches"
+                  : `${workspace === "No workspace" ? "No files outside a workspace" : `No files in ${workspace}`} yet — upload one on the Files page`}
+              </CommandEmpty>
+              <CommandGroup heading={heading}>
                 {items.map((c) => (
                   <CommandItem
                     key={c.id}
@@ -328,6 +337,13 @@ export function ReferenceInput({
       <EditorContent editor={editor} className="min-h-[60px] w-full" />
     </>
   );
+}
+
+/** The conversation's workspace's name, or "No workspace". */
+function useWorkspaceName() {
+  const id = useChatWorkspaceId();
+  const { data: workspaces = [] } = useWorkspaces();
+  return workspaces.find((w) => w.id === id)?.name ?? "No workspace";
 }
 
 /** The choices of each kind, by sigil. */
