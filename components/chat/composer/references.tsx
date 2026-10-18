@@ -313,7 +313,7 @@ export function ReferenceInput({
               <CommandEmpty className="px-3 py-3 text-left text-xs text-muted-foreground">
                 {choices["#"]?.length
                   ? "No file matches"
-                  : `${workspace === "No workspace" ? "No files outside a workspace" : `No files in ${workspace}`} yet — upload one on the Files page`}
+                  : `${workspace === "No workspace" ? "No files outside a workspace" : `No files in ${workspace}`} yet — attach one with the paperclip or on the Files page`}
               </CommandEmpty>
               <CommandGroup heading={heading}>
                 {items.map((c) => (

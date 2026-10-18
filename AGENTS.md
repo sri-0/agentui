@@ -100,7 +100,7 @@ components/
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
                               #   voice (the voice prompt: the mic button and the dictation bar),
-                              #   attach (the paperclip, drops and pastes: files upload, then become # chips)
+                              #   attach (the paperclip, drops and pastes open the upload dialog; kept files become # chips)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card
                               #   (QuestionPanel: shadcn questionnaire; QuestionCard: the line or
                               #   recap in the thread), agent-card, markdown (+ source-citation:
@@ -557,14 +557,14 @@ before large changes:
   file's name, and the sidebar shows a title's `#id`s as names (`useFileNames`): a title is the
   first message as typed. Backspace after a chip takes it.
 - **Attachments are files** (`composer/attach.tsx`, Feature 2): the paperclip, a drop on the
-  composer or a pasted file uploads it to the conversation's workspace (`POST /v1/files`),
-  shown above the text with AI Elements' inline `Attachment` (preview, name, spinner) until
-  the server answers; then it is a `#` chip at the cursor, exactly as if picked from the `#`
-  list, and an image's chip shows its thumbnail. A refused file (415, 413, 502) says why and
-  leaves no chip. Sending waits while files upload (the send button is `aria-disabled`: a
-  disabled control would fade the whole input group). The composer takes drops and pastes in
-  the capture phase, so AI Elements' `PromptInput` doesn't also keep the file in its own
-  attachments list, which this app doesn't send. Add kinds to the table and their
+  composer or a pasted file opens the upload dialog (`files/upload-dialog.tsx`, the Files
+  page's too) for the conversation's workspace, with what was dropped or pasted; nothing
+  uploads without it. Each file it keeps is a `#` chip at the cursor, exactly as if picked
+  from the `#` list, and an image's chip shows its thumbnail; a refused one stays in the
+  dialog with the server's reason. The composer takes drops and pastes in the capture phase,
+  so AI Elements' `PromptInput` doesn't also keep the file in its own attachments list, which
+  this app doesn't send; the dialog renders outside those handlers, since React events bubble
+  out of a portal. Add kinds to the table and their
   choices to `useChoices`, not another menu.
 - **`components/ui/` is shadcn registry output only** (style `radix-nova`, as the CLI writes
   it) and `components/ai-elements/` the AI Elements registry. Hand-written shared pieces go
