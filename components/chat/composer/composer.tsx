@@ -91,12 +91,13 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
             editorRef={editorRef}
           />
         </PromptInputBody>
-        <PromptInputFooter className="flex-wrap gap-3 px-3 pb-3 pt-1">
+        <PromptInputFooter className="gap-3 px-3 pb-3 pt-1">
           {dictating ? (
             <DictationBar editorRef={editorRef} onEnd={endDictation} />
           ) : (
             <>
-              <PromptInputTools className="flex-wrap gap-1">
+              {/* one row: on a narrow screen the selectors scroll, send stays put */}
+              <PromptInputTools className="min-w-0 flex-1 gap-1 overflow-x-auto py-0.5 [mask-image:linear-gradient(to_right,black_88%,transparent)] [scrollbar-width:none]">
                 {images ? (
                   <ModelSelector use="image" />
                 ) : (
@@ -108,7 +109,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
                   </>
                 )}
               </PromptInputTools>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 {contextSlot}
                 <VoiceButton error={voiceError} onStart={startDictation} />
                 <PromptInputSubmit
