@@ -8,11 +8,13 @@ import {
   PromptInputSubmit,
   PromptInputTools,
   type PromptInputMessage,
-  usePromptInputController,
 } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
 import { memo, type ReactNode, useCallback, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+
+import { NextPrompts } from "../next-prompts";
 
 import { AgentSelector } from "./agent-selector";
 import { AttachButton, useAttach } from "./attach";
@@ -37,8 +39,9 @@ type ComposerProps = {
   initialText?: string;
   /** an images composer: it picks the image model, and no agent or connectors */
   images?: boolean;
-  /** shown above the input while it is empty, e.g. next-prompt suggestions */
-  above?: ReactNode;
+  /** next-prompt suggestions above the input: for the thread's last answer
+   *  (messageId) and for what is typed; {} on a new chat, for the typed text */
+  suggest?: { threadId?: string; messageId?: string };
 };
 
 // The provider holds the text the form sends; the editor writes it on each edit.
@@ -50,7 +53,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   );
 });
 
-function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder, images, above }: ComposerProps) {
+function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder, images, suggest }: ComposerProps) {
   const idle = status === "ready";
   const editorRef = useRef<Editor | null>(null); // the voice prompt writes into it
   const [dictating, setDictating] = useState(false);
@@ -69,10 +72,23 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
     setVoiceError(error);
     setDictating(false);
   }, []);
+  // A suggestion replaces the draft and is sent the way Enter sends.
+  const pick = useCallback((text: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    flushSync(() => editor.chain().clearContent().insertContent({ type: "text", text }).run());
+    editor.view.dom.closest("form")?.requestSubmit();
+  }, []);
 
   return (
     <>
-      {above && <WhileEmpty>{above}</WhileEmpty>}
+      {suggest && !dictating && (
+        // Without a thread (the centred new-chat page) they float above the
+        // input, so the page doesn't move when they come and go.
+        <div className={cn(!suggest.threadId && "relative")}>
+          <NextPrompts {...suggest} onPick={pick} className={cn(!suggest.threadId && "absolute inset-x-0 bottom-0")} />
+        </div>
+      )}
       <div className="relative" {...attach.handlers}>
         <div className="ai-glow" />
         <PromptInput
@@ -130,11 +146,4 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
       {attach.dialog}
     </>
   );
-}
-
-/** Its children while the input is empty: typing puts them away. Apart from
- *  ComposerInput, so a keystroke re-renders only this. */
-function WhileEmpty({ children }: { children: ReactNode }) {
-  const { textInput } = usePromptInputController();
-  return textInput.value.trim() ? null : children;
 }

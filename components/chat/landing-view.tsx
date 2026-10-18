@@ -53,6 +53,9 @@ export function useStartChat(agentId?: string) {
   return { start, error };
 }
 
+/** A new chat's suggestions follow what is typed; it has no thread yet. */
+const NEW_CHAT_SUGGEST = {};
+
 const MODES = {
   chat: { title: "How can I help?", hint: "Choose a model or an agent, then ask anything." },
   images: {
@@ -86,7 +89,8 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
           a mode adds hangs below, so switching modes doesn't move the composer. */}
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 pt-10 pb-[20vh]">
         <div className="relative w-full">
-          <div className="mb-10 text-center">
+          {/* mb-14: room for the suggestions that float above the composer */}
+          <div className="mb-14 text-center">
             <h1 className="text-balance text-4xl font-semibold tracking-tight">{MODES[mode].title}</h1>
             <p className="mt-3 text-[15px] text-muted-foreground">{error ?? MODES[mode].hint}</p>
           </div>
@@ -99,6 +103,7 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
             initialText={draft}
             images={images}
             placeholder={images ? "Describe an image…" : undefined}
+            suggest={NEW_CHAT_SUGGEST}
           />
           <WorkspaceBar />
 

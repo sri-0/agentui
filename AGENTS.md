@@ -156,7 +156,7 @@ lib/
          thread-context.ts (the thread a view shows, for citations)
   api/   client.ts (apiFetch, apiText) · agents.ts · models.ts · threads.ts · connectors.ts ·
          artifacts.ts · sources.ts · types.ts · voice.ts (transcribe a recording) ·
-         suggestions.ts (next prompts for an answer)
+         suggestions.ts (next prompts for an answer or typed text)
   audio/ wav.ts (a recording → 16 kHz mono WAV)
   providers.ts · group-threads.ts · dayjs.ts · utils.ts
 stores/ ui-store.ts            # Zustand UI state
@@ -544,13 +544,15 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
-- **Next-prompt suggestions** (`chat/next-prompts.tsx`): once a run that streamed in this
-  view ends with an answer (not stopped, failed, or waiting on a question), three follow-ups
-  from `POST /v1/threads/{id}/suggestions` (`lib/api/suggestions.ts`, cached per answer;
-  a 409, the answer not stored yet, is tried again) show above the composer as AI Elements'
-  `Suggestions`; picking one sends it like a typed message. Reopening a thread shows none.
-  The composer's `above` slot shows them only while its text is empty (`WhileEmpty`, apart
-  so a keystroke re-renders only it).
+- **Next-prompt suggestions** (`chat/next-prompts.tsx`, the composer's `suggest` prop):
+  three prompts from `POST /v1/suggestions` (`lib/api/suggestions.ts`) above the composer,
+  as AI Elements' `Suggestions`. In a thread, with the input empty, they follow its last
+  answer (`{threadId}`, cached per answer; a thread just opened, stale ones too, and each
+  finished run; a 409, the answer not stored yet, is tried again). Once 3+ characters are
+  typed they follow the text (`{threadId?, text}`, 500 ms after the last keystroke; a
+  superseded request is aborted); on the new-chat page only the text. None while a run
+  streams or a question waits, nor for a stopped or failed run. Picking one replaces the
+  draft and sends it the way Enter does.
 - **The voice prompt** (`composer/voice.tsx`): the mic button turns the composer's footer
   into a dictation bar, as in ChatGPT: X drops the recording, stop transcribes it into the
   text, send transcribes and sends. The waveform is ElevenLabs UI's `live-waveform` (shadcn
