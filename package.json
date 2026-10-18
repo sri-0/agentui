@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@ag-ui/core": "1.0.2",
-    "@diceui/tags-input": "^1.0.0",
     "@radix-ui/react-use-controllable-state": "^1.2.3",
     "@rive-app/react-webgl2": "^4.29.1",
     "@shadcn/react": "^0.3.1",
@@ -44,7 +43,6 @@
     "radix-ui": "^1.5.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-dropzone": "^20.1.4",
     "react-hook-form": "7.89.0",
     "react-jsx-parser": "^2.4.1",
     "react-resizable-panels": "^4.11.2",
