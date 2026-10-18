@@ -69,6 +69,15 @@ export type SpeechInputProps = ComponentProps<typeof Button> & {
    */
   onAudioRecorded?: (audioBlob: Blob) => Promise<string>;
   lang?: string;
+  /**
+   * Forces a mode. "media-recorder" always records and calls onAudioRecorded,
+   * for a server-side model (the browser's speech recognition needs its
+   * vendor's servers). By default the mode is detected.
+   */
+  mode?: SpeechInputMode;
+  /** Called when recording cannot start or fails: no microphone, permission
+   *  denied, or an origin that is not secure. */
+  onRecordingError?: (error: unknown) => void;
 };
 
 const detectSpeechInputMode = (): SpeechInputMode => {
@@ -92,11 +101,13 @@ export const SpeechInput = ({
   onTranscriptionChange,
   onAudioRecorded,
   lang = "en-US",
+  mode: forcedMode,
+  onRecordingError,
   ...props
 }: SpeechInputProps) => {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [mode] = useState<SpeechInputMode>(detectSpeechInputMode);
+  const [mode] = useState<SpeechInputMode>(() => forcedMode ?? detectSpeechInputMode());
   const [isRecognitionReady, setIsRecognitionReady] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -107,10 +118,13 @@ export const SpeechInput = ({
   >(onTranscriptionChange);
   const onAudioRecordedRef =
     useRef<SpeechInputProps["onAudioRecorded"]>(onAudioRecorded);
+  const onRecordingErrorRef = useRef(onRecordingError);
+  const startingRef = useRef(false);
 
   // Keep refs in sync
   onTranscriptionChangeRef.current = onTranscriptionChange;
   onAudioRecordedRef.current = onAudioRecorded;
+  onRecordingErrorRef.current = onRecordingError;
 
   // Initialize Speech Recognition when mode is speech-recognition
   useEffect(() => {
@@ -194,9 +208,11 @@ export const SpeechInput = ({
 
   // Start MediaRecorder recording
   const startMediaRecorder = useCallback(async () => {
-    if (!onAudioRecordedRef.current) {
+    // A second click while the microphone is being opened would open another.
+    if (!onAudioRecordedRef.current || startingRef.current) {
       return;
     }
+    startingRef.current = true;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -235,12 +251,13 @@ export const SpeechInput = ({
         }
       };
 
-      const handleError = () => {
+      const handleError = (event: Event) => {
         setIsListening(false);
         for (const track of stream.getTracks()) {
           track.stop();
         }
         streamRef.current = null;
+        onRecordingErrorRef.current?.(event);
       };
 
       mediaRecorder.addEventListener("dataavailable", handleDataAvailable);
@@ -250,8 +267,11 @@ export const SpeechInput = ({
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setIsListening(true);
-    } catch {
+    } catch (error) {
       setIsListening(false);
+      onRecordingErrorRef.current?.(error);
+    } finally {
+      startingRef.current = false;
     }
   }, []);
 

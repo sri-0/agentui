@@ -9,21 +9,19 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDeleteThread, useThreads } from "@/lib/api/threads";
-import type { RunStatus } from "@/lib/api/types";
+import { useThreads } from "@/lib/api/threads";
+import type { Thread } from "@/lib/api/types";
+import { useWorkspaces } from "@/lib/api/workspaces";
 import { groupThreads, threadTitle } from "@/lib/group-threads";
-import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import {
   BookOpenIcon,
-  CircleAlertIcon,
   ImageIcon,
   LayersIcon,
   MoonIcon,
@@ -31,16 +29,27 @@ import {
   SearchIcon,
   SparklesIcon,
   SunIcon,
-  Trash2Icon,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 
+import { ThreadRow } from "./thread-row";
+import { WorkspaceGroups } from "./workspace-groups";
+
 export function AppSidebar() {
-  const { data: threads = [], isLoading } = useThreads();
-  const groups = groupThreads(threads);
+  const threadsQuery = useThreads();
+  const workspacesQuery = useWorkspaces();
+  const isLoading = threadsQuery.isLoading || workspacesQuery.isLoading;
+  const threads = threadsQuery.data ?? [];
+  const workspaces = workspacesQuery.data ?? [];
+  // A conversation filed under a workspace shows in it; the rest (and any
+  // whose workspace is gone) are grouped by date.
+  const known = new Set(workspaces.map((w) => w.id));
+  const isFiled = (t: Thread) => known.has(t.workspace_id ?? "");
+  const filed = threads.filter(isFiled);
+  const groups = groupThreads(threads.filter((t) => !isFiled(t)));
   const params = useParams();
   const activeId = params?.threadId as string | undefined;
   const pathname = usePathname();
@@ -140,7 +149,8 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
           )}
-          {!isLoading && groups.length === 0 && (
+          {!isLoading && <WorkspaceGroups workspaces={workspaces} threads={filed} activeId={activeId} />}
+          {!isLoading && groups.length === 0 && filed.length === 0 && (
             <p className="px-4 py-8 text-center text-xs text-muted-foreground">
               No conversations yet.
             </p>
@@ -177,85 +187,6 @@ export function AppSidebar() {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
-  );
-}
-
-/** Pulsing emerald status dot (ping ring + solid core) for a thread whose run
- *  is queued or running. */
-function StatusDot() {
-  return (
-    <span
-      aria-label="Running"
-      className="relative flex size-2 shrink-0 items-center justify-center"
-    >
-      <span className="absolute inline-flex size-2 animate-ping rounded-full bg-emerald-500 opacity-75" />
-      <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-    </span>
-  );
-}
-
-function ThreadRow({
-  id,
-  href,
-  title,
-  active,
-  runStatus,
-}: {
-  id: string;
-  /** the chat, or the Images page for one of its conversations */
-  href: string;
-  title: string;
-  active: boolean;
-  /** present while a run owns the thread */
-  runStatus?: RunStatus;
-}) {
-  const router = useRouter();
-  const del = useDeleteThread();
-
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={active} className="h-9">
-        <Link href={href}>
-          <span className="truncate">{title}</span>
-        </Link>
-      </SidebarMenuButton>
-      {/* The status and the trash share the slot at the row's end. Hovering the
-          row slides the status out and the trash in, and tabbing to the trash
-          shows it too. (shadcn's showOnHover shows it whenever the row has
-          focus, so after a click, on top of the status.) Below md the sidebar
-          is a sheet with no hover: the trash stays and the status sits beside it. */}
-      {runStatus && (
-        <span
-          className={cn(
-            "pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 transition duration-200 ease-out max-md:right-7 motion-reduce:transition-none",
-            "group-hover/menu-item:translate-x-2 group-hover/menu-item:opacity-0",
-            "group-has-[[data-sidebar=menu-action]:focus-visible]/menu-item:opacity-0",
-          )}
-        >
-          {runStatus === "awaiting_input" ? (
-            <CircleAlertIcon
-              aria-label="Awaiting your input"
-              className="size-3.5 text-amber-500"
-            />
-          ) : (
-            <StatusDot />
-          )}
-        </span>
-      )}
-      <SidebarMenuAction
-        className={cn(
-          "translate-x-2 opacity-0 transition duration-200 ease-out motion-reduce:transition-none",
-          "group-hover/menu-item:translate-x-0 group-hover/menu-item:opacity-100 focus-visible:translate-x-0 focus-visible:opacity-100",
-          "peer-data-active/menu-button:text-sidebar-accent-foreground max-md:translate-x-0 max-md:opacity-100",
-        )}
-        onClick={() =>
-          del.mutate(id, { onSuccess: () => active && router.push("/chat") })
-        }
-      >
-        <Trash2Icon className="size-3.5" />
-        <span className="sr-only">Delete</span>
-      </SidebarMenuAction>
-    </SidebarMenuItem>
   );
 }
 

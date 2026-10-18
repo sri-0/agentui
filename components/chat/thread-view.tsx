@@ -34,6 +34,7 @@ import { MessageList } from "./messages/message-list";
 import { pendingQuestion, QuestionPanel } from "./messages/question-card";
 import { TaskBar } from "./task-bar";
 import { useThread } from "./use-thread";
+import { WorkspaceBar } from "./workspace-bar";
 
 export function ThreadView({ threadId }: { threadId: string }) {
   return (
@@ -51,14 +52,17 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   // This view is keyed by thread: leaving it closes its side panel, and
   // opening it shows the connectors the thread remembers.
   useEffect(() => closeSidepanel, [closeSidepanel]);
-  // An Images page conversation opens there (the sidebar links every thread here).
+  const queryClient = useQueryClient();
+  // An Images page conversation opens there, from any link to /chat.
   const router = useRouter();
   useEffect(() => {
-    fetchThread(threadId).then((t) => {
-      if (t.agent_id === "images") router.replace(`/images/${threadId}`);
-      else setConnectors(t.connectors ?? null);
-    }, () => {});
-  }, [threadId, setConnectors, router]);
+    queryClient
+      .fetchQuery({ queryKey: ["thread", threadId], queryFn: () => fetchThread(threadId) })
+      .then((t) => {
+        if (t.agent_id === "images") router.replace(`/images/${threadId}`);
+        else setConnectors(t.connectors ?? null);
+      }, () => {});
+  }, [threadId, setConnectors, queryClient, router]);
   const connected = useChatStore((s) => s.connected);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
@@ -112,7 +116,6 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   const citedCount = sources.filter((s) => s.cited_in?.length).length;
 
   // A run that ends may have published artifacts and cited sources.
-  const queryClient = useQueryClient();
   const streaming = status === "streaming";
   const wasStreaming = useRef(streaming);
   useEffect(() => {
@@ -188,13 +191,16 @@ export function ThreadChat({ threadId }: { threadId: string }) {
               {asking ? (
                 <QuestionPanel key={questionId} part={asking} onAnswer={answer} onCancel={() => setPutAway(questionId)} autoFocus />
               ) : (
-                <Composer
-                  onSubmit={onSubmit}
-                  status={composerStatus}
-                  onStop={stop}
-                  contextSlot={contextSlot}
-                  placeholder={status === "awaiting_input" ? "Send a message to cancel the open request…" : undefined}
-                />
+                <>
+                  <Composer
+                    onSubmit={onSubmit}
+                    status={composerStatus}
+                    onStop={stop}
+                    contextSlot={contextSlot}
+                    placeholder={status === "awaiting_input" ? "Send a message to cancel the open request…" : undefined}
+                  />
+                  <WorkspaceBar threadId={threadId} />
+                </>
               )}
               <p className="mt-2 text-center text-xs text-muted-foreground">
                 AI can make mistakes. Always validate responses.

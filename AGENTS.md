@@ -83,7 +83,8 @@ components/
     reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
-                              #   connector-icon, thread-usage-ring, references (the text, with / and @ chips)
+                              #   connector-icon, thread-usage-ring, references (the text, with / and @ chips),
+                              #   voice-button (the voice prompt: AI Elements' SpeechInput, always recording)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card
                               #   (QuestionPanel: shadcn questionnaire; QuestionCard: the line or
                               #   recap in the thread), agent-card, markdown (+ source-citation:
@@ -111,6 +112,9 @@ components/
                               #   opens one full-page: details, npx command, files
   skills/skill-dialogs.tsx    # upload (a shadcn file input + details) and edit details
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
+  sidebar/workspace-groups.tsx # workspaces: a folder of conversations each, new chat in one, rename, delete
+  sidebar/thread-row.tsx      # one conversation row: status dot, delete on hover
+  chat/workspace-bar.tsx      # the card under the composer: the conversation's workspace, or the next one's
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
 
@@ -119,7 +123,8 @@ lib/
          types.ts (ChatMessage/parts) · usage.ts · artifacts.ts · tasks.ts ·
          thread-context.ts (the thread a view shows, for citations)
   api/   client.ts (apiFetch, apiText) · agents.ts · models.ts · threads.ts · connectors.ts ·
-         artifacts.ts · sources.ts · types.ts
+         artifacts.ts · sources.ts · types.ts · voice.ts (transcribe a recording)
+  audio/ wav.ts (a recording → 16 kHz mono WAV)
   providers.ts · group-threads.ts · dayjs.ts · utils.ts
 stores/ ui-store.ts            # Zustand UI state
 hooks/  use-mobile.ts          # shadcn's sidebar breakpoint hook
@@ -149,11 +154,15 @@ drops that subscription instead of retrying it on reconnect.
 
 REST (TanStack Query / `apiFetch` in `lib/api/*`) is for creating a thread and
 for reads and admin:
-- `POST /v1/agent/chat` → `201 {threadId, runId, seq}`: a new thread with its first turn
+- `POST /v1/agent/chat` → `201 {threadId, runId, seq}`: a new thread with its first turn,
+  filed under `workspaceId` when the composer's workspace card names one
 - `GET /v1/agents`, `GET /v1/models`, `GET /v1/connectors`, `GET /v1/connectors/{id}`
-- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, created_at, updated_at, run_status?}]}`;
+- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, workspace_id?, created_at, updated_at, run_status?}]}`;
   fetched once, refetched when a run this tab watches starts or ends and on window focus (no polling)
-- `GET /v1/threads/{id}` (its `connectors` set the composer's toggles), `PATCH`, `DELETE`
+- `GET /v1/threads/{id}` (its `connectors` set the composer's toggles; `['thread', id]`), `PATCH`
+  (`{workspace_id}` files it, `""` takes it out), `DELETE`
+- `GET /v1/workspaces` (by name), `POST {name}`, `PATCH /v1/workspaces/{id} {name}`,
+  `DELETE /v1/workspaces/{id}` (its conversations stay, outside any workspace)
 - `GET /v1/threads/{id}/artifacts` (the conversation's artifacts, no bodies) and
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
 - `POST /v1/images {prompt, model?, threadId?, edit?}` → `{threadId, artifact}`: the Images page; its
@@ -162,6 +171,8 @@ for reads and admin:
   `selectedImageModel` (persisted; null is the server's default)
 - `GET /v1/artifacts?after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
   every conversation's artifacts for `/artifacts`, newest first; `next` is the cursor for `after`
+- `POST /v1/voice/transcriptions` (multipart `file`, a 16 kHz mono WAV made by `lib/audio/wav.ts`)
+  → `{text}`: the voice prompt; the text is appended to the composer and sent as typed
 - `GET /v1/skills?q=&category=&source=` → `{data: [{name, title?, description, category?,
   source?, files: [{path}], created_at, updated_at}], categories, sources}` (`[{value, count}]`):
   the skills library, for `/skills`, the composer's `/` palette and the `/name` chip;
@@ -311,14 +322,18 @@ leaves the part `denied`.
 
 - **Zustand UI store** (`stores/ui-store.ts`): `selectedModel`, `selectedAgentId`,
   `selectedConnectors` (null = all), `sidepanel`, `libraryView` (grid or list on the
-  artifacts and skills pages). Model, agent and view are **persisted to
-  localStorage**; the rest are ephemeral. "New chat" clears the panel and the connectors.
+  artifacts and skills pages), `newChatWorkspaceId` (the workspace the next new
+  conversation is filed under). Model, agent and view are **persisted to
+  localStorage**; the rest are ephemeral. "New chat" clears the panel and the connectors,
+  and files the chat under the workspace it was started from (none from the header).
 - **Zustand chat store** (`lib/chat/store.ts`): `threads[threadId]` for every
   thread opened in this tab (main view and side panel alike) and `connected`.
   Only `useThread` and `ThreadUsageRing` read it.
 - **TanStack Query** (`lib/api/*`) for REST: keys `['agents']`, `['models']`,
   `['connectors']` (cached 5 min), `['skills', filter]` (every filter refetched after an
-  upload, an edit or a delete; the previous result stays while the next loads) and `['threads']` (refetched on run status changes and window focus). A skill's file
+  upload, an edit or a delete; the previous result stays while the next loads) and `['threads']` (refetched on run status changes, window focus and a new conversation);
+  `['workspaces']`, and one thread as stored, `['thread', id]` (the workspace card's; moving a
+  thread sets it and refetches `['threads']`). A skill's file
   is `['skill-file', name, updated_at, path]`. Deleting a thread invalidates `['threads']` and
   `['recent-artifacts']`. Per conversation: `['artifacts', id]`, `['sources', id]`
   (one list; chips `select` their own source), `['sources', id, n]` (one source not
@@ -369,7 +384,8 @@ Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
     The ring self-subscribes to the chat store and re-renders alone for the live
     token count — the composer stays memoized.
 - **`Composer`, `ThreadHeader`, `AgentSelector`, `ModelSelector`,
-  `ReasoningEffortSelector`, `AttachmentButton`, `TaskBar`** are all `memo`'d.
+  `ReasoningEffortSelector`, `AttachmentButton`, `TaskBar`, `WorkspaceBar`** are all `memo`'d
+  (`WorkspaceBar` takes only the thread id and subscribes to the rest itself).
 - **`MessageItem`** is `memo`'d on the message ref: only the message the frame
   touched re-renders. Inside it:
   - `ToolCard`, `QuestionCard`, `AgentCard` → `memo` on the part/data ref (the
@@ -483,6 +499,13 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
+- **The voice prompt** (`composer/voice-button.tsx`) is AI Elements' `SpeechInput` with
+  `mode="media-recorder"` (the changes to it: a mode prop, an `onRecordingError` prop, and a
+  guard against opening the microphone twice), so it always records rather
+  than using the browser's speech recognition, which needs its vendor's servers. The
+  recording goes to the server as WAV (`lib/audio/wav.ts`; browsers record WebM, which
+  Voxtral refuses), and the text is appended through the editor `ComposerInput` hands both
+  `ReferenceInput` and the button (`editorRef`). Errors show beside the button.
 - **References are chips in the text** (`composer/references.tsx`): the composer's text is a
   Tiptap editor whose Mention nodes are the chips (`chat/reference-chip.tsx`: the text's font,
   the list's coloured icon), with one list (shadcn's Command in a popover, stock styling, an
