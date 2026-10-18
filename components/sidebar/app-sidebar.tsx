@@ -23,7 +23,6 @@ import { useUiStore } from "@/stores/ui-store";
 import {
   BookOpenIcon,
   FilesIcon,
-  ImageIcon,
   LayersIcon,
   MoonIcon,
   PenSquareIcon,
@@ -102,14 +101,6 @@ export function AppSidebar() {
                   <Link href="/artifacts">
                     <LayersIcon />
                     <span>Artifacts</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Images" isActive={pathname.startsWith("/images")} className="h-9 gap-2.5">
-                  <Link href="/images">
-                    <ImageIcon />
-                    <span>Images</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

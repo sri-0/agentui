@@ -3,16 +3,15 @@
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { RecentImages } from "@/components/images/recent-images";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IMAGES_AGENT } from "@/lib/api/agents";
 import { createThread } from "@/lib/api/threads";
 import { useUiStore } from "@/stores/ui-store";
 import { useQueryClient } from "@tanstack/react-query";
-import { ImageIcon, MessageSquareIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { Composer } from "./composer/composer";
+import { type ChatMode, ModeToggle } from "./mode-toggle";
 import { runOptions } from "./use-thread";
 import { WorkspaceBar } from "./workspace-bar";
 
@@ -54,13 +53,9 @@ export function useStartChat(agentId?: string) {
   return { start, error };
 }
 
-/** What a new conversation is for: a chat, or images (the images agent). */
-export type LandingMode = "chat" | "images";
-
 const MODES = {
-  chat: { path: "/chat", title: "How can I help?", hint: "Choose a model or an agent, then ask anything." },
+  chat: { title: "How can I help?", hint: "Choose a model or an agent, then ask anything." },
   images: {
-    path: "/images",
     title: "Create an image",
     hint: "Describe it and pick an image model, then keep talking to change it.",
   },
@@ -68,37 +63,26 @@ const MODES = {
 
 /**
  * The new-conversation page, /chat or /images: one composer whose mode the
- * toggle switches (and the route with it). Chat picks the model, agent and
+ * toggle at the top switches (and the route with it). Chat picks the model, agent and
  * connectors and offers suggestions; Images picks the image model, shows the
  * latest images and starts a conversation with the images agent.
  */
-export function LandingView({ mode = "chat" }: { mode?: LandingMode }) {
+export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
   // ?prompt= starts the composer with a draft, e.g. the skills page's
   // "Create with agent".
   const draft = useSearchParams().get("prompt") ?? undefined;
   const images = mode === "images";
   const { start, error } = useStartChat(images ? IMAGES_AGENT : undefined);
-  const router = useRouter();
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <header className="flex h-14 shrink-0 items-center px-4">
+      <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 px-4">
         <SidebarTrigger className="text-muted-foreground" />
+        <ModeToggle mode={mode} />
       </header>
 
-      {/* From the top, not centred: the toggle stays put when a mode is taller. */}
+      {/* From the top, not centred: the heading stays put when a mode is taller. */}
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center px-4 pt-[max(2rem,14vh)] pb-16">
-        <Tabs value={mode} onValueChange={(m) => router.replace(MODES[m as LandingMode].path)} className="mb-8">
-          <TabsList className="h-10 rounded-full p-1">
-            <TabsTrigger value="chat" className="rounded-full px-4">
-              <MessageSquareIcon /> Chat
-            </TabsTrigger>
-            <TabsTrigger value="images" className="rounded-full px-4">
-              <ImageIcon /> Images
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
         <div className="mb-10 text-center">
           <h1 className="text-balance text-4xl font-semibold tracking-tight">{MODES[mode].title}</h1>
           <p className="mt-3 text-[15px] text-muted-foreground">{error ?? MODES[mode].hint}</p>
