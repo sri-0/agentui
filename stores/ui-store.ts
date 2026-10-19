@@ -30,6 +30,8 @@ type UiState = {
   libraryView: "grid" | "list";
   /** the workspace a new conversation is filed under, or null for none */
   newChatWorkspaceId: string | null;
+  /** the model generate_image uses, picked in an images composer; null for the server's default */
+  selectedImageModel: string | null;
 
   setModel: (id: string | null) => void;
   setAgent: (id: string | null) => void;
@@ -41,6 +43,7 @@ type UiState = {
   requestNewChat: (workspaceId?: string | null) => void;
   setLibraryView: (view: "grid" | "list") => void;
   setNewChatWorkspace: (id: string | null) => void;
+  setImageModel: (id: string | null) => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -53,6 +56,7 @@ export const useUiStore = create<UiState>()(
       artifactRefresh: {},
       libraryView: "grid",
       newChatWorkspaceId: null,
+      selectedImageModel: null,
 
       setModel: (id) => set({ selectedModel: id }),
       setAgent: (id) => set({ selectedAgentId: id }),
@@ -65,6 +69,7 @@ export const useUiStore = create<UiState>()(
         set({ sidepanel: null, selectedConnectors: null, newChatWorkspaceId: workspaceId }),
       setLibraryView: (view) => set({ libraryView: view }),
       setNewChatWorkspace: (id) => set({ newChatWorkspaceId: id }),
+      setImageModel: (id) => set({ selectedImageModel: id }),
     }),
     {
       name: "agentui-ui",
@@ -73,6 +78,7 @@ export const useUiStore = create<UiState>()(
         selectedModel: s.selectedModel,
         selectedAgentId: s.selectedAgentId,
         libraryView: s.libraryView,
+        selectedImageModel: s.selectedImageModel,
       }),
     },
   ),

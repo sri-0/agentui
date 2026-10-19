@@ -59,9 +59,10 @@ app/
   globals.css             # Tailwind v4 @theme, OKLCH tokens, .ai-gradient/.ai-glow helpers
   (app)/
     layout.tsx            # app shell: SidebarProvider + AppSidebar + SidebarInset
-    chat/page.tsx         # <LandingView> — centered composer for a new chat
+    chat/page.tsx         # <LandingView> — centered composer for a new chat (Chat mode)
     chat/[threadId]/page.tsx   # <ThreadView> — awaits params (Next 16), renders the chat
     artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts as cards (GET /v1/artifacts)
+    images/page.tsx       # <LandingView mode="images"> — the same page in Images mode
     skills/page.tsx       # <SkillsView> — the skills library: categories, sources, cards (/v1/skills)
 ```
 
@@ -69,10 +70,23 @@ app/
   `'use client'`.
 - **No `app/api/*` routes** — all network calls go directly to the Go backend.
 - Landing flow: the first message on `/chat` is `POST /v1/agent/chat`
-  (`createThread` in `lib/api/threads.ts`); the server creates the thread, starts
-  the run and replies `201 {threadId, runId, seq}` once the thread is stored. The
-  page navigates to `/chat/[threadId]`, which opens it, subscribes and replays the
-  turn from its start. Every later turn is a `run` frame on the socket.
+  (`useStartChat` in `landing-view.tsx`, `createThread` in `lib/api/threads.ts`); the
+  server creates the thread, starts the run and replies `201 {threadId, runId, seq}`
+  once the thread is stored. The page navigates to `/chat/[threadId]`, which opens it,
+  subscribes and replays the turn from its start. Every later turn is a `run` frame on
+  the socket. `/images` is the same page in Images mode and starts the thread with
+  `agentId: "images"`. The Chat | Images toggle (`mode-toggle.tsx`) is pinned to the top
+  of the page and switches between the two; a thread has none (its agent sets its mode).
+  The sidebar has no Images item; the toggle is the way in.
+- Images conversations: a thread whose `agent_id` is `images` (`IMAGES_AGENT`,
+  `lib/api/agents.ts`) is an ordinary chat whose composer is in its images mode
+  (`<Composer images>`: `ModelSelector use="image"`, no agent or connector selectors), and
+  its turns keep `agentId: "images"` and send no `model`, so the agent runs on the server's
+  default LLM (`runOptions(IMAGES_AGENT)`). Every turn sends `imageModel`, the picked image
+  model (`selectedImageModel`, persisted), which `generate_image` uses; `ImageCall` shows
+  the image in the thread, with a download button on hover (the bytes are fetched and saved:
+  the API is another origin, where `<a download>` would only open it), and a follow-up such
+  as "make it blue" edits it.
 
 ```
 components/
@@ -80,7 +94,11 @@ components/
   chat/
     use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
     reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
-    landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
+    landing-view.tsx          # the new-conversation page, /chat or /images: one composer whose
+                              #   mode the toggle sets, suggestions or the image carousel; useStartChat
+    mode-toggle.tsx           # the Chat | Images toggle (shadcn Tabs) in the new-conversation
+                              #   page's top bar: switches /chat and /images
+    thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with / and @ chips),
                               #   voice (the voice prompt: the mic button and the dictation bar)
@@ -90,7 +108,8 @@ components/
                               #   AI Elements inline citation), compaction-divider,
                               #   message-reasoning, message-actions, message-meta,
                               #   skill (SkillLoaded, UserText: the /name chip)
-      tools/                  # tool renderers: registry.ts (name → component), slides-call
+      tools/                  # tool renderers: registry.ts (name → component), slides-call,
+                              #   image-call (generate_image: a placeholder, then the image; download on hover)
   right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
                               #   sources-view, usage-view, model-view, agent-details-view,
                               #   connector-details-view
@@ -101,7 +120,9 @@ components/
   common/copy-button.tsx      # a copy-to-clipboard icon button for any page
   artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
                               #   once the card is in view), kind tabs, search; ?open=root/id
-                              #   opens one full-page
+                              #   opens one full-page; an image card shows the image
+  images/recent-images.tsx    # Images mode's scrolling carousel of the latest images (embla auto-scroll),
+                              #   each opening its conversation
   skills/skills-view.tsx      # categories and sources (with counts) on the left, search, Create
                               #   (with an agent: /chat?prompt=…; or upload), cards; ?skill=name
                               #   opens one full-page: details, npx command, files
@@ -160,8 +181,10 @@ for reads and admin:
   `DELETE /v1/workspaces/{id}` (its conversations stay, outside any workspace)
 - `GET /v1/threads/{id}/artifacts` (the conversation's artifacts, no bodies) and
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
-- `GET /v1/artifacts?after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
-  every conversation's artifacts for `/artifacts`, newest first; `next` is the cursor for `after`
+- `GET /v1/artifacts?kind=&after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
+  every conversation's artifacts (of one kind, when set) for `/artifacts` and the Images page's
+  carousel (`kind=image`), newest first; `next` is the cursor for `after`. Image models come
+  from `useModels("image")`
 - `POST /v1/voice/transcriptions` (multipart `file`, a 16 kHz mono WAV made by `lib/audio/wav.ts`)
   → `{text}`: the voice prompt; the text is appended to the composer and sent as typed
 - `GET /v1/skills?q=&category=&source=` → `{data: [{name, title?, description, category?,
@@ -199,8 +222,9 @@ Data part payloads: `data-agent` is the backend's agent activity
 (`subagentRunId, childThreadId, name, description?, status: running | waiting | done | error, startedAt, durationMs?, error?, progress?, log?, text?, interrupts?`; `interrupts` are the child's pending AG-UI interrupts while `waiting`).
 When a run ends, cards still `running` or `waiting` are settled as `error`.
 `data-task-list` is `{tasks:[{id, title, status}]}`, `data-artifact` is `{id, title, kind, version, language?, url?}`
-with kind `markdown | code | json | csv | url` (no body: `ArtifactView` fetches it; kind `url` embeds the
-page; old threads carry `content`). `data-compaction` is `{status: running | completed | failed | declined,
+with kind `markdown | code | json | csv | url | image` (no body: `ArtifactView` fetches it; kind `url` embeds the
+page; kind `image` is shown from its content URL, `artifactUrl`, and in the chat by its `generate_image` call
+rather than the button; old threads carry `content`). `data-compaction` is `{status: running | completed | failed | declined,
 summary?, inputTokens?, outputTokens?, durationMs?, error?}`, one per compaction of the model's context.
 `data-model` is `{from, to}`: the turn ran on another model than the thread's previous turn.
 `data-skill` is `{name, description}`: the skill a message starting with `/name` loaded; the

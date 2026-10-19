@@ -20,7 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ProviderIcon } from "@/components/provider-icon";
-import { hasCapability, useGroupedModels } from "@/lib/api/models";
+import { hasCapability, type ModelUse, useGroupedModels } from "@/lib/api/models";
 import { useUiStore } from "@/stores/ui-store";
 import { cn } from "@/lib/utils";
 import {
@@ -33,11 +33,12 @@ import {
 } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
 
-export const ModelSelector = memo(function ModelSelector() {
+/** Picks the chat's model, or with use "image" the model images are made with. */
+export const ModelSelector = memo(function ModelSelector({ use = "chat" }: { use?: ModelUse }) {
   const [open, setOpen] = useState(false);
-  const { groups, isLoading } = useGroupedModels();
-  const selectedModel = useUiStore((s) => s.selectedModel);
-  const setModel = useUiStore((s) => s.setModel);
+  const { groups, isLoading } = useGroupedModels(use);
+  const selectedModel = useUiStore((s) => (use === "image" ? s.selectedImageModel : s.selectedModel));
+  const setModel = useUiStore((s) => (use === "image" ? s.setImageModel : s.setModel));
 
   const allModels = useMemo(() => groups.flatMap((g) => g.models), [groups]);
   const current = allModels.find((m) => m.id === selectedModel);
@@ -76,7 +77,7 @@ export const ModelSelector = memo(function ModelSelector() {
             </button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent>Choose model</TooltipContent>
+        <TooltipContent>{use === "image" ? "Choose image model" : "Choose model"}</TooltipContent>
       </Tooltip>
       {/* Only build the (large) model list while the popover is open — when
           closed this whole subtree is skipped, so renders stay cheap. */}

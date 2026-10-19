@@ -5,7 +5,7 @@ import Papa from "papaparse";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { Markdown } from "@/components/chat/messages/markdown";
 import { Button } from "@/components/ui/button";
-import { useArtifactBody } from "@/lib/api/artifacts";
+import { artifactUrl, useArtifactBody } from "@/lib/api/artifacts";
 import { downloadArtifact } from "@/lib/chat/artifacts";
 import type { Artifact } from "@/lib/chat/types";
 import dayjs from "@/lib/dayjs";
@@ -19,6 +19,7 @@ import {
   DownloadIcon,
   ExternalLinkIcon,
   FileTextIcon,
+  ImageIcon,
   type LucideIcon,
   RotateCwIcon,
   TableIcon,
@@ -79,6 +80,7 @@ export const ARTIFACT_KINDS: Record<Artifact["kind"], { label: string; icon: Luc
   json: { label: "Data", icon: BracesIcon, color: "text-emerald-600 dark:text-emerald-400" },
   csv: { label: "Table", icon: TableIcon, color: "text-emerald-600 dark:text-emerald-400" },
   url: { label: "Page", icon: AppWindowIcon, color: "text-amber-600 dark:text-amber-400" },
+  image: { label: "Image", icon: ImageIcon, color: "text-pink-600 dark:text-pink-400" },
 };
 
 /** An artifact's icon, in its kind's colour. */
@@ -105,6 +107,10 @@ function embeddable(url?: string): url is string {
 /** An artifact's body, rendered by kind. */
 export function ArtifactBody({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
   const { body, error } = useArtifactBody(threadId, artifact);
+  if (artifact.kind === "image") {
+    // eslint-disable-next-line @next/next/no-img-element -- served by the API, any size
+    return <img src={artifactUrl(threadId, artifact)} alt={artifact.title} className="mx-auto max-h-full rounded-md" />;
+  }
   if (error) return <p className="text-sm text-destructive">{error.message}</p>;
   if (body == null) return <p className="text-sm text-muted-foreground">Loading…</p>;
   switch (artifact.kind) {
@@ -187,7 +193,7 @@ function CsvTable({ content }: { content: string }) {
   );
 }
 
-/** Reload the artifact; open a page in a new tab, or download a body. */
+/** Reload the artifact; open a page or an image in a new tab, or download a body. */
 export function ArtifactActions({ threadId, artifact }: { threadId: string; artifact: Artifact }) {
   const refreshArtifact = useUiStore((s) => s.refreshArtifact);
   const queryClient = useQueryClient();
@@ -198,14 +204,18 @@ export function ArtifactActions({ threadId, artifact }: { threadId: string; arti
   };
   return (
     <>
-      {artifact.content == null && (
+      {artifact.content == null && artifact.kind !== "image" && (
         <Button variant="ghost" size="icon-sm" title="Refresh" onClick={reload}>
           <RotateCwIcon className="size-4" />
         </Button>
       )}
-      {artifact.kind === "url" ? (
+      {artifact.kind === "url" || artifact.kind === "image" ? (
         <Button variant="ghost" size="icon-sm" title="Open in a new tab" asChild>
-          <a href={artifact.url} target="_blank" rel="noopener noreferrer">
+          <a
+            href={artifact.kind === "image" ? artifactUrl(threadId, artifact) : artifact.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <ExternalLinkIcon className="size-4" />
           </a>
         </Button>

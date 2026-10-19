@@ -45,12 +45,13 @@ export type AgentCard = {
 
 export type Task = { id: string; title: string; status: string };
 
-/** A published artifact: a document with a body (fetched from the API) or,
- *  kind "url", a page to embed. */
+/** A published artifact: a document with a body (fetched from the API),
+ *  kind "url", a page to embed, or kind "image", an image (made by
+ *  generate_image or the Images page). */
 export type Artifact = {
   id: string;
   title: string;
-  kind: "markdown" | "code" | "json" | "csv" | "url";
+  kind: "markdown" | "code" | "json" | "csv" | "url" | "image";
   language?: string;
   /** kind url: the page to embed */
   url?: string;

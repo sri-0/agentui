@@ -229,12 +229,12 @@ export function interruptPart(i: Interrupt): ToolPart {
 }
 
 /** When a run ends, nothing in it is still waiting: text still open is
- *  complete, approvals never answered did not run, and sub-agent cards still
- *  open lost their parent. */
+ *  complete, approvals never answered did not run, calls with no result were
+ *  stopped, and sub-agent cards still open lost their parent. */
 function settleOpenParts(m: ChatMessage): ChatMessage {
   const open = (p: ChatPart) =>
     (p.type === "text" && !p.done) ||
-    (p.type === "tool" && p.state === "approval") ||
+    (p.type === "tool" && (p.state === "approval" || p.state === "running")) ||
     (p.type === "data-agent" && (p.data.status === "running" || p.data.status === "waiting"));
   if (!m.parts.some(open)) return m;
   return {
@@ -242,6 +242,7 @@ function settleOpenParts(m: ChatMessage): ChatMessage {
     parts: m.parts.map((p): ChatPart => {
       if (!open(p)) return p;
       if (p.type === "text") return { ...p, done: true };
+      if (p.type === "tool" && p.state === "running") return { ...p, state: "error", errorText: "stopped" };
       if (p.type === "tool") return { ...p, state: "denied" };
       if (p.type === "data-agent") return { ...p, data: { ...p.data, status: "error", error: p.data.error ?? "stopped", interrupts: undefined } };
       return p;

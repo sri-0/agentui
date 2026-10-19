@@ -8,16 +8,24 @@ import { useUiStore } from "@/stores/ui-store";
 import { apiFetch } from "./client";
 import type { ListResponse, Model } from "./types";
 
-export function useModels() {
-  return useQuery({
-    queryKey: ["models"],
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      const res = await apiFetch<ListResponse<Model>>("/v1/models");
-      // only chat-capable models are selectable in the composer
-      return (res.data ?? []).filter((m) => m.type === "llm" || !m.type);
-    },
-  });
+/** Every model the server lists, of every type; one request for all of them. */
+const allModels = {
+  queryKey: ["models"],
+  staleTime: 5 * 60_000,
+  queryFn: async () => (await apiFetch<ListResponse<Model>>("/v1/models")).data ?? [],
+};
+
+/** What a composer picks a model for: the chat (its runs) or images. */
+export type ModelUse = "chat" | "image";
+
+const forUse: Record<ModelUse, (models: Model[]) => Model[]> = {
+  chat: (models) => models.filter((m) => m.type === "llm" || !m.type),
+  image: (models) => models.filter((m) => m.type === "image"),
+};
+
+/** The models of one use; the chat's by default. */
+export function useModels(use: ModelUse = "chat") {
+  return useQuery({ ...allModels, select: forUse[use] });
 }
 
 /** The currently-selected model object (or undefined while loading / unset). */
@@ -35,8 +43,8 @@ export function hasCapability(model: Model | undefined, capability: string): boo
 export type ProviderGroup = { providerId: string; providerName: string; models: Model[] };
 
 /** Group models by provider for the grouped selector. */
-export function useGroupedModels() {
-  const query = useModels();
+export function useGroupedModels(use: ModelUse = "chat") {
+  const query = useModels(use);
   const groups = useMemo<ProviderGroup[]>(() => {
     const map = new Map<string, ProviderGroup>();
     for (const m of query.data ?? []) {
