@@ -65,6 +65,8 @@ app/
     images/page.tsx       # <LandingView mode="images"> — the same page in Images mode
     skills/page.tsx       # <SkillsView> — the skills library: categories, sources, cards (/v1/skills)
     files/page.tsx        # <FilesView> — the user's uploaded files, by workspace (/v1/rag/files)
+    workspaces/page.tsx   # <WorkspacesView> — the workspaces as cards, as ChatGPT's Spaces
+    workspaces/[id]/page.tsx  # <WorkspaceView> — one workspace: Chats, Artifacts, Sources, Files tabs
 ```
 
 - Root + `(app)` layouts are **Server Components**; every interactive surface is
@@ -117,7 +119,7 @@ components/
   right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
                               #   sources-view, usage-view, model-view, agent-details-view,
                               #   connector-details-view
-  library/                    # the Spaces-style frame the artifacts, skills and files pages share:
+  library/                    # the Spaces-style frame the artifacts, skills, files and workspaces pages share:
                               #   LibraryPage (top bar, optional nav column), LibraryToolbar (title,
                               #   search, actions, grid/list toggle), LibraryItems/LibraryItem (card
                               #   or row, opened at its href or, without one, by nothing but its actions),
@@ -125,7 +127,8 @@ components/
   common/copy-button.tsx      # a copy-to-clipboard icon button for any page
   artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
                               #   once the card is in view), kind tabs, search; ?open=root/id
-                              #   opens one full-page; an image card shows the image
+                              #   opens one full-page; an image card shows the image. ArtifactItem
+                              #   (one card) is the workspace page's too
   images/recent-images.tsx    # Images mode's scrolling carousel of the latest images (embla auto-scroll),
                               #   each opening its conversation
   skills/skills-view.tsx      # categories and sources (with counts) on the left, search, Create
@@ -136,19 +139,39 @@ components/
                               #   tags), Upload (or a drop on the list) opens the upload dialog for the
                               #   workspace shown, cards (an image shows itself) with a Searchable / Reference
                               #   only badge and the tags, download and delete; files are never opened in the
-                              #   browser (the server sends them as attachments)
+                              #   browser (the server sends them as attachments). FileItem (one card) is the
+                              #   workspace page's too
   files/upload-dialog.tsx     # THE way files are uploaded: a drop area (native drag events + a file input)
                               #   for several at once, what's accepted said plainly (and refused before
-                              #   upload), the workspace (a Select, starting at the chat's or the page's), tags
+                              #   upload), the workspace (WorkspaceCommand in a combobox, starting at the
+                              #   chat's or the page's; typing a new name creates one), tags
                               #   for the batch (TagsField: shadcn Input + Badge chips, earlier tags offered),
                               #   per-file progress and the server's
                               #   reasons; each kept file in the chat's workspace goes to onUploaded, and
                               #   files sent to another workspace are said to be unusable in the chat
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
-  sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
-  sidebar/workspace-groups.tsx # workspaces: a folder of conversations each, new chat in one, rename, delete
-  sidebar/thread-row.tsx      # one conversation row: status dot, delete on hover
+  sidebar/app-sidebar.tsx     # New chat, Search, Workspaces, Artifacts, Skills, Files; the thread list
+                              #   (Pinned, with a pin, then Today/Yesterday/7d/30d/Older) + run-status dots
+  sidebar/thread-row.tsx      # one conversation row: its workspace (avatar and name) under the title,
+                              #   the status dot, delete on hover
+  workspaces/workspaces-view.tsx # the workspaces as cards (their latest chats as the preview; chats and
+                              #   files counted), New workspace, and WorkspaceMenu (rename, delete)
+  workspaces/workspace-view.tsx  # one workspace: New chat, its menu, and tabs (?tab=) of its chats (archived
+                              #   too), artifacts (ArtifactItem), sources (SourceList) and files (FileItem,
+                              #   Upload into it); the toolbar's search searches the tab shown
+  workspaces/workspace-avatar.tsx # a workspace's icon: its initials (Pet Project → PP) on a gradient picked
+                              #   by its id, in a rounded square (shadcn Avatar); the cards, the page's
+                              #   heading, the sidebar's rows, the thread header, the pickers and the
+                              #   Files page's list
+  workspaces/workspace-command.tsx # the workspaces to pick, "No workspace", and Create for a new name
+                              #   (shadcn Command), in the composer's workspace bar and the upload dialog
+  sources/source-list.tsx     # a workspace's sources, cited or all retrieved, as cards: the system's icon,
+                              #   the conversation, the metadata; an address opens in a new tab
   chat/workspace-bar.tsx      # the card under the composer: the conversation's workspace, or the next one's
+  chat/thread-title.tsx       # the thread header's breadcrumb (shadcn Breadcrumb): the workspace (its
+                              #   avatar and name) / the conversation's title, each with a background on
+                              #   hover: a click on the workspace picks another (WorkspaceCommand), on the
+                              #   title edits it in place (Enter or leaving saves, Escape doesn't)
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
 
@@ -201,10 +224,12 @@ for reads and admin:
   `DELETE /v1/workspaces/{id}` (its conversations stay, outside any workspace)
 - `GET /v1/threads/{id}/artifacts` (the conversation's artifacts, no bodies) and
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
-- `GET /v1/artifacts?kind=&after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
-  every conversation's artifacts (of one kind, when set) for `/artifacts` and the Images page's
-  carousel (`kind=image`), newest first; `next` is the cursor for `after`. Image models come
-  from `useModels("image")`
+- `GET /v1/artifacts?kind=&workspace=&after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
+  every conversation's artifacts (of one kind, of one workspace's conversations, when set) for
+  `/artifacts`, the Images page's carousel (`kind=image`) and a workspace's Artifacts tab, newest
+  first; `next` is the cursor for `after`. Image models come from `useModels("image")`
+- `GET /v1/sources?cited=&workspace=&after=&limit=` → `{data: [source + id, thread_title], next?}`:
+  a workspace's Sources tab (`cited=true` unless All retrieved is picked), paged as artifacts are
 - `POST /v1/voice/transcriptions` (multipart `file`, a 16 kHz mono WAV made by `lib/audio/wav.ts`)
   → `{text}`: the voice prompt; the text is appended to the composer and sent as typed
 - `GET /v1/skills?q=&category=&source=` → `{data: [{name, title?, description, category?,
@@ -377,7 +402,7 @@ leaves the part `denied`.
   a delete or a deleted workspace refetches them all), and one thread as stored, `['thread', id]` (the workspace card's; moving a
   thread sets it and refetches `['threads']`). A skill's file
   is `['skill-file', name, updated_at, path]`. Deleting a thread invalidates `['threads']` and
-  `['recent-artifacts']`. Per conversation: `['artifacts', id]`, `['sources', id]`
+  `['recent-artifacts']`; a run that ends, `['recent-artifacts']` and `['recent-sources']`. Per conversation: `['artifacts', id]`, `['sources', id]`
   (one list; chips `select` their own source), `['sources', id, n]` (one source not
   listed yet), `['artifact-body', id, artifactId, version]`; across
   conversations `['recent-artifacts']` (infinite). A run's end invalidates the

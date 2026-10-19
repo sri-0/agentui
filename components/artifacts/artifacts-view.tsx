@@ -109,19 +109,7 @@ export function ArtifactsView() {
       )}
       <LibraryItems>
         {shown.map((a) => (
-          <LibraryItem
-            key={keyOf(a)}
-            href={`${pathname}?open=${encodeURIComponent(keyOf(a))}`}
-            preview={<ArtifactPreview artifact={a} />}
-            icon={
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-background">
-                <ArtifactIcon kind={a.kind} />
-              </span>
-            }
-            title={a.title}
-            subtitle={a.thread_title || "Untitled conversation"}
-            meta={a.updated_at ? dayjs(a.updated_at).fromNow() : undefined}
-          />
+          <ArtifactItem key={keyOf(a)} artifact={a} href={`${pathname}?open=${encodeURIComponent(keyOf(a))}`} />
         ))}
       </LibraryItems>
       {hasNextPage && (
@@ -136,6 +124,25 @@ export function ArtifactsView() {
         </Button>
       )}
     </LibraryPage>
+  );
+}
+
+/** One artifact of the list, opened at href: a preview of it, what kind it
+ *  is, and its conversation. */
+export function ArtifactItem({ artifact: a, href }: { artifact: RecentArtifact; href: string }) {
+  return (
+    <LibraryItem
+      href={href}
+      preview={<ArtifactPreview artifact={a} />}
+      icon={
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-background">
+          <ArtifactIcon kind={a.kind} />
+        </span>
+      }
+      title={a.title}
+      subtitle={a.thread_title || "Untitled conversation"}
+      meta={a.updated_at ? dayjs(a.updated_at).fromNow() : undefined}
+    />
   );
 }
 

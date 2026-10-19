@@ -13,6 +13,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { WorkspaceAvatar } from "@/components/workspaces/workspace-avatar";
 import { useDeleteThread, useThreadRecord } from "@/lib/api/threads";
 import { useUpdateThread, useWorkspaces } from "@/lib/api/workspaces";
 import { ThreadIdContext } from "@/lib/chat/thread-context";
@@ -52,6 +53,7 @@ export function ThreadMenu() {
               <DropdownMenuRadioItem value="">No workspace</DropdownMenuRadioItem>
               {workspaces.map((w) => (
                 <DropdownMenuRadioItem key={w.id} value={w.id}>
+                  <WorkspaceAvatar workspace={w} size="sm" />
                   {w.name}
                 </DropdownMenuRadioItem>
               ))}

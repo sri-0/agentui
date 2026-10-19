@@ -1,20 +1,12 @@
 "use client";
 
-import {
-  Command,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from "@/components/ui/command";
+import { WorkspaceAvatar } from "@/components/workspaces/workspace-avatar";
+import { WorkspaceCommand } from "@/components/workspaces/workspace-command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useThreadRecord } from "@/lib/api/threads";
-import type { Workspace } from "@/lib/api/types";
-import { useCreateWorkspace, useUpdateThread, useWorkspaces } from "@/lib/api/workspaces";
-import { cn } from "@/lib/utils";
+import { useUpdateThread, useWorkspaces } from "@/lib/api/workspaces";
 import { useUiStore } from "@/stores/ui-store";
-import { CheckIcon, ChevronDownIcon, FolderIcon, FolderPlusIcon } from "lucide-react";
+import { ChevronDownIcon, FolderIcon } from "lucide-react";
 import { memo, useState } from "react";
 
 /**
@@ -50,7 +42,7 @@ export const WorkspaceBar = memo(function WorkspaceBar({ threadId }: { threadId?
             aria-label={`Workspace: ${current?.name ?? "none"}`}
             className="flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-300/70 hover:text-foreground dark:text-neutral-300 dark:hover:bg-neutral-700"
           >
-            <FolderIcon className="size-3.5" />
+            {current ? <WorkspaceAvatar workspace={current} size="xs" /> : <FolderIcon className="size-3.5" />}
             <span className="max-w-[240px] truncate">{current?.name ?? "No workspace"}</span>
             <ChevronDownIcon className="size-3 opacity-50" />
           </button>
@@ -64,61 +56,3 @@ export const WorkspaceBar = memo(function WorkspaceBar({ threadId }: { threadId?
     </div>
   );
 });
-
-/** The workspaces to choose from, plus "No workspace", and a create item for a
- *  name typed that no workspace has. */
-function WorkspaceCommand({
-  workspaces,
-  currentId,
-  onChoose,
-}: {
-  workspaces: Workspace[];
-  currentId: string | null;
-  onChoose: (id: string | null) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const create = useCreateWorkspace();
-  const name = search.trim();
-  const taken = workspaces.some((w) => w.name.toLowerCase() === name.toLowerCase());
-
-  return (
-    <Command>
-      <CommandInput placeholder="Find or create a workspace…" value={search} onValueChange={setSearch} />
-      <CommandList className="max-h-[280px]">
-        <CommandGroup>
-          <CommandItem value="none" keywords={["No workspace"]} onSelect={() => onChoose(null)} className="gap-2">
-            <Check on={currentId === null} />
-            No workspace
-          </CommandItem>
-          {workspaces.map((w) => (
-            <CommandItem key={w.id} value={w.id} keywords={[w.name]} onSelect={() => onChoose(w.id)} className="gap-2">
-              <Check on={currentId === w.id} />
-              <span className="truncate">{w.name}</span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
-        {name && !taken && (
-          <>
-            <CommandSeparator />
-            <CommandGroup>
-              <CommandItem
-                value="create"
-                keywords={[name]}
-                disabled={create.isPending}
-                onSelect={() => create.mutate(name, { onSuccess: (w) => onChoose(w.id) })}
-                className="gap-2"
-              >
-                <FolderPlusIcon className="size-4" />
-                <span className="truncate">Create “{name}”</span>
-              </CommandItem>
-            </CommandGroup>
-          </>
-        )}
-      </CommandList>
-    </Command>
-  );
-}
-
-function Check({ on }: { on: boolean }) {
-  return <CheckIcon className={cn("size-4 shrink-0", on ? "opacity-100" : "opacity-0")} />;
-}

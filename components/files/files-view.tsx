@@ -10,11 +10,12 @@ import {
 } from "@/components/library/library";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { WorkspaceAvatar } from "@/components/workspaces/workspace-avatar";
 import { fileContentUrl, type UserFile, useDeleteFile, useFiles } from "@/lib/api/files";
 import { useWorkspaces } from "@/lib/api/workspaces";
 import dayjs from "@/lib/dayjs";
 import { cn } from "@/lib/utils";
-import { DownloadIcon, FilesIcon, FolderIcon, InboxIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import { DownloadIcon, FilesIcon, InboxIcon, Trash2Icon, UploadIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { type DragEvent, useState } from "react";
 
@@ -68,7 +69,7 @@ export function FilesView() {
         {workspaces.map((w) => (
           <NavItem
             key={w.id}
-            icon={<FolderIcon className="text-muted-foreground" />}
+            icon={<WorkspaceAvatar workspace={w} size="sm" />}
             label={w.name}
             active={workspaceId === w.id}
             href={`/files?workspace=${encodeURIComponent(w.id)}`}
@@ -131,7 +132,7 @@ export function FilesView() {
 
 /** One file: an image shows itself, anything else its icon; the first badge
  *  says whether search_userfiles finds it, the rest are its tags. */
-function FileItem({ file }: { file: UserFile }) {
+export function FileItem({ file }: { file: UserFile }) {
   const del = useDeleteFile();
   return (
     <LibraryItem

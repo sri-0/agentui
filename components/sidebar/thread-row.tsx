@@ -9,6 +9,8 @@ import { useFileNames } from "@/lib/api/files";
 import { useDeleteThread } from "@/lib/api/threads";
 import type { RunStatus } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import { WorkspaceAvatar } from "@/components/workspaces/workspace-avatar";
+import type { Workspace } from "@/lib/api/types";
 import { CircleAlertIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -32,12 +34,15 @@ export function ThreadRow({
   title,
   active,
   runStatus,
+  workspace,
 }: {
   id: string;
   title: string;
   active: boolean;
   /** present while a run owns the thread */
   runStatus?: RunStatus;
+  /** the workspace it is filed under, shown under the title */
+  workspace?: Workspace;
 }) {
   const router = useRouter();
   const del = useDeleteThread();
@@ -45,9 +50,15 @@ export function ThreadRow({
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={active} className="h-9">
+      <SidebarMenuButton asChild isActive={active} className={cn("h-9", workspace && "h-auto flex-col items-start gap-0.5 py-1.5")}>
         <Link href={`/chat/${id}`}>
-          <span className="truncate">{named(title)}</span>
+          <span className="w-full truncate">{named(title)}</span>
+          {workspace && (
+            <span className="flex max-w-full items-center gap-1.5 text-xs text-muted-foreground">
+              <WorkspaceAvatar workspace={workspace} size="xs" />
+              <span className="truncate">{workspace.name}</span>
+            </span>
+          )}
         </Link>
       </SidebarMenuButton>
       {/* The status and the trash share the slot at the row's end. Hovering the
