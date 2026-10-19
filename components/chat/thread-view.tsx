@@ -66,8 +66,9 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   // composer picks the image model.
   const record = useThreadRecord(threadId).data;
   const images = record?.agent_id === IMAGES_AGENT;
-  // While it is open, REST requests are made under its control set.
-  const controlSet = record?.controlset_id ?? null;
+  // While it is open, REST requests are made under its control set; until its
+  // record is known, under none (never the picker's).
+  const controlSet = record?.controlset_id ?? "";
   const setThreadControlSet = useUiStore((s) => s.setThreadControlSet);
   useEffect(() => {
     setThreadControlSet(controlSet);

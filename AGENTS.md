@@ -260,9 +260,9 @@ for reads and admin:
 - `GET /v1/threads/{id}/messages` → `{data: [{id, thread_id, role, seq, created_at, text, events}], cursor}`;
   `events` are the AG-UI events of that turn, `cursor` is the log id to subscribe from (`""` when idle)
 
-Every REST call (`apiText`) sends `X-Control-Set: C1000`, the control set it is made under
-(`currentControlSet` in `stores/ui-store.ts`): the open thread's, else the picker's; none
-before one is picked. The UI sends no identity header and has no temporary mode: every
+Every POST (`apiText`) sends `X-Control-Set: C1000`, the control set it creates documents
+under (`currentControlSet` in `stores/ui-store.ts`): the open thread's (none until its record
+is loaded), else the picker's; none before one is picked. Other requests send none. The UI sends no identity header and has no temporary mode: every
 thread is persisted.
 
 ---

@@ -34,7 +34,8 @@ type UiState = {
   selectedImageModel: string | null;
   /** the control set a new conversation is created under (C1000–C1020); null until one is picked */
   selectedControlSet: string | null;
-  /** the open conversation's control set, fixed when it was created; null outside one */
+  /** the open conversation's control set, fixed when it was created; "" while
+   *  its record loads; null outside one */
   threadControlSet: string | null;
 
   setModel: (id: string | null) => void;
@@ -95,9 +96,9 @@ export const useUiStore = create<UiState>()(
   ),
 );
 
-/** The control set REST requests are made under (X-Control-Set): the open
- *  conversation's, else the one picked for a new one. Runs carry none: the
- *  server takes a thread's from its record. */
+/** The control set a POST creates documents under (X-Control-Set): the open
+ *  conversation's, else the one picked for a new one; "" when nothing may be
+ *  created yet. Runs carry none: the server takes a thread's from its record. */
 export function currentControlSet() {
   const s = useUiStore.getState();
   return s.threadControlSet ?? s.selectedControlSet ?? undefined;
