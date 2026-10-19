@@ -80,6 +80,9 @@ export type Thread = {
   connectors?: string[];
   /** the workspace the conversation is filed under, if any */
   workspace_id?: string;
+  pinned?: boolean;
+  /** left out of the sidebar */
+  archived?: boolean;
   created_at?: string | number;
   updated_at?: string | number;
   /** present while a run owns the thread */

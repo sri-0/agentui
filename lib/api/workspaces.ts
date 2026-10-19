@@ -58,14 +58,15 @@ export function useDeleteWorkspace() {
   });
 }
 
-/** Files a conversation under a workspace, or takes it out (null). */
-export function useMoveThread() {
+/** Files a conversation under a workspace or takes it out (null), pins or
+ *  archives it; what is left undefined stays. */
+export function useUpdateThread() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ threadId, workspaceId }: { threadId: string; workspaceId: string | null }) =>
+    mutationFn: ({ threadId, workspaceId, ...flags }: { threadId: string; workspaceId?: string | null } & Pick<Thread, "pinned" | "archived">) =>
       apiFetch<Thread>(`/v1/threads/${encodeURIComponent(threadId)}`, {
         method: "PATCH",
-        body: JSON.stringify({ workspace_id: workspaceId ?? "" }),
+        body: JSON.stringify({ workspace_id: workspaceId === undefined ? undefined : (workspaceId ?? ""), ...flags }),
       }),
     onSuccess: (thread) => {
       qc.setQueryData(["thread", thread.id], thread);

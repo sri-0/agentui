@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useThreadRecord } from "@/lib/api/threads";
 import type { Workspace } from "@/lib/api/types";
-import { useCreateWorkspace, useMoveThread, useWorkspaces } from "@/lib/api/workspaces";
+import { useCreateWorkspace, useUpdateThread, useWorkspaces } from "@/lib/api/workspaces";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import { CheckIcon, ChevronDownIcon, FolderIcon, FolderPlusIcon } from "lucide-react";
@@ -29,7 +29,7 @@ export const WorkspaceBar = memo(function WorkspaceBar({ threadId }: { threadId?
   const { data: thread } = useThreadRecord(threadId);
   const newChatWorkspaceId = useUiStore((s) => s.newChatWorkspaceId);
   const setNewChatWorkspace = useUiStore((s) => s.setNewChatWorkspace);
-  const move = useMoveThread();
+  const move = useUpdateThread();
 
   const currentId = threadId ? thread?.workspace_id : newChatWorkspaceId;
   const current = workspaces.find((w) => w.id === currentId);

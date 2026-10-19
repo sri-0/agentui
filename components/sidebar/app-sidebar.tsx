@@ -42,14 +42,16 @@ export function AppSidebar() {
   const threadsQuery = useThreads();
   const workspacesQuery = useWorkspaces();
   const isLoading = threadsQuery.isLoading || workspacesQuery.isLoading;
-  const threads = threadsQuery.data ?? [];
+  const threads = (threadsQuery.data ?? []).filter((t) => !t.archived);
   const workspaces = workspacesQuery.data ?? [];
   // A conversation filed under a workspace shows in it; the rest (and any
-  // whose workspace is gone) are grouped by date.
+  // whose workspace is gone) are grouped by date, after the pinned ones.
   const known = new Set(workspaces.map((w) => w.id));
   const isFiled = (t: Thread) => known.has(t.workspace_id ?? "");
   const filed = threads.filter(isFiled);
-  const groups = groupThreads(threads.filter((t) => !isFiled(t)));
+  const groups = groupThreads(threads.filter((t) => !isFiled(t) && !t.pinned));
+  const pinned = threads.filter((t) => t.pinned);
+  if (pinned.length) groups.unshift({ label: "Pinned", threads: pinned });
   const params = useParams();
   const activeId = params?.threadId as string | undefined;
   const pathname = usePathname();
