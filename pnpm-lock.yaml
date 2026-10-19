@@ -56,6 +56,9 @@ importers:
       embla-carousel-react:
         specifier: ^8.6.0
         version: 8.6.0(react@19.3.1)
+      geist:
+        specifier: ^1.8.1
+        version: 1.8.1(next@16.4.2(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))
       lucide-react:
         specifier: ^1.18.0
         version: 1.18.0(react@19.3.1)
@@ -3429,6 +3432,11 @@ packages:
 
   fuzzysort@3.1.0:
     resolution: {integrity: sha512-sR9BNCjBg6LNgwvxlBd0sBABvQitkLzoVY9MYYROQVX/FvfJ4Mai9LsGhDgd8qYdds0bY77VzYd5iuB+v5rwQQ==}
+
+  geist@1.8.1:
+    resolution: {integrity: sha512-oSBhuzTvwZqGAZVC4swTRo61G/JHojtEVNR3DCToU+4nUBkG48ndKNvj4Ma7zZ+OlJkYDLT66HS+hrFszkovTg==}
+    peerDependencies:
+      next: '>=13.2.0'
 
   generator-function@2.0.1:
     resolution: {integrity: sha512-SFdFmIJi+ybC0vjlHN0ZGVGHc3lgE0DxPAT0djjVg+kjOnSqclqmj0KQ7ykTOLP6YxoqOvuAODGdcHJn+43q3g==}
@@ -8083,7 +8091,7 @@ snapshots:
       dot-prop: 10.1.0
       env-paths: 3.0.0
       json-schema-typed: 8.0.2
-      semver: 7.8.4
+      semver: 7.8.5
       uint8array-extras: 1.5.0
 
   confbox@0.2.4: {}
@@ -8992,6 +9000,10 @@ snapshots:
   functions-have-names@1.2.3: {}
 
   fuzzysort@3.1.0: {}
+
+  geist@1.8.1(next@16.4.2(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)):
+    dependencies:
+      next: 16.4.2(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
 
   generator-function@2.0.1: {}
 
@@ -10952,8 +10964,7 @@ snapshots:
 
   semver@7.8.4: {}
 
-  semver@7.8.5:
-    optional: true
+  semver@7.8.5: {}
 
   send@1.2.1:
     dependencies:
