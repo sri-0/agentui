@@ -1,6 +1,7 @@
 import { EventType, type Event as AgUiEvent } from "@ag-ui/core";
 import { create } from "zustand";
 
+import { errorMessage } from "@/lib/api/client";
 import { fetchMessages } from "@/lib/api/threads";
 
 import { emptyThread, reduce, type ThreadState } from "./reduce";
@@ -48,7 +49,7 @@ chatSocket.onFrame = (f: ThreadFrame) => {
       if (t.status === "streaming") stage(f.threadId, { ...t, status: "idle" });
       break;
     case "error":
-      stage(f.threadId, { ...t, status: "error", error: f.message });
+      stage(f.threadId, { ...t, status: "error", error: { title: "Couldn't follow the conversation", detail: f.message } });
       break;
   }
 };
@@ -68,7 +69,7 @@ export async function openThread(threadId: string) {
     cursor = res.cursor;
     for (const m of res.data) for (const ev of m.events) t = reduce(t, ev);
   } catch (err) {
-    t = { ...emptyThread, status: "error", error: (err as Error).message };
+    t = { ...emptyThread, status: "error", error: { title: "Couldn't load the conversation", detail: errorMessage(err), retry: true } };
   }
   if (opens.get(threadId) !== gen) return;
   // A thread with no history has no run to follow yet.
@@ -97,13 +98,13 @@ export async function sendMessage(threadId: string, text: string, opts: RunOptio
     error: undefined,
     messages: [...t.messages, { id, role: "user", parts: [{ type: "text", id, text, done: true }] }],
   });
-  await follow(threadId, chatSocket.request({ type: "run", threadId, messages: [{ id, role: "user", content: text }], ...opts }));
+  await follow(threadId, chatSocket.request({ type: "run", threadId, messages: [{ id, role: "user", content: text }], ...opts }), "Message not sent");
 }
 
 /** Answer the thread's own paused run; the continuation streams on the same turn. */
 export async function resumeRun(threadId: string, interruptId: string, decision: Decision) {
   stage(threadId, { ...current(threadId), status: "streaming" });
-  await follow(threadId, chatSocket.request({ type: "answer", threadId, interruptId, ...decision }));
+  await follow(threadId, chatSocket.request({ type: "answer", threadId, interruptId, ...decision }), "Answer not sent");
 }
 
 /** Answer a sub-agent's request from its card on the parent's thread. The
@@ -127,12 +128,12 @@ export async function cancelRun(threadId: string) {
   }
 }
 
-/** Follow a started or resumed run from its ack's cursor; a refusal lands as the thread's error. */
-async function follow(threadId: string, request: Promise<Ack>) {
+/** Follow a started or resumed run from its ack's cursor; a refusal lands as the thread's error, under `title`. */
+async function follow(threadId: string, request: Promise<Ack>, title: string) {
   try {
     const ack = await request;
     chatSocket.send({ type: "subscribe", threadId, after: ack.seq });
   } catch (err) {
-    stage(threadId, { ...current(threadId), status: "error", error: (err as Error).message });
+    stage(threadId, { ...current(threadId), status: "error", error: { title, detail: errorMessage(err) } });
   }
 }
