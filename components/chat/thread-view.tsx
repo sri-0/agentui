@@ -36,6 +36,7 @@ import { MessageList } from "./messages/message-list";
 import { pendingQuestion, QuestionPanel } from "./messages/question-card";
 import { TaskBar } from "./task-bar";
 import { ThreadMenu } from "./thread-menu";
+import { ThreadTitle } from "./thread-title";
 import { useThread } from "./use-thread";
 import { WorkspaceBar } from "./workspace-bar";
 
@@ -140,6 +141,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
       void queryClient.invalidateQueries({ queryKey: ["artifacts", threadId] });
       void queryClient.invalidateQueries({ queryKey: ["recent-artifacts"] });
       void queryClient.invalidateQueries({ queryKey: ["sources", threadId] });
+      void queryClient.invalidateQueries({ queryKey: ["recent-sources"] });
     }
     wasStreaming.current = streaming;
   }, [streaming, threadId, queryClient]);
@@ -275,13 +277,14 @@ const ThreadHeader = memo(function ThreadHeader({
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
       <SidebarTrigger className="text-muted-foreground" />
+      <ThreadTitle />
       {reconnecting && (
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           <LoaderIcon className="size-3.5 animate-spin" />
           Reconnecting…
         </span>
       )}
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         {sourceCount > 0 && (
           <PanelButton panel="sources" icon={<BookOpenIcon className="size-4" />} label="Sources" count={sourceCount} />
         )}

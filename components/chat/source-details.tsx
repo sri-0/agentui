@@ -32,17 +32,24 @@ export function SourceDetails({ source: s }: { source: Source }) {
           </p>
         </div>
       </div>
-      {s.metadata && Object.keys(s.metadata).length > 0 && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md bg-muted/40 px-3 py-2 text-xs">
-          {Object.entries(s.metadata).map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt className="text-muted-foreground">{k}</dt>
-              <dd className="break-all font-mono">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <SourceMetadata metadata={s.metadata} />
     </div>
+  );
+}
+
+/** The metadata a system attached to a source, exactly as recorded; nothing
+ *  when there is none. */
+export function SourceMetadata({ metadata }: { metadata?: Record<string, unknown> }) {
+  if (!metadata || Object.keys(metadata).length === 0) return null;
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md bg-muted/40 px-3 py-2 text-xs">
+      {Object.entries(metadata).map(([k, v]) => (
+        <div key={k} className="contents">
+          <dt className="text-muted-foreground">{k}</dt>
+          <dd className="break-all font-mono">{typeof v === "string" ? v : JSON.stringify(v)}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

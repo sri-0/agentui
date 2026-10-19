@@ -16,16 +16,17 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useThreads } from "@/lib/api/threads";
-import type { Thread } from "@/lib/api/types";
 import { useWorkspaces } from "@/lib/api/workspaces";
 import { groupThreads, threadTitle } from "@/lib/group-threads";
 import { useUiStore } from "@/stores/ui-store";
 import {
   BookOpenIcon,
   FilesIcon,
+  FoldersIcon,
   LayersIcon,
   MoonIcon,
   PenSquareIcon,
+  PinIcon,
   SearchIcon,
   SparklesIcon,
   SunIcon,
@@ -36,20 +37,16 @@ import { useParams, usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 
 import { ThreadRow } from "./thread-row";
-import { WorkspaceGroups } from "./workspace-groups";
 
 export function AppSidebar() {
   const threadsQuery = useThreads();
   const workspacesQuery = useWorkspaces();
   const isLoading = threadsQuery.isLoading || workspacesQuery.isLoading;
   const threads = (threadsQuery.data ?? []).filter((t) => !t.archived);
-  const workspaces = workspacesQuery.data ?? [];
-  // A conversation filed under a workspace shows in it; the rest (and any
-  // whose workspace is gone) are grouped by date, after the pinned ones.
-  const known = new Set(workspaces.map((w) => w.id));
-  const isFiled = (t: Thread) => known.has(t.workspace_id ?? "");
-  const filed = threads.filter(isFiled);
-  const groups = groupThreads(threads.filter((t) => !isFiled(t) && !t.pinned));
+  // Conversations are grouped by date, after the pinned ones; one filed under
+  // a workspace names it (one whose workspace is gone names none).
+  const workspaceNames = new Map((workspacesQuery.data ?? []).map((w) => [w.id, w.name]));
+  const groups = groupThreads(threads.filter((t) => !t.pinned));
   const pinned = threads.filter((t) => t.pinned);
   if (pinned.length) groups.unshift({ label: "Pinned", threads: pinned });
   const params = useParams();
@@ -99,6 +96,14 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Workspaces" isActive={pathname.startsWith("/workspaces")} className="h-9 gap-2.5">
+                  <Link href="/workspaces">
+                    <FoldersIcon />
+                    <span>Workspaces</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Artifacts" isActive={pathname === "/artifacts"} className="h-9 gap-2.5">
                   <Link href="/artifacts">
                     <LayersIcon />
@@ -106,6 +111,7 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Skills" isActive={pathname.startsWith("/skills")} className="h-9 gap-2.5">
                   <Link href="/skills">
@@ -151,8 +157,7 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
           )}
-          {!isLoading && <WorkspaceGroups workspaces={workspaces} threads={filed} activeId={activeId} />}
-          {!isLoading && groups.length === 0 && filed.length === 0 && (
+          {!isLoading && groups.length === 0 && (
             <p className="px-4 py-8 text-center text-xs text-muted-foreground">
               No conversations yet.
             </p>
@@ -160,7 +165,8 @@ export function AppSidebar() {
           {!isLoading &&
             groups.map((group) => (
             <SidebarGroup key={group.label} className="px-0">
-              <SidebarGroupLabel className="px-2 text-xs font-semibold text-sidebar-foreground/65">
+              <SidebarGroupLabel className="gap-1.5 px-2 text-xs font-semibold text-sidebar-foreground/65">
+                {group.label === "Pinned" && <PinIcon />}
                 {group.label}
               </SidebarGroupLabel>
               <SidebarGroupContent>
@@ -172,6 +178,7 @@ export function AppSidebar() {
                       title={threadTitle(t)}
                       active={t.id === activeId}
                       runStatus={t.run_status}
+                      workspace={workspaceNames.get(t.workspace_id ?? "")}
                     />
                   ))}
                 </SidebarMenu>

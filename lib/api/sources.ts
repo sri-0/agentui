@@ -1,6 +1,6 @@
 "use client";
 
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { queryOptions, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { apiFetch } from "./client";
 import type { ListResponse } from "./types";
@@ -20,6 +20,25 @@ export type Source = {
   /** "message:<id>" or "artifact:<id>" for each place that cites it. */
   cited_in?: string[];
 };
+
+/** A source in the list across conversations, with its conversation's title
+ *  ("" once the conversation is deleted: its sources stay). */
+export type RecentSource = Source & { id: string; thread_title: string };
+
+/** Sources across every conversation (only cited ones, and only one
+ *  workspace's conversations, when asked), newest first, a page at a time; a
+ *  full page names the cursor of the next. Marked stale when a run ends. */
+export function useRecentSources({ cited, workspace }: { cited?: boolean; workspace?: string }) {
+  return useInfiniteQuery({
+    queryKey: ["recent-sources", cited, workspace],
+    initialPageParam: "",
+    queryFn: ({ pageParam }) =>
+      apiFetch<ListResponse<RecentSource> & { next?: string }>(
+        `/v1/sources?${new URLSearchParams({ ...(cited && { cited: "true" }), ...(workspace && { workspace }), ...(pageParam && { after: pageParam }) })}`,
+      ),
+    getNextPageParam: (page) => page.next || undefined,
+  });
+}
 
 const sourcesPath = (threadId: string) => `/v1/threads/${encodeURIComponent(threadId)}/sources`;
 

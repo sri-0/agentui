@@ -56,7 +56,7 @@ export function LibraryToolbar({
   placeholder = "Search",
   actions,
 }: {
-  heading: string;
+  heading: ReactNode;
   search: string;
   onSearch: (q: string) => void;
   placeholder?: string;
@@ -66,7 +66,7 @@ export function LibraryToolbar({
   const setView = useUiStore((s) => s.setLibraryView);
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <h1 className="mr-auto text-2xl font-semibold tracking-tight">{heading}</h1>
+      <h1 className="mr-auto flex min-w-0 items-center gap-3 text-2xl font-semibold tracking-tight">{heading}</h1>
       <InputGroup className="w-full sm:w-64">
         <InputGroupInput
           value={search}

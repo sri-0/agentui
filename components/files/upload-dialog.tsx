@@ -11,11 +11,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { WorkspaceAvatar } from "@/components/workspaces/workspace-avatar";
+import { WorkspaceCommand } from "@/components/workspaces/workspace-command";
 import { type UserFile, useFiles, useUploadFile } from "@/lib/api/files";
 import { useWorkspaces } from "@/lib/api/workspaces";
 import { cn } from "@/lib/utils";
-import { CheckIcon, LoaderIcon, UploadIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronsUpDownIcon, FolderIcon, LoaderIcon, UploadIcon, XIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { FileKindIcon, formatSize } from "./file-icon";
@@ -48,9 +50,6 @@ const ACCEPT_ATTR = Object.entries(ACCEPT).flat(2).join(",");
 
 type Entry = { file: File; state: "ready" | "uploading" | "failed"; error?: string };
 
-/** The workspace select's value for none (a Select item can't be ""). */
-const NONE = "none";
-
 /**
  * Upload files: drop or pick several, choose their workspace (workspaceId to
  * start; null is none), tag them all, upload. From a chat (chatWorkspaceId
@@ -74,6 +73,8 @@ export function UploadDialog({
 }) {
   const { data: workspaces = [] } = useWorkspaces();
   const [target, setTarget] = useState(workspaceId);
+  const [picking, setPicking] = useState(false); // the workspace list is open
+  const picked = workspaces.find((w) => w.id === target);
   const nameOf = (id: string | null) => workspaces.find((w) => w.id === id)?.name ?? "No workspace";
   const elsewhere = chatWorkspaceId !== undefined && target !== chatWorkspaceId;
   const [notice, setNotice] = useState<string>(); // uploaded elsewhere: said instead of chips
@@ -136,19 +137,39 @@ export function UploadDialog({
               <span className="text-sm font-medium" id="upload-workspace">
                 Workspace
               </span>
-              <Select value={target ?? NONE} onValueChange={(v) => setTarget(v === NONE ? null : v)} disabled={busy}>
-                <SelectTrigger className="w-full" aria-labelledby="upload-workspace">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>No workspace</SelectItem>
-                  {workspaces.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* shadcn's combobox: pick a workspace, or type a new one's name to create it. */}
+              <Popover modal open={picking} onOpenChange={setPicking}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={picking}
+                    aria-labelledby="upload-workspace"
+                    disabled={busy}
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {picked ? (
+                        <WorkspaceAvatar workspace={picked} size="sm" />
+                      ) : (
+                        <FolderIcon className="text-muted-foreground" />
+                      )}
+                      <span className="truncate">{nameOf(target)}</span>
+                    </span>
+                    <ChevronsUpDownIcon className="opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-(--radix-popover-trigger-width) p-0">
+                  <WorkspaceCommand
+                    workspaces={workspaces}
+                    currentId={target}
+                    onChoose={(id) => {
+                      setTarget(id);
+                      setPicking(false);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
               {elsewhere && (
                 <p className="text-xs text-muted-foreground">
                   Files in another workspace can&apos;t be used in this chat; they won&apos;t be added to your message.
