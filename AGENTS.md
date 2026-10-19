@@ -550,14 +550,15 @@ before large changes:
 - **Next-prompt suggestions** (`chat/next-prompts.tsx`, the composer's `suggest` prop):
   three prompts from `POST /v1/suggestions` (`lib/api/suggestions.ts`) as AI Elements'
   `Suggestions`, floating just above the composer: in a thread over the conversation, which
-  fades out under their blurred chips (`scrollClassName`'s mask; `pb-16` keeps the last answer
-  clear of them), so nothing moves when they come and go. In a thread, with the input empty,
-  they follow its last turn (`{messages}`: the user's message and the answer as the UI shows
-  them, cached per answer; a thread just opened, and each finished run). Once 3+ characters
-  are typed they follow the text too (`{messages?, text}`); on the new-chat page only the
-  text. A request is sent once it has stayed the same for 1 s, and a superseded one is
-  aborted. None while a run streams or a question waits, nor for a stopped or failed run.
-  Picking one replaces the draft and sends it the way Enter does.
+  fades out under their blurred chips (`conversation-fade` in globals.css, a mask that
+  leaves the scrollbar sharp; `pb-16` keeps the last answer clear of them), so nothing moves
+  when they come and go. In a thread, with the input empty, they follow its last turn
+  (`{messages}`: the user's message and the answer as the UI shows them, cached per answer;
+  a thread just opened, and each finished run). Once 3+ characters are typed they follow the
+  text too (`{messages?, text}`); on the new-chat page only the text. A request is sent once
+  it has stayed the same for 1 s, and a superseded one is aborted. None while a run streams
+  or a question waits, nor for a stopped or failed run. Picking one replaces the draft and
+  sends it the way Enter does.
 - **The voice prompt** (`composer/voice.tsx`): the mic button turns the composer's footer
   into a dictation bar, as in ChatGPT: X drops the recording, stop transcribes it into the
   text, send transcribes and sends. The waveform is ElevenLabs UI's `live-waveform` (shadcn
