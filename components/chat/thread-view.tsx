@@ -68,12 +68,12 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   const images = record?.agent_id === IMAGES_AGENT;
   // While it is open, REST requests are made under its control set; until its
   // record is known, under none (never the picker's).
-  const controlSet = record?.controlset_id ?? "";
-  const setThreadControlSet = useUiStore((s) => s.setThreadControlSet);
+  const controlset = record?.controlset_id ?? "";
+  const setThreadControlset = useUiStore((s) => s.setThreadControlset);
   useEffect(() => {
-    setThreadControlSet(controlSet);
-    return () => setThreadControlSet(null);
-  }, [controlSet, setThreadControlSet]);
+    setThreadControlset(controlset);
+    return () => setThreadControlset(null);
+  }, [controlset, setThreadControlset]);
   const connected = useChatStore((s) => s.connected);
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);

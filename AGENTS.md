@@ -83,10 +83,10 @@ app/
   The sidebar has no Images item; the toggle is the way in.
 - Control sets: every conversation is made under one control set, C1000–C1020, fixed when
   it is created (the thread's `controlset_id`). The composer's picker
-  (`composer/control-set-selector.tsx`, shadcn Command in a popover, in both modes) picks it
-  on a new-chat page (`selectedControlSet`, persisted); until one is picked the send button
+  (`composer/controlset-selector.tsx`, shadcn Command in a popover, in both modes) picks it
+  on a new-chat page (`selectedControlset`, persisted); until one is picked the send button
   is disabled and the page's hint says so (Enter is refused and keeps the draft). In a
-  thread it shows the thread's, locked. REST requests carry it (`currentControlSet`, §3);
+  thread it shows the thread's, locked. REST requests carry it (`currentControlset`, §3);
   socket frames don't.
 - Images conversations: a thread whose `agent_id` is `images` (`IMAGES_AGENT`,
   `lib/api/agents.ts`) is an ordinary chat whose composer is in its images mode
@@ -111,7 +111,7 @@ components/
     thread-view.tsx (ThreadChat), task-bar.tsx
     next-prompts.tsx          # next-prompt suggestions above the composer (AI Elements Suggestions)
     composer/                 # composer, model-selector, agent-selector, connector-selector,
-                              #   control-set-selector, connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
+                              #   controlset-selector, connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
                               #   voice (the voice prompt: the mic button and the dictation bar),
                               #   attach (the paperclip, drops and pastes open the upload dialog; kept files become # chips)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card
@@ -261,7 +261,7 @@ for reads and admin:
   `events` are the AG-UI events of that turn, `cursor` is the log id to subscribe from (`""` when idle)
 
 Every POST (`apiText`) sends `X-Control-Set: C1000`, the control set it creates documents
-under (`currentControlSet` in `stores/ui-store.ts`): the open thread's (none until its record
+under (`currentControlset` in `stores/ui-store.ts`): the open thread's (none until its record
 is loaded), else the picker's; none before one is picked. Other requests send none. The UI sends no identity header and has no temporary mode: every
 thread is persisted.
 
@@ -400,9 +400,9 @@ leaves the part `denied`.
 - **Zustand UI store** (`stores/ui-store.ts`): `selectedModel`, `selectedAgentId`,
   `selectedConnectors` (null = all), `sidepanel`, `libraryView` (grid or list on the
   artifacts, skills and files pages), `newChatWorkspaceId` (the workspace the next new
-  conversation is filed under), `selectedControlSet` (a new conversation's) and
-  `threadControlSet` (the open thread's, set by `ThreadChat` from its record). Model,
-  agent, view and control set are **persisted to localStorage**; the rest are ephemeral. "New chat" clears the panel and the connectors,
+  conversation is filed under), `selectedControlset` (a new conversation's) and
+  `threadControlset` (the open thread's, set by `ThreadChat` from its record). Model,
+  agent, view and control set are **persisted to localStorage**; the rest are ephemeral. The key the control set is saved under became `selectedControlset` with no migration, so one picked before that is forgotten once. "New chat" clears the panel and the connectors,
   and files the chat under the workspace it was started from (none from the header).
 - **Zustand chat store** (`lib/chat/store.ts`): `threads[threadId]` for every
   thread opened in this tab (main view and side panel alike) and `connected`.
@@ -464,7 +464,7 @@ Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
     streaming thread, so it recomputes once per turn (when the status leaves
     `streaming`) and re-renders alone — the composer stays memoized.
 - **`Composer`, `ThreadHeader`, `AgentSelector`, `ModelSelector`,
-  `ReasoningEffortSelector`, `ControlSetSelector`, `AttachmentButton`, `TaskBar`, `WorkspaceBar`** are all `memo`'d
+  `ReasoningEffortSelector`, `ControlsetSelector`, `AttachmentButton`, `TaskBar`, `WorkspaceBar`** are all `memo`'d
   (`WorkspaceBar` takes only the thread id and subscribes to the rest itself).
 - **`MessageItem`** is `memo`'d on the message ref: only the message the frame
   touched re-renders. Inside it:

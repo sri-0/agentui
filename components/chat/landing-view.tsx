@@ -35,7 +35,7 @@ export function useStartChat(agentId?: string) {
 
   const start = useCallback(
     async (message: PromptInputMessage) => {
-      if (!message.text.trim() || !useUiStore.getState().selectedControlSet) return;
+      if (!message.text.trim() || !useUiStore.getState().selectedControlset) return;
       let threadId: string;
       try {
         const workspaceId = useUiStore.getState().newChatWorkspaceId ?? undefined;
@@ -77,7 +77,7 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
   const images = mode === "images";
   const { start, error } = useStartChat(images ? IMAGES_AGENT : undefined);
   // A conversation is made under a control set, picked in the composer.
-  const noControlSet = useUiStore((s) => !s.selectedControlSet);
+  const noControlset = useUiStore((s) => !s.selectedControlset);
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -95,7 +95,7 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
           <div className="mb-14 text-center">
             <h1 className="text-balance text-4xl font-semibold tracking-tight">{MODES[mode].title}</h1>
             <p className="mt-3 text-[15px] text-muted-foreground">
-              {error ?? (noControlSet ? "Pick a control set to start a conversation." : MODES[mode].hint)}
+              {error ?? (noControlset ? "Pick a control set to start a conversation." : MODES[mode].hint)}
             </p>
           </div>
 
@@ -108,7 +108,7 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
             images={images}
             placeholder={images ? "Describe an image…" : undefined}
             suggest={NEW_CHAT_SUGGEST}
-            sendDisabled={noControlSet}
+            sendDisabled={noControlset}
           />
           <WorkspaceBar />
 

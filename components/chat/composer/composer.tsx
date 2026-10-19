@@ -20,7 +20,7 @@ import { NextPrompts } from "../next-prompts";
 import { AgentSelector } from "./agent-selector";
 import { AttachButton, useAttach } from "./attach";
 import { ConnectorSelector } from "./connector-selector";
-import { ControlSetSelector } from "./control-set-selector";
+import { ControlsetSelector } from "./controlset-selector";
 import { ModelSelector } from "./model-selector";
 import { ReferenceInput } from "./references";
 import { DictationBar, VoiceButton } from "./voice";
@@ -141,7 +141,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
                       <ConnectorSelector />
                     </>
                   )}
-                  <ControlSetSelector />
+                  <ControlsetSelector />
                 </PromptInputTools>
                 <div className="flex shrink-0 items-center gap-2">
                   {contextSlot}

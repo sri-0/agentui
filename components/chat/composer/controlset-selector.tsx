@@ -10,16 +10,16 @@ import { CheckIcon, ChevronsUpDownIcon, LockIcon, ShieldIcon } from "lucide-reac
 import { memo, useContext, useState } from "react";
 
 /** The control sets a conversation can be made under. */
-const CONTROL_SETS = Array.from({ length: 21 }, (_, i) => `C${1000 + i}`);
+const CONTROLSETS = Array.from({ length: 21 }, (_, i) => `C${1000 + i}`);
 
 /** Picks the control set a new conversation is made under; every request
- *  carries it (`currentControlSet`). A thread's is fixed when it is created,
+ *  carries it (`currentControlset`). A thread's is fixed when it is created,
  *  so in a thread it shows the thread's, locked. */
-export const ControlSetSelector = memo(function ControlSetSelector() {
+export const ControlsetSelector = memo(function ControlsetSelector() {
   const [open, setOpen] = useState(false);
   const inThread = useContext(ThreadIdContext) !== null;
-  const selected = useUiStore((s) => (inThread ? s.threadControlSet : s.selectedControlSet));
-  const setControlSet = useUiStore((s) => s.setControlSet);
+  const selected = useUiStore((s) => (inThread ? s.threadControlset : s.selectedControlset));
+  const setControlset = useUiStore((s) => s.setControlset);
 
   return (
     <Popover open={open} onOpenChange={inThread ? undefined : setOpen}>
@@ -55,12 +55,12 @@ export const ControlSetSelector = memo(function ControlSetSelector() {
             <CommandList className="max-h-[320px]">
               <CommandEmpty>No control sets found.</CommandEmpty>
               <CommandGroup>
-                {CONTROL_SETS.map((id) => (
+                {CONTROLSETS.map((id) => (
                   <CommandItem
                     key={id}
                     value={id}
                     onSelect={() => {
-                      setControlSet(id);
+                      setControlset(id);
                       setOpen(false);
                     }}
                     className="gap-2"
