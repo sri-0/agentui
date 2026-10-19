@@ -2,7 +2,7 @@
 
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { ReferenceChip } from "@/components/chat/reference-chip";
-import { FileKindIcon } from "@/components/files/file-icon";
+import { FileChipIcon } from "@/components/files/file-icon";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useAgents } from "@/lib/api/agents";
@@ -185,6 +185,8 @@ export function ReferenceInput({
           listItem: false,
           underline: false,
           link: false,
+          // a dropped file goes to the upload dialog (attach.tsx), not into the text
+          dropcursor: false,
         }),
         Placeholder.configure({ placeholder }),
         References.configure({
@@ -312,7 +314,7 @@ export function ReferenceInput({
           <Command shouldFilter={false} value={current} onValueChange={setSelected}>
             <CommandList ref={setList} aria-label={heading}>
               <CommandEmpty className="px-3 py-3 text-left text-xs text-muted-foreground">
-                {choices["#"]?.length ? "No file matches" : "No files yet — attach one, or upload on the Files page"}
+                {choices["#"]?.length ? "No file matches" : "No files yet — attach one with the paperclip, or upload on the Files page"}
               </CommandEmpty>
               <CommandGroup heading={heading}>
                 {items.map((c) => (
@@ -385,7 +387,7 @@ function useChoices(): Record<string, Choice[]> {
         hint: f.status === "ready" ? "searchable" : "reference only",
         keywords: workspaceName(f.workspace_id),
         aside: workspaceName(f.workspace_id),
-        icon: <FileKindIcon mediaType={f.media_type} />,
+        icon: <FileChipIcon file={f} />,
       })),
   };
 }
