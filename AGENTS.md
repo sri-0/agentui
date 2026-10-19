@@ -151,7 +151,9 @@ components/
                               #   files sent to another workspace are said to be unusable in the chat
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
   sidebar/app-sidebar.tsx     # New chat, Search, Workspaces, Artifacts, Skills, Files; the thread list
-                              #   (Pinned, with a pin, then Today/Yesterday/7d/30d/Older) + run-status dots
+                              #   (Pinned, with a pin, then Today/Yesterday/7d/30d/Older) + run-status dots, and a moon
+                              #   on a thread idle since a run within 24 h (`dormant`, on updated_at, until
+                              #   the server sends a dormant_until)
   sidebar/thread-row.tsx      # one conversation row: its workspace (avatar and name) under the title,
                               #   the status dot, delete on hover
   workspaces/workspaces-view.tsx # the workspaces as cards (their latest chats as the preview; chats and
