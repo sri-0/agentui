@@ -14,11 +14,9 @@ function toMs(t: Thread): number {
   return d.isValid() ? d.valueOf() : 0;
 }
 
-/** Idle, but ran within the last day: the backend still keeps its log and
- *  session, so it can be picked up again. `updated_at` is bumped when a run
- *  starts; a `dormant_until` from the server is to replace this. */
+/** Idle, but the backend can still pick it up (`dormant_until` ahead). */
 export function dormant(t: Thread, now = Date.now()): boolean {
-  return !t.run_status && now - toMs(t) < 24 * 60 * 60 * 1000;
+  return !t.run_status && !!t.dormant_until && dayjs(t.dormant_until).valueOf() > now;
 }
 
 /** Bucket threads into Today / Yesterday / Previous 7 days / 30 days / Older. */

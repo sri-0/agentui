@@ -42,7 +42,7 @@ export function ThreadRow({
   active: boolean;
   /** present while a run owns the thread */
   runStatus?: RunStatus;
-  /** idle, but ran within the last day (`dormant` in lib/group-threads.ts) */
+  /** idle, but the backend can still pick it up */
   dormant?: boolean;
   /** the workspace it is filed under, shown under the title */
   workspace?: Workspace;
@@ -85,7 +85,7 @@ export function ThreadRow({
           ) : runStatus ? (
             <StatusDot />
           ) : (
-            <MoonIcon aria-label="Recently active" className="size-3.5 text-muted-foreground" />
+            <MoonIcon aria-label="Recently active" className="size-3.5 text-muted-foreground/60" />
           )}
         </span>
       )}
