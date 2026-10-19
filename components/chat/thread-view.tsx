@@ -191,7 +191,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
           <Conversation className="flex-1">
             <ConversationContent
               className="px-4 pt-6 pb-16"
-              scrollClassName="[mask-image:linear-gradient(to_bottom,black_calc(100%-3rem),transparent)]"
+              scrollClassName="conversation-fade"
             >
               <MessageList
                 messages={messages}
