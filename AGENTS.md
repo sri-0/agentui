@@ -284,7 +284,7 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
        │     └─ MessageItem (memo on the message ref — the reducer shares untouched messages)
        │           ├─ text          → Markdown (streamdown; a run of [source:N] → SourceCitation, the
        │           │                  AI Elements inline citation: a badge with the first source's
-       │           │                  host or system and "+N", a hover card to page through them).
+       │           │                  title or system and "+N", a hover card to page through them).
        │           │                  `streaming` while the part is open, static once done (see §8)
        │           ├─ reasoning     → MessageReasoning
        │           ├─ tool          → the renderer `toolRenderers[part.ui]` names (SlidesCall), else
