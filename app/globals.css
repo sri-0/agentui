@@ -198,6 +198,21 @@
     }
   }
 
+  /* A conversation fading out at its foot, under the suggestions that float
+     there; the second layer keeps the right-hand strip, its scrollbar, sharp. */
+  .conversation-fade {
+    mask-image:
+      linear-gradient(to bottom, #000 calc(100% - 3rem), transparent),
+      linear-gradient(#000, #000);
+    mask-size:
+      100% 100%,
+      1.25rem 100%;
+    mask-position:
+      0 0,
+      100% 0;
+    mask-repeat: no-repeat;
+  }
+
   /* Glowing gradient orb — the "thinking" / loading indicator */
   .ai-orb {
     border-radius: 9999px;

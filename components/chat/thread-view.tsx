@@ -17,6 +17,7 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { IMAGES_AGENT } from "@/lib/api/agents";
 import { useModels } from "@/lib/api/models";
+import type { SuggestFor, SuggestMessage } from "@/lib/api/suggestions";
 import { useThreadSources } from "@/lib/api/sources";
 import { fetchThread, useThreadRecord } from "@/lib/api/threads";
 import { collectArtifacts, useArtifacts } from "@/lib/chat/artifacts";
@@ -30,6 +31,7 @@ import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState
 import { Composer, type ComposerStatus } from "./composer/composer";
 import { ThreadUsageRing } from "./composer/thread-usage-ring";
 import { ConversationSkeleton } from "./loading";
+import { messageText } from "./messages/message-actions";
 import { MessageList } from "./messages/message-list";
 import { pendingQuestion, QuestionPanel } from "./messages/question-card";
 import { TaskBar } from "./task-bar";
@@ -115,6 +117,22 @@ export function ThreadChat({ threadId }: { threadId: string }) {
 
   // A run that ends may have published artifacts and cited sources.
   const streaming = status === "streaming";
+
+  // Next-prompt suggestions for the last turn, also of a thread just opened,
+  // sent as shown here (the user's message and the answer); not for a failed
+  // or stopped run, nor while one runs or waits on a question (then there are
+  // none, typed text included).
+  const last = messages.at(-1);
+  const asked = messages.at(-2);
+  const answered = last?.role === "assistant" && !last.metadata?.cancelled && !last.metadata?.error ? last : undefined;
+  const idle = status === "idle" && !asking;
+  const suggest = useMemo((): SuggestFor | undefined => {
+    if (!idle) return undefined;
+    if (!answered) return {};
+    const turn: SuggestMessage[] = [{ role: "assistant", content: messageText(answered) }];
+    if (asked?.role === "user") turn.unshift({ role: "user", content: messageText(asked) });
+    return { messageId: answered.id, messages: turn };
+  }, [idle, answered, asked]);
   const wasStreaming = useRef(streaming);
   useEffect(() => {
     if (wasStreaming.current && !streaming) {
@@ -168,8 +186,13 @@ export function ThreadChat({ threadId }: { threadId: string }) {
             reconnecting={!connected}
           />
 
+          {/* The suggestions float over its foot, where it fades out; pb-16
+              keeps the last answer clear of them. */}
           <Conversation className="flex-1">
-            <ConversationContent className="px-4 py-6">
+            <ConversationContent
+              className="px-4 pt-6 pb-16"
+              scrollClassName="conversation-fade"
+            >
               <MessageList
                 messages={messages}
                 status={status}
@@ -177,7 +200,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
                 onReopenQuestion={question && putAway === questionId ? onReopenQuestion : undefined}
               />
             </ConversationContent>
-            <ConversationScrollButton />
+            <ConversationScrollButton className="bottom-12" />
           </Conversation>
 
           <div className="px-4 pb-5 pt-2">
@@ -195,6 +218,7 @@ export function ThreadChat({ threadId }: { threadId: string }) {
                     status={composerStatus}
                     onStop={stop}
                     contextSlot={contextSlot}
+                    suggest={suggest}
                     images={images}
                     placeholder={
                       status === "awaiting_input"

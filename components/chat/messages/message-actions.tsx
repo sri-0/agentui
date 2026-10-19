@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 import { CheckIcon, CopyIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 import { useState } from "react";
 
-function messageText(message: ChatMessage): string {
+/** A message's text parts, joined: what Copy copies and suggestions read. */
+export function messageText(message: ChatMessage): string {
   return message.parts
     .filter((p) => p.type === "text")
     .map((p) => (p.type === "text" ? p.text : ""))

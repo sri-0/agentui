@@ -9,9 +9,13 @@ import {
   PromptInputTools,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
+import type { SuggestFor } from "@/lib/api/suggestions";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
 import { memo, type ReactNode, useCallback, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+
+import { NextPrompts } from "../next-prompts";
 
 import { AgentSelector } from "./agent-selector";
 import { AttachButton, useAttach } from "./attach";
@@ -36,6 +40,10 @@ type ComposerProps = {
   initialText?: string;
   /** an images composer: it picks the image model, and no agent or connectors */
   images?: boolean;
+  /** next-prompt suggestions above the input: for the thread's last turn
+   *  (the answer's messageId and the turn's messages) and for what is typed;
+   *  on a new chat for the typed text only */
+  suggest?: SuggestFor;
 };
 
 // The provider holds the text the form sends; the editor writes it on each edit.
@@ -47,7 +55,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   );
 });
 
-function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder, images }: ComposerProps) {
+function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder, images, suggest }: ComposerProps) {
   const idle = status === "ready";
   const editorRef = useRef<Editor | null>(null); // the voice prompt writes into it
   const [dictating, setDictating] = useState(false);
@@ -66,9 +74,28 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
     setVoiceError(error);
     setDictating(false);
   }, []);
+  // A suggestion replaces the draft and is sent the way Enter sends.
+  const pick = useCallback((text: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    flushSync(() => editor.chain().clearContent().insertContent({ type: "text", text }).run());
+    editor.view.dom.closest("form")?.requestSubmit();
+  }, []);
 
   return (
     <>
+      {suggest && !dictating && (
+        // They float above the input, over the conversation, so nothing moves
+        // when they come and go; only the chips take clicks.
+        <div className="relative">
+          <NextPrompts
+            messageId={suggest.messageId}
+            messages={suggest.messages}
+            onPick={pick}
+            className="pointer-events-none absolute inset-x-0 bottom-0"
+          />
+        </div>
+      )}
       <div className="relative" {...attach.handlers}>
         <div className="ai-glow" />
         <PromptInput

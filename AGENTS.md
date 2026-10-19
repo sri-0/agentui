@@ -100,6 +100,7 @@ components/
     mode-toggle.tsx           # the Chat | Images toggle (shadcn Tabs) in the new-conversation
                               #   page's top bar: switches /chat and /images
     thread-view.tsx (ThreadChat), task-bar.tsx
+    next-prompts.tsx          # next-prompt suggestions above the composer (AI Elements Suggestions)
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
                               #   voice (the voice prompt: the mic button and the dictation bar),
@@ -156,7 +157,8 @@ lib/
          types.ts (ChatMessage/parts) · usage.ts · artifacts.ts · tasks.ts ·
          thread-context.ts (the thread a view shows, for citations)
   api/   client.ts (apiFetch, apiText) · agents.ts · models.ts · threads.ts · connectors.ts ·
-         artifacts.ts · sources.ts · types.ts · voice.ts (transcribe a recording)
+         artifacts.ts · sources.ts · types.ts · voice.ts (transcribe a recording) ·
+         suggestions.ts (next prompts for an answer or typed text)
   audio/ wav.ts (a recording → 16 kHz mono WAV)
   providers.ts · group-threads.ts · dayjs.ts · utils.ts
 stores/ ui-store.ts            # Zustand UI state
@@ -171,6 +173,7 @@ plans/  00–06 + agent-ui-redesign.md   # design docs (see §9)
 | Var | Default | Used by |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | REST (`lib/api/client.ts`) and the WebSocket (`lib/chat/socket.ts`, `http` → `ws`) |
+| `NEXT_PUBLIC_SUGGESTIONS` | on | `off` stops next-prompt suggestions above the composer (`lib/api/suggestions.ts`) |
 
 WebSocket `GET /v1/agent/chat?v=1` (`lib/chat/socket.ts`), one per tab and shared
 by every thread, carries everything between the UI and its agents on existing
@@ -545,6 +548,18 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
+- **Next-prompt suggestions** (`chat/next-prompts.tsx`, the composer's `suggest` prop):
+  three prompts from `POST /v1/suggestions` (`lib/api/suggestions.ts`) as AI Elements'
+  `Suggestions`, floating just above the composer: in a thread over the conversation, which
+  fades out under their blurred chips (`conversation-fade` in globals.css, a mask that
+  leaves the scrollbar sharp; `pb-16` keeps the last answer clear of them), so nothing moves
+  when they come and go. In a thread, with the input empty, they follow its last turn
+  (`{messages}`: the user's message and the answer as the UI shows them, cached per answer;
+  a thread just opened, and each finished run). Once 3+ characters are typed they follow the
+  text too (`{messages?, text}`); on the new-chat page only the text. A request is sent once
+  it has stayed the same for 1 s, and a superseded one is aborted. None while a run streams
+  or a question waits, nor for a stopped or failed run. Picking one replaces the draft and
+  sends it the way Enter does.
 - **The voice prompt** (`composer/voice.tsx`): the mic button turns the composer's footer
   into a dictation bar, as in ChatGPT: X drops the recording, stop transcribes it into the
   text, send transcribes and sends. The waveform is ElevenLabs UI's `live-waveform` (shadcn
