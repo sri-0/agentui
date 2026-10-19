@@ -44,7 +44,10 @@ export function useThreads() {
  *  turn sent over HTTP, so the server can check the request before the thread
  *  exists; it replies once the thread is stored. Later turns go over the
  *  socket. */
-export function createThread(text: string, opts: { agentId?: string; model?: string; connectors?: string[] | null }) {
+export function createThread(
+  text: string,
+  opts: { agentId?: string; model?: string; connectors?: string[] | null; workspaceId?: string },
+) {
   return apiFetch<{ threadId: string; runId: string; seq: string }>("/v1/agent/chat", {
     method: "POST",
     body: JSON.stringify({ messages: [{ id: crypto.randomUUID(), role: "user", content: text }], ...opts }),
@@ -61,6 +64,16 @@ export function fetchMessages(threadId: string) {
 
 export function fetchThread(threadId: string) {
   return apiFetch<Thread>(`/v1/threads/${encodeURIComponent(threadId)}`);
+}
+
+/** One thread, fresh from the server (the list may not have it yet). */
+export function useThreadRecord(threadId: string | undefined) {
+  return useQuery({
+    queryKey: ["thread", threadId],
+    enabled: Boolean(threadId),
+    staleTime: 60_000, // a move writes it
+    queryFn: () => fetchThread(threadId!),
+  });
 }
 
 export function useDeleteThread() {
