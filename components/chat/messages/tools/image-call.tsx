@@ -47,12 +47,13 @@ export const ImageCall = memo(function ImageCall({ part }: { part: ToolPart }) {
         <img src={artifactUrl(threadId, image)} alt={image.title} className="w-full" />
       </button>
       <Button
-        variant="secondary"
+        variant="ghost"
         size="icon-sm"
         title="Download"
         aria-label="Download"
         onClick={download}
-        className="absolute top-2 right-2 rounded-full opacity-0 shadow-sm transition-opacity group-hover/image:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+        // A halo in the page's colour keeps the bare icon clear on any image.
+        className="absolute top-2 right-2 opacity-0 transition-opacity group-hover/image:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 [&_svg]:drop-shadow-[0_0_2px_var(--background)]"
       >
         <DownloadIcon />
       </Button>
