@@ -32,6 +32,10 @@ type UiState = {
   newChatWorkspaceId: string | null;
   /** the model generate_image uses, picked in an images composer; null for the server's default */
   selectedImageModel: string | null;
+  /** the control set a new conversation is created under (C1000–C1020); null until one is picked */
+  selectedControlSet: string | null;
+  /** the open conversation's control set, fixed when it was created; null outside one */
+  threadControlSet: string | null;
 
   setModel: (id: string | null) => void;
   setAgent: (id: string | null) => void;
@@ -44,6 +48,8 @@ type UiState = {
   setLibraryView: (view: "grid" | "list") => void;
   setNewChatWorkspace: (id: string | null) => void;
   setImageModel: (id: string | null) => void;
+  setControlSet: (id: string) => void;
+  setThreadControlSet: (id: string | null) => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -57,6 +63,8 @@ export const useUiStore = create<UiState>()(
       libraryView: "grid",
       newChatWorkspaceId: null,
       selectedImageModel: null,
+      selectedControlSet: null,
+      threadControlSet: null,
 
       setModel: (id) => set({ selectedModel: id }),
       setAgent: (id) => set({ selectedAgentId: id }),
@@ -70,6 +78,8 @@ export const useUiStore = create<UiState>()(
       setLibraryView: (view) => set({ libraryView: view }),
       setNewChatWorkspace: (id) => set({ newChatWorkspaceId: id }),
       setImageModel: (id) => set({ selectedImageModel: id }),
+      setControlSet: (id) => set({ selectedControlSet: id }),
+      setThreadControlSet: (id) => set({ threadControlSet: id }),
     }),
     {
       name: "agentui-ui",
@@ -79,7 +89,16 @@ export const useUiStore = create<UiState>()(
         selectedAgentId: s.selectedAgentId,
         libraryView: s.libraryView,
         selectedImageModel: s.selectedImageModel,
+        selectedControlSet: s.selectedControlSet,
       }),
     },
   ),
 );
+
+/** The control set REST requests are made under (X-Control-Set): the open
+ *  conversation's, else the one picked for a new one. Runs carry none: the
+ *  server takes a thread's from its record. */
+export function currentControlSet() {
+  const s = useUiStore.getState();
+  return s.threadControlSet ?? s.selectedControlSet ?? undefined;
+}

@@ -3,6 +3,8 @@
  * REST through this helper, the agent stream through lib/chat/socket.ts.
  */
 
+import { currentControlSet } from "@/stores/ui-store";
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export class ApiError extends Error {
@@ -29,6 +31,9 @@ export async function apiText(path: string, init?: RequestInit): Promise<string>
   if (typeof init?.body === "string" && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  // Every request is made under a control set: the conversation's, or the picker's.
+  const controlSet = currentControlSet();
+  if (controlSet) headers.set("X-Control-Set", controlSet);
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
   const text = await res.text();
   if (!res.ok) throw new ApiError(res.status, serverMessage(text) || `Request failed: ${res.status}`);
