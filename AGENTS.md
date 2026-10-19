@@ -82,7 +82,8 @@ components/
     reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
-                              #   connector-icon, thread-usage-ring, references (the text, with / and @ chips)
+                              #   connector-icon, thread-usage-ring, references (the text, with / and @ chips),
+                              #   voice (the voice prompt: the mic button and the dictation bar)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card
                               #   (QuestionPanel: shadcn questionnaire; QuestionCard: the line or
                               #   recap in the thread), agent-card, markdown (+ source-citation:
@@ -117,7 +118,8 @@ lib/
          types.ts (ChatMessage/parts) · usage.ts · artifacts.ts · tasks.ts ·
          thread-context.ts (the thread a view shows, for citations)
   api/   client.ts (apiFetch, apiText) · agents.ts · models.ts · threads.ts · connectors.ts ·
-         artifacts.ts · sources.ts · types.ts
+         artifacts.ts · sources.ts · types.ts · voice.ts (transcribe a recording)
+  audio/ wav.ts (a recording → 16 kHz mono WAV)
   providers.ts · group-threads.ts · dayjs.ts · utils.ts
 stores/ ui-store.ts            # Zustand UI state
 hooks/  use-mobile.ts          # shadcn's sidebar breakpoint hook
@@ -160,6 +162,8 @@ for reads and admin:
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
 - `GET /v1/artifacts?after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
   every conversation's artifacts for `/artifacts`, newest first; `next` is the cursor for `after`
+- `POST /v1/voice/transcriptions` (multipart `file`, a 16 kHz mono WAV made by `lib/audio/wav.ts`)
+  → `{text}`: the voice prompt; the text is appended to the composer and sent as typed
 - `GET /v1/skills?q=&category=&source=` → `{data: [{name, title?, description, category?,
   source?, files: [{path}], created_at, updated_at}], categories, sources}` (`[{value, count}]`):
   the skills library, for `/skills`, the composer's `/` palette and the `/name` chip;
@@ -486,6 +490,15 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
+- **The voice prompt** (`composer/voice.tsx`): the mic button turns the composer's footer
+  into a dictation bar, as in ChatGPT: X drops the recording, stop transcribes it into the
+  text, send transcribes and sends. The waveform is ElevenLabs UI's `live-waveform` (shadcn
+  registry, `components/ui/live-waveform.tsx`); it opens the microphone, and a `MediaRecorder`
+  records its stream. The server transcribes whole recordings, so no text shows while
+  speaking. The recording goes to the server as WAV (`lib/audio/wav.ts`; browsers record
+  WebM, which Voxtral refuses), and the text is appended through the editor `ComposerInput`
+  hands both `ReferenceInput` and the bar (`editorRef`); send commits it (`flushSync`) before
+  submitting the form. Errors show beside the mic button.
 - **References are chips in the text** (`composer/references.tsx`): the composer's text is a
   Tiptap editor whose Mention nodes are the chips (`chat/reference-chip.tsx`: the text's font,
   the list's coloured icon), with one list (shadcn's Command in a popover, stock styling, an

@@ -13,6 +13,7 @@ import { Mention, type MentionNodeAttrs } from "@tiptap/extension-mention";
 import { Placeholder } from "@tiptap/extensions";
 import { PluginKey } from "@tiptap/pm/state";
 import {
+  type Editor,
   EditorContent,
   Extension,
   type JSONContent,
@@ -23,7 +24,7 @@ import {
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { BookOpenIcon, BotIcon, type LucideIcon, SparklesIcon } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
 /**
  * A kind of reference the composer holds inline, as a chip in the text: the
@@ -129,7 +130,16 @@ const editorClass = cn(
  *
  * Only this re-renders as the user types; the composer around it is memoized.
  */
-export function ReferenceInput({ placeholder, autoFocus }: { placeholder?: string; autoFocus?: boolean }) {
+export function ReferenceInput({
+  placeholder,
+  autoFocus,
+  editorRef,
+}: {
+  placeholder?: string;
+  autoFocus?: boolean;
+  /** filled with the editor, for controls that write into it (the voice prompt) */
+  editorRef?: RefObject<Editor | null>;
+}) {
   const { textInput } = usePromptInputController();
   const choices = useChoices();
   // What the editor's callbacks read; the editor is configured once.
@@ -203,6 +213,10 @@ export function ReferenceInput({ placeholder, autoFocus }: { placeholder?: strin
     },
     [],
   );
+
+  useEffect(() => {
+    if (editorRef) editorRef.current = editor;
+  }, [editor, editorRef]);
 
   // The form clears the text once it has sent it; the editor follows. Only
   // then: a chip that reads as nothing (an agent) leaves the text empty too.
