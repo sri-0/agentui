@@ -5,6 +5,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { useFileNames } from "@/lib/api/files";
 import { useDeleteThread } from "@/lib/api/threads";
 import type { RunStatus } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
@@ -40,12 +41,13 @@ export function ThreadRow({
 }) {
   const router = useRouter();
   const del = useDeleteThread();
+  const named = useFileNames(); // a title holds the #ids the message named
 
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={active} className="h-9">
         <Link href={`/chat/${id}`}>
-          <span className="truncate">{title}</span>
+          <span className="truncate">{named(title)}</span>
         </Link>
       </SidebarMenuButton>
       {/* The status and the trash share the slot at the row's end. Hovering the

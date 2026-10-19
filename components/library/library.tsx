@@ -113,7 +113,8 @@ export function LibraryItems({ children }: { children: ReactNode }) {
 
 /** One item, opened at href: a card holding all of it, a preview on top when
  *  there is one (grid), or a row (list). The title is the link, stretched
- *  over the item, so the rest is read as its content; a preview is inert. */
+ *  over the item, so the rest is read as its content; a preview is inert.
+ *  Without href the item opens nothing (a file: its actions download it). */
 export function LibraryItem({
   href,
   preview,
@@ -121,15 +122,18 @@ export function LibraryItem({
   title,
   subtitle,
   meta,
+  actions,
   children,
 }: {
-  href: string;
+  href?: string;
   preview?: ReactNode;
   icon: ReactNode;
   title: string;
   subtitle?: ReactNode;
   /** e.g. a date: the list's right-hand column, the card's foot */
   meta?: ReactNode;
+  /** controls over the item, e.g. delete: the card's top corner, the row's end */
+  actions?: ReactNode;
   /** more for the card: a description, tags */
   children?: ReactNode;
 }) {
@@ -138,9 +142,13 @@ export function LibraryItem({
     <div className="flex min-w-0 items-center gap-3">
       {icon}
       <div className="min-w-0 flex-1">
-        <Link href={href} className="block truncate text-sm font-medium outline-none after:absolute after:inset-0">
-          {title}
-        </Link>
+        {href ? (
+          <Link href={href} className="block truncate text-sm font-medium outline-none after:absolute after:inset-0">
+            {title}
+          </Link>
+        ) : (
+          <span className="block truncate text-sm font-medium">{title}</span>
+        )}
         {subtitle && <div className="truncate text-xs text-muted-foreground">{subtitle}</div>}
       </div>
     </div>
@@ -156,6 +164,7 @@ export function LibraryItem({
       >
         {heading}
         {meta && <span className="ms-auto shrink-0 text-xs text-muted-foreground">{meta}</span>}
+        {actions && <div className="relative z-10 flex shrink-0 gap-1">{actions}</div>}
       </div>
     );
   }
@@ -171,6 +180,7 @@ export function LibraryItem({
           {preview}
         </div>
       )}
+      {actions && <div className="absolute top-2 right-2 z-10 flex gap-1">{actions}</div>}
       <div className="flex flex-1 flex-col gap-3 p-4">
         {heading}
         {children}

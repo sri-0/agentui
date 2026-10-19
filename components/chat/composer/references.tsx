@@ -2,10 +2,13 @@
 
 import { usePromptInputController } from "@/components/ai-elements/prompt-input";
 import { ReferenceChip } from "@/components/chat/reference-chip";
-import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import { FileKindIcon } from "@/components/files/file-icon";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList, CommandShortcut } from "@/components/ui/command";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { useAgents } from "@/lib/api/agents";
+import { useFiles } from "@/lib/api/files";
 import { useSkillFacets, useSkills } from "@/lib/api/skills";
+import { useChatWorkspaceId, useWorkspaces } from "@/lib/api/workspaces";
 import { colorsOf } from "@/lib/colors";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
@@ -23,7 +26,7 @@ import {
   useEditor,
 } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { BookOpenIcon, BotIcon, type LucideIcon, SparklesIcon } from "lucide-react";
+import { BookOpenIcon, BotIcon, FileIcon, type LucideIcon, SparklesIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
 /**
@@ -45,6 +48,8 @@ const KINDS: Kind[] = [
   // The server does not resolve `@agent` yet (agentlite internal/refs), so an
   // agent chip sets the thread's agent when picked and stays out of the text.
   { char: "@", heading: "Agents", icon: BotIcon, text: () => "" },
+  // The server gives the model the file `#id` names (agentlite docs/FILES.md).
+  { char: "#", heading: "Files", icon: FileIcon, text: (a) => `#${a.id}` },
 ];
 
 const kindOf = (char?: string | null) => KINDS.find((k) => k.char === char) ?? KINDS[0];
@@ -56,6 +61,8 @@ type Choice = {
   hint?: string;
   /** matched besides the label */
   keywords?: string;
+  /** pinned right, e.g. a file's workspace */
+  aside?: string;
   icon?: ReactNode;
   /** what picking it does besides inserting the chip */
   onPick?: () => void;
@@ -237,8 +244,11 @@ export function ReferenceInput({
   }, [editor, textInput.value]);
 
   const items = suggest?.items ?? [];
-  const open = !!suggest && suggest.query !== dismissed && items.length > 0;
   const kind = kindOf(suggest?.char);
+  const files = kind.char === "#";
+  // # opens on none too, to say there are none yet
+  const open = !!suggest && suggest.query !== dismissed && (items.length > 0 || files);
+  const heading = kind.heading;
   const current = items.find((c) => c.id.toLowerCase() === selected.toLowerCase())?.id ?? items[0]?.id ?? "";
   const pick = (c: Choice) => {
     c.onPick?.();
@@ -247,7 +257,7 @@ export function ReferenceInput({
 
   useEffect(() => {
     keyRef.current = (e) => {
-      if (!open) return false;
+      if (!open || (!items.length && e.key !== "Escape")) return false;
       const index = items.findIndex((c) => c.id === current);
       switch (e.key) {
         case "ArrowDown":
@@ -300,8 +310,11 @@ export function ReferenceInput({
           className="w-(--radix-popover-trigger-width) p-0"
         >
           <Command shouldFilter={false} value={current} onValueChange={setSelected}>
-            <CommandList ref={setList} aria-label={kind.heading}>
-              <CommandGroup heading={kind.heading}>
+            <CommandList ref={setList} aria-label={heading}>
+              <CommandEmpty className="px-3 py-3 text-left text-xs text-muted-foreground">
+                {choices["#"]?.length ? "No file matches" : "No files yet — attach one, or upload on the Files page"}
+              </CommandEmpty>
+              <CommandGroup heading={heading}>
                 {items.map((c) => (
                   <CommandItem
                     key={c.id}
@@ -313,6 +326,7 @@ export function ReferenceInput({
                     {c.icon}
                     <span className="shrink-0">{c.label}</span>
                     {c.hint && <span className="truncate text-muted-foreground">{c.hint}</span>}
+                    {c.aside && <CommandShortcut className="shrink-0 pl-2 tracking-normal">{c.aside}</CommandShortcut>}
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -332,6 +346,12 @@ function useChoices(): Record<string, Choice[]> {
   const colorOf = colorsOf(categories);
   const { data: agents = [] } = useAgents();
   const setAgent = useUiStore((s) => s.setAgent);
+  // every workspace's files (# may name any), the conversation's own first
+  const { data: files = [] } = useFiles();
+  const { data: workspaces = [] } = useWorkspaces();
+  const chat = useChatWorkspaceId() ?? "";
+  const workspaceName = (id = "") => workspaces.find((w) => w.id === id)?.name ?? "No workspace";
+  const own = (f: { workspace_id?: string }) => Number((f.workspace_id ?? "") === chat);
   return {
     "/": skills.map((s) => ({
       id: s.name,
@@ -357,5 +377,15 @@ function useChoices(): Record<string, Choice[]> {
         onPick: () => setAgent(a.id),
       })),
     ],
+    "#": [...files]
+      .sort((a, b) => own(b) - own(a)) // stable: newest first within each
+      .map((f) => ({
+        id: f.id,
+        label: f.name,
+        hint: f.status === "ready" ? "searchable" : "reference only",
+        keywords: workspaceName(f.workspace_id),
+        aside: workspaceName(f.workspace_id),
+        icon: <FileKindIcon mediaType={f.media_type} />,
+      })),
   };
 }

@@ -13,12 +13,14 @@ import { memo, type ReactNode } from "react";
 import { ThinkingIndicator } from "../loading";
 import { AgentCard } from "./agent-card";
 import { CompactionDivider } from "./compaction-divider";
+import { FileRead } from "./file";
 import { Markdown } from "./markdown";
 import { MessageActions } from "./message-actions";
 import { MessageMeta } from "./message-meta";
 import { MessageReasoning } from "./message-reasoning";
 import { ModelChangeDivider } from "./model-change-divider";
-import { SkillLoaded, UserText } from "./skill";
+import { SkillLoaded } from "./skill";
+import { UserText } from "./user-text";
 import { QuestionCard } from "./question-card";
 import { ToolLine, type Approve } from "./tool-line";
 import { toolRenderers } from "./tools/registry";
@@ -60,12 +62,13 @@ export function MessageList({
   );
 }
 
-// The model and skill markers come before the model has said anything, so
-// they do not end the wait.
+// The model, skill and file markers come before the model has said
+// anything, so they do not end the wait.
 const isVisible = (p: ChatPart) =>
   p.type !== "step-start" &&
   p.type !== "data-model" &&
   p.type !== "data-skill" &&
+  p.type !== "data-file" &&
   !(p.type === "text" && !p.text) &&
   !(p.type === "data-compaction" && p.data.status === "declined");
 
@@ -161,6 +164,8 @@ const MessageItem = memo(function MessageItem({
         return <ModelChangeDivider key={key} data={part.data} />;
       case "data-skill":
         return <SkillLoaded key={key} data={part.data} />;
+      case "data-file":
+        return <FileRead key={key} data={part.data} />;
       case "data-artifact":
         // An image shows in its generate_image call.
         if (part.data.kind === "image") return null;
