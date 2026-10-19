@@ -152,8 +152,8 @@ components/
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
   sidebar/app-sidebar.tsx     # New chat, Search, Workspaces, Artifacts, Skills, Files; the thread list
                               #   (Pinned, with a pin, then Today/Yesterday/7d/30d/Older) + run-status dots
-  sidebar/thread-row.tsx      # one conversation row: its workspace (a folder and the name) under the
-                              #   title, the status dot, delete on hover
+  sidebar/thread-row.tsx      # one conversation row: its workspace (avatar and name) under the title,
+                              #   the status dot, delete on hover
   workspaces/workspaces-view.tsx # the workspaces as cards (their latest chats as the preview; chats and
                               #   files counted), New workspace, and WorkspaceMenu (rename, delete)
   workspaces/workspace-view.tsx  # one workspace: New chat, its menu, and tabs (?tab=) of its chats (archived
@@ -161,14 +161,17 @@ components/
                               #   Upload into it); the toolbar's search searches the tab shown
   workspaces/workspace-avatar.tsx # a workspace's icon: its initials (Pet Project → PP) on a gradient picked
                               #   by its id, in a rounded square (shadcn Avatar); the cards, the page's
-                              #   heading, the thread header, the pickers and the Files page's list
+                              #   heading, the sidebar's rows, the thread header, the pickers and the
+                              #   Files page's list
   workspaces/workspace-command.tsx # the workspaces to pick, "No workspace", and Create for a new name
                               #   (shadcn Command), in the composer's workspace bar and the upload dialog
   sources/source-list.tsx     # a workspace's sources, cited or all retrieved, as cards: the system's icon,
                               #   the conversation, the metadata; an address opens in a new tab
   chat/workspace-bar.tsx      # the card under the composer: the conversation's workspace, or the next one's
   chat/thread-title.tsx       # the thread header's breadcrumb (shadcn Breadcrumb): the workspace (its
-                              #   avatar and name, a link to its page) / the conversation's title
+                              #   avatar and name) / the conversation's title, each with a background on
+                              #   hover: a click on the workspace picks another (WorkspaceCommand), on the
+                              #   title edits it in place (Enter or leaving saves, Escape doesn't)
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
 

@@ -45,7 +45,7 @@ export function AppSidebar() {
   const threads = (threadsQuery.data ?? []).filter((t) => !t.archived);
   // Conversations are grouped by date, after the pinned ones; one filed under
   // a workspace names it (one whose workspace is gone names none).
-  const workspaceNames = new Map((workspacesQuery.data ?? []).map((w) => [w.id, w.name]));
+  const workspaceOf = new Map((workspacesQuery.data ?? []).map((w) => [w.id, w]));
   const groups = groupThreads(threads.filter((t) => !t.pinned));
   const pinned = threads.filter((t) => t.pinned);
   if (pinned.length) groups.unshift({ label: "Pinned", threads: pinned });
@@ -178,7 +178,7 @@ export function AppSidebar() {
                       title={threadTitle(t)}
                       active={t.id === activeId}
                       runStatus={t.run_status}
-                      workspace={workspaceNames.get(t.workspace_id ?? "")}
+                      workspace={workspaceOf.get(t.workspace_id ?? "")}
                     />
                   ))}
                 </SidebarMenu>
