@@ -61,7 +61,8 @@ app/
     layout.tsx            # app shell: SidebarProvider + AppSidebar + SidebarInset
     chat/page.tsx         # <LandingView> — centered composer for a new chat
     chat/[threadId]/page.tsx   # <ThreadView> — awaits params (Next 16), renders the chat
-    artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts (GET /v1/artifacts)
+    artifacts/page.tsx    # <ArtifactsView> — every conversation's artifacts as cards (GET /v1/artifacts)
+    skills/page.tsx       # <SkillsView> — the skills library: categories, sources, cards (/v1/skills)
 ```
 
 - Root + `(app)` layouts are **Server Components**; every interactive surface is
@@ -78,17 +79,30 @@ components/
   providers.tsx               # QueryClientProvider + ThemeProvider + single TooltipProvider
   chat/
     use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
+    reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
     landing-view.tsx, thread-view.tsx (ThreadChat), task-bar.tsx
     composer/                 # composer, model-selector, agent-selector, connector-selector,
-                              #   connector-icon, thread-usage-ring
+                              #   connector-icon, thread-usage-ring, references (the text, with / and @ chips)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card,
                               #   agent-card, markdown (+ source-chip), compaction-divider,
-                              #   message-reasoning, message-actions, message-meta
+                              #   message-reasoning, message-actions, message-meta,
+                              #   skill (SkillLoaded, UserText: the /name chip)
       tools/                  # tool renderers: registry.ts (name → component), slides-call
   right-panel/                # right-panel, agent-view (child thread), artifact-view (+ list),
                               #   sources-view, usage-view, model-view, agent-details-view,
                               #   connector-details-view
-  artifacts/artifacts-view.tsx  # the all-artifacts page: paged list + the open one beside it
+  library/                    # the Spaces-style frame both pages share: LibraryPage (top bar,
+                              #   optional nav column), LibraryToolbar (title, search, actions,
+                              #   grid/list toggle), LibraryItems/LibraryItem (card or row),
+                              #   NavSection/NavItem; creatable-combobox (pick or create a value)
+  common/copy-button.tsx      # a copy-to-clipboard icon button for any page
+  artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
+                              #   once the card is in view), kind tabs, search; ?open=root/id
+                              #   opens one full-page
+  skills/skills-view.tsx      # categories and sources (with counts) on the left, search, Create
+                              #   (with an agent: /chat?prompt=…; or upload), cards; ?skill=name
+                              #   opens one full-page: details, npx command, files
+  skills/skill-dialogs.tsx    # upload (a shadcn file input + details) and edit details
   sidebar/app-sidebar.tsx     # thread list (grouped Today/Yesterday/7d/30d/Older) + run-status dots
   ai-elements/                # shadcn AI Elements registry (message, reasoning, tool, conversation, …)
   ui/                         # shadcn primitives (radix-nova)
@@ -101,7 +115,7 @@ lib/
          artifacts.ts · sources.ts · types.ts
   providers.ts · group-threads.ts · dayjs.ts · utils.ts
 stores/ ui-store.ts            # Zustand UI state
-hooks/  use-mobile.ts
+hooks/  use-mobile.ts          # shadcn's sidebar breakpoint hook
 plans/  00–06 + agent-ui-redesign.md   # design docs (see §9)
 ```
 
@@ -137,6 +151,13 @@ for reads and admin:
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
 - `GET /v1/artifacts?after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
   every conversation's artifacts for `/artifacts`, newest first; `next` is the cursor for `after`
+- `GET /v1/skills?q=&category=&source=` → `{data: [{name, title?, description, category?,
+  source?, files: [{path}], created_at, updated_at}], categories, sources}` (`[{value, count}]`):
+  the skills library, for `/skills`, the composer's `/` palette and the `/name` chip;
+  `POST /v1/skills` as a multipart form (`file`: a skill's zip or its SKILL.md; optional
+  `title`, `description`, `category`, `source`), `PATCH /v1/skills/{name}` (JSON details;
+  a new description rewrites the SKILL.md), `DELETE /v1/skills/{name}`, and
+  `GET /v1/skills/{name}/files/{path}` (one file, as written)
 - `GET /v1/threads/{id}/sources` and `GET /v1/threads/{id}/sources/{n}` (what `[source:n]`
   refers to; each chip reads its source from the list, and one not listed yet is fetched
   when its citation is opened); the list is refetched when a run ends
@@ -153,7 +174,7 @@ There is no identity header yet and no temporary mode: every thread is persisted
 `ThreadState = {messages, status, error?, loaded}`. Messages are our own part
 shapes (`lib/chat/types.ts`); nothing depends on the AI SDK. Part types: `text`,
 `reasoning`, `tool` (state `running | done | error | approval | denied`), `step-start`,
-and `data-agent | data-task-list | data-artifact | data-compaction | data-model`. An interrupt is stamped onto the
+and `data-agent | data-task-list | data-artifact | data-compaction | data-model | data-skill`. An interrupt is stamped onto the
 tool part it holds (`state: "approval"`, `approval.id` = the interrupt id), for an
 approval and a `question` alike. The full event → part → component table is
 `agentlite/docs/AG-UI-RENDERING.md`.
@@ -167,6 +188,8 @@ with kind `markdown | code | json | csv | url` (no body: `ArtifactView` fetches 
 page; old threads carry `content`). `data-compaction` is `{status: running | completed | failed | declined,
 summary?, inputTokens?, outputTokens?, durationMs?, error?}`, one per compaction of the model's context.
 `data-model` is `{from, to}`: the turn ran on another model than the thread's previous turn.
+`data-skill` is `{name, description}`: the skill a message starting with `/name` loaded; the
+server loads it, the message is stored as typed.
 When a run ends, text parts still open are marked done.
 A `tool` part carries `ui` when the backend names a renderer for the tool (agentlite TOOLS.md).
 
@@ -205,6 +228,7 @@ use-thread.ts        useThread(threadId) → {messages, status, loaded, error, s
        │           │                  and a `compact_context` line holding the summary
        │           ├─ data-model    → ModelChangeDivider: a rule "Changed model to X" (both rules are
        │           │                  ThreadRule); not counted as output for the thinking indicator
+       │           ├─ data-skill    → SkillLoaded: a line "Loaded skill X"; not counted as output either
        │           └─ step-start    → consecutive steps by one agent form a stage; in a pipeline every
        │                              stage but the last collapses into a StageCard
        ├─ TaskBar (memo)  ← latest data-task-list
@@ -262,14 +286,16 @@ leaves the part `denied`.
 ## 7. State management
 
 - **Zustand UI store** (`stores/ui-store.ts`): `selectedModel`, `selectedAgentId`,
-  `selectedConnectors` (null = all), `sidepanel`. Model and agent are **persisted to
+  `selectedConnectors` (null = all), `sidepanel`, `libraryView` (grid or list on the
+  artifacts and skills pages). Model, agent and view are **persisted to
   localStorage**; the rest are ephemeral. "New chat" clears the panel and the connectors.
 - **Zustand chat store** (`lib/chat/store.ts`): `threads[threadId]` for every
   thread opened in this tab (main view and side panel alike) and `connected`.
   Only `useThread` and `ThreadUsageRing` read it.
 - **TanStack Query** (`lib/api/*`) for REST: keys `['agents']`, `['models']`,
-  `['connectors']` (cached 5 min) and `['threads']` (refetched on run status
-  changes and window focus). Deleting a thread invalidates `['threads']` and
+  `['connectors']` (cached 5 min), `['skills', filter]` (every filter refetched after an
+  upload, an edit or a delete; the previous result stays while the next loads) and `['threads']` (refetched on run status changes and window focus). A skill's file
+  is `['skill-file', name, updated_at, path]`. Deleting a thread invalidates `['threads']` and
   `['recent-artifacts']`. Per conversation: `['artifacts', id]`, `['sources', id]`
   (one list; chips `select` their own source), `['sources', id, n]` (one source not
   listed yet), `['artifact-body', id, artifactId, version]`; across
@@ -434,6 +460,19 @@ before large changes:
   `components/ai-elements` import types from `ai`. Don't add `@ai-sdk/react` back.
 - **One socket per tab** (`lib/chat/socket.ts`). Open threads through
   `useThread`; never subscribe by hand.
+- **References are chips in the text** (`composer/references.tsx`): the composer's text is a
+  Tiptap editor whose Mention nodes are the chips (`chat/reference-chip.tsx`: the text's font,
+  the list's coloured icon), with one list (shadcn's Command in a popover, stock styling, an
+  icon per row) for every sigil in its `KINDS` table. `/` lists
+  the skills a message can load; the chip reads as `/name` in the text sent, wherever it
+  sits, which the backend resolves (`agentlite/internal/refs`: `/` is the only sigil so far,
+  `@agent` and `#id` are planned, there is no `$`). `@` lists the agents; since `@agent` is
+  not resolved yet, picking one sets the thread's agent as the selector does and the chip
+  stays out of the text. Backspace after a chip takes it. Add kinds to the table and their
+  choices to `useChoices`, not another menu.
+- **`components/ui/` is shadcn registry output only** (style `radix-nova`, as the CLI writes
+  it) and `components/ai-elements/` the AI Elements registry. Hand-written shared pieces go
+  in `components/common/` or `components/library/`, never in `ui/`.
 - Next 16: dynamic route params are **async** — `await params` in
   `chat/[threadId]/page.tsx`. Re-read `node_modules/next/dist/docs/` before using
   unfamiliar APIs (see top banner).

@@ -26,6 +26,8 @@ type UiState = {
   /** Per url artifact id, bumped to reload its page: the panel's refresh
    *  button, or a tool that changed it (a slide deck write). */
   artifactRefresh: Record<string, number>;
+  /** How the artifacts and skills pages lay out their items. */
+  libraryView: "grid" | "list";
 
   setModel: (id: string | null) => void;
   setAgent: (id: string | null) => void;
@@ -34,6 +36,7 @@ type UiState = {
   closeSidepanel: () => void;
   refreshArtifact: (id: string) => void;
   requestNewChat: () => void;
+  setLibraryView: (view: "grid" | "list") => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -44,6 +47,7 @@ export const useUiStore = create<UiState>()(
       selectedConnectors: null,
       sidepanel: null,
       artifactRefresh: {},
+      libraryView: "grid",
 
       setModel: (id) => set({ selectedModel: id }),
       setAgent: (id) => set({ selectedAgentId: id }),
@@ -53,6 +57,7 @@ export const useUiStore = create<UiState>()(
       refreshArtifact: (id) =>
         set((s) => ({ artifactRefresh: { ...s.artifactRefresh, [id]: (s.artifactRefresh[id] ?? 0) + 1 } })),
       requestNewChat: () => set({ sidepanel: null, selectedConnectors: null }),
+      setLibraryView: (view) => set({ libraryView: view }),
     }),
     {
       name: "agentui-ui",
@@ -60,6 +65,7 @@ export const useUiStore = create<UiState>()(
       partialize: (s) => ({
         selectedModel: s.selectedModel,
         selectedAgentId: s.selectedAgentId,
+        libraryView: s.libraryView,
       }),
     },
   ),

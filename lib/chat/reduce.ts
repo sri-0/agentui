@@ -31,6 +31,7 @@ const ACTIVITY_PARTS: Record<string, DataPart["type"]> = {
   artifact: "data-artifact",
   compaction: "data-compaction",
   model: "data-model",
+  skill: "data-skill",
 };
 
 /**
