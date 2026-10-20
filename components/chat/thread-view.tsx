@@ -21,12 +21,13 @@ import type { SuggestFor, SuggestMessage } from "@/lib/api/suggestions";
 import { useThreadSources } from "@/lib/api/sources";
 import { fetchThread, useThreadRecord } from "@/lib/api/threads";
 import { collectArtifacts, useArtifacts } from "@/lib/chat/artifacts";
-import { useChatStore } from "@/lib/chat/store";
+import { openThread, useChatStore } from "@/lib/chat/store";
 import { ThreadIdContext } from "@/lib/chat/thread-context";
 import { useUiStore } from "@/stores/ui-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { BookOpenIcon, FileTextIcon, LoaderIcon } from "lucide-react";
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { Composer, type ComposerStatus } from "./composer/composer";
 import { ThreadUsageRing } from "./composer/thread-usage-ring";
@@ -64,8 +65,33 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   }, [threadId, setConnectors, queryClient]);
   // An images conversation (from the Images page) keeps its agent, and its
   // composer picks the image model.
-  const images = useThreadRecord(threadId).data?.agent_id === IMAGES_AGENT;
+  const record = useThreadRecord(threadId).data;
+  const images = record?.agent_id === IMAGES_AGENT;
+  // While it is open, REST requests are made under its control set; until its
+  // record is known, under none (never the picker's).
+  const controlset = record?.controlset_id ?? "";
+  const setThreadControlset = useUiStore((s) => s.setThreadControlset);
+  useEffect(() => {
+    setThreadControlset(controlset);
+    return () => setThreadControlset(null);
+  }, [controlset, setThreadControlset]);
   const connected = useChatStore((s) => s.connected);
+
+  // A failure outside a run (loading the thread, a refused message) is a
+  // toast, gone once the thread moves on; a run's error sits on its message.
+  useEffect(() => {
+    if (status !== "error" || !error) return;
+    const id = `thread-${threadId}`;
+    toast.error(error.title, {
+      id,
+      description: error.detail,
+      action: error.retry ? { label: "Retry", onClick: () => void openThread(threadId) } : undefined,
+    });
+    return () => {
+      toast.dismiss(id);
+    };
+  }, [status, error, threadId]);
+
   const openSidepanel = useUiStore((s) => s.openSidepanel);
   const sidepanel = useUiStore((s) => s.sidepanel);
   const panelOpen = Boolean(sidepanel);
@@ -209,9 +235,6 @@ export function ThreadChat({ threadId }: { threadId: string }) {
           <div className="px-4 pb-5 pt-2">
             <TaskBar messages={messages} running={streaming} />
             <div className="mx-auto w-full max-w-3xl">
-              {status === "error" && error && (
-                <p className="mb-2 text-center text-xs text-destructive">{error}</p>
-              )}
               {asking ? (
                 <QuestionPanel key={questionId} part={asking} onAnswer={answer} onCancel={() => setPutAway(questionId)} autoFocus />
               ) : (

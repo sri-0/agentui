@@ -81,6 +81,13 @@ app/
   `agentId: "images"`. The Chat | Images toggle (`mode-toggle.tsx`) is pinned to the top
   of the page and switches between the two; a thread has none (its agent sets its mode).
   The sidebar has no Images item; the toggle is the way in.
+- Control sets: every conversation is made under one control set, C1000–C1020, fixed when
+  it is created (the thread's `controlset_id`). The composer's picker
+  (`composer/controlset-selector.tsx`, shadcn Command in a popover, in both modes) picks it
+  on a new-chat page (`selectedControlset`, persisted); until one is picked the send button
+  is disabled and the page's hint says so (Enter is refused and keeps the draft). In a
+  thread it shows the thread's, locked. REST requests carry it (`currentControlset`, §3);
+  socket frames don't.
 - Images conversations: a thread whose `agent_id` is `images` (`IMAGES_AGENT`,
   `lib/api/agents.ts`) is an ordinary chat whose composer is in its images mode
   (`<Composer images>`: `ModelSelector use="image"`, no agent or connector selectors), and
@@ -93,7 +100,7 @@ app/
 
 ```
 components/
-  providers.tsx               # QueryClientProvider + ThemeProvider + single TooltipProvider
+  providers.tsx               # QueryClientProvider + ThemeProvider + single TooltipProvider + the Toaster
   chat/
     use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
     reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
@@ -104,7 +111,7 @@ components/
     thread-view.tsx (ThreadChat), task-bar.tsx
     next-prompts.tsx          # next-prompt suggestions above the composer (AI Elements Suggestions)
     composer/                 # composer, model-selector, agent-selector, connector-selector,
-                              #   connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
+                              #   controlset-selector, connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
                               #   voice (the voice prompt: the mic button and the dictation bar),
                               #   attach (the paperclip, drops and pastes open the upload dialog; kept files become # chips)
     messages/                 # message-list (+ pipeline stage cards), tool-line, question-card
@@ -206,7 +213,8 @@ it (normally the subscribe) and answers `not_found` if not; the socket then
 drops that subscription instead of retrying it on reconnect.
 - requests (`chatSocket.request`, answered by `ack {threadId, runId, seq}` or
   `error {code, message}` with the same `requestId`): `run {threadId, agentId?,
-  model?, connectors?, messages}`, `answer {threadId, interruptId, approved?,
+  model?, connectors?, messages}` (no control set: the server takes the thread's from
+  its record), `answer {threadId, interruptId, approved?,
   justification?, output?}`, `cancel {threadId}`;
 - following: `subscribe {threadId, after?}`, `unsubscribe {threadId}`; the server
   streams `event {threadId, seq, event}` and `idle {threadId}`; a subscription ends
@@ -217,7 +225,7 @@ for reads and admin:
 - `POST /v1/agent/chat` → `201 {threadId, runId, seq}`: a new thread with its first turn,
   filed under `workspaceId` when the composer's workspace card names one
 - `GET /v1/agents`, `GET /v1/models`, `GET /v1/connectors`, `GET /v1/connectors/{id}`
-- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, workspace_id?, created_at, updated_at, run_status?, dormant_until?}]}`
+- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, workspace_id?, controlset_id?, created_at, updated_at, run_status?, dormant_until?}]}`
   (`dormant_until`: until when an idle thread can still be picked up, the sidebar's moon);
   fetched once, refetched when a run this tab watches starts or ends and on window focus (no polling)
 - `GET /v1/threads/{id}` (its `connectors` set the composer's toggles; `['thread', id]`), `PATCH`
@@ -254,7 +262,10 @@ for reads and admin:
 - `GET /v1/threads/{id}/messages` → `{data: [{id, thread_id, role, seq, created_at, text, events}], cursor}`;
   `events` are the AG-UI events of that turn, `cursor` is the log id to subscribe from (`""` when idle)
 
-There is no identity header yet and no temporary mode: every thread is persisted.
+Every POST (`apiText`) sends `X-Control-Set: C1000`, the control set it creates documents
+under (`currentControlset` in `stores/ui-store.ts`): the open thread's (none until its record
+is loaded), else the picker's; none before one is picked. Other requests send none. The UI sends no identity header and has no temporary mode: every
+thread is persisted.
 
 ---
 
@@ -391,8 +402,9 @@ leaves the part `denied`.
 - **Zustand UI store** (`stores/ui-store.ts`): `selectedModel`, `selectedAgentId`,
   `selectedConnectors` (null = all), `sidepanel`, `libraryView` (grid or list on the
   artifacts, skills and files pages), `newChatWorkspaceId` (the workspace the next new
-  conversation is filed under). Model, agent and view are **persisted to
-  localStorage**; the rest are ephemeral. "New chat" clears the panel and the connectors,
+  conversation is filed under), `selectedControlset` (a new conversation's) and
+  `threadControlset` (the open thread's, set by `ThreadChat` from its record). Model,
+  agent, view and control set are **persisted to localStorage**; the rest are ephemeral. The key the control set is saved under became `selectedControlset` with no migration, so one picked before that is forgotten once. "New chat" clears the panel and the connectors,
   and files the chat under the workspace it was started from (none from the header).
 - **Zustand chat store** (`lib/chat/store.ts`): `threads[threadId]` for every
   thread opened in this tab (main view and side panel alike) and `connected`.
@@ -454,7 +466,7 @@ Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
     streaming thread, so it recomputes once per turn (when the status leaves
     `streaming`) and re-renders alone — the composer stays memoized.
 - **`Composer`, `ThreadHeader`, `AgentSelector`, `ModelSelector`,
-  `ReasoningEffortSelector`, `AttachmentButton`, `TaskBar`, `WorkspaceBar`** are all `memo`'d
+  `ReasoningEffortSelector`, `ControlsetSelector`, `AttachmentButton`, `TaskBar`, `WorkspaceBar`** are all `memo`'d
   (`WorkspaceBar` takes only the thread id and subscribes to the rest itself).
 - **`MessageItem`** is `memo`'d on the message ref: only the message the frame
   touched re-renders. Inside it:
@@ -493,7 +505,10 @@ Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
 
 ### How to diagnose (React Scan)
 
-Use the React Scan overlay + Optimize/Ranked tab. Read it as:
+React Scan remembers its toolbar's toggle: switched off there, it stays away
+on reload, toolbar included. To bring it back, in the console
+`localStorage.removeItem("react-scan-options")` and reload. Then use the
+overlay + Optimize/Ranked tab. Read it as:
 - High **"other time" ≫ render time** → cost is browser work (style/layout/paint)
   or `useEffect`/`useLayoutEffect`, usually from **Radix Popper/Tooltip/Collapsible**
   re-rendering thousands of times. Find which user component drags them.
@@ -624,6 +639,12 @@ before large changes:
   to another one aren't put in the message (they wouldn't resolve). It renders outside those
   handlers, since React events bubble out of a portal. Add kinds to the table and their
   choices to `useChoices`, not another menu.
+- **A failure that is not a run's is a toast** (shadcn's sonner; `Toaster` in `providers.tsx`):
+  loading a conversation (with Retry), a refused message or answer, starting a chat. The store
+  keeps it as the thread's `error` (`ThreadError`: a title and the detail, which `errorMessage`
+  in `lib/api/client.ts` words); the thread view toasts it and dismisses it once the thread
+  moves on. A run's error sits on its message; a failure tied to content (an artifact body, a
+  source, a sub-agent's card) stays inline where that content is.
 - **`components/ui/` is shadcn registry output only** (style `radix-nova`, as the CLI writes
   it) and `components/ai-elements/` the AI Elements registry. Hand-written shared pieces go
   in `components/common/` or `components/library/`, never in `ui/`.
