@@ -503,7 +503,10 @@ Key store facts (`lib/chat/store.ts`, `lib/chat/reduce.ts`):
 
 ### How to diagnose (React Scan)
 
-Use the React Scan overlay + Optimize/Ranked tab. Read it as:
+React Scan remembers its toolbar's toggle: switched off there, it stays away
+on reload, toolbar included. To bring it back, in the console
+`localStorage.removeItem("react-scan-options")` and reload. Then use the
+overlay + Optimize/Ranked tab. Read it as:
 - High **"other time" ≫ render time** → cost is browser work (style/layout/paint)
   or `useEffect`/`useLayoutEffect`, usually from **Radix Popper/Tooltip/Collapsible**
   re-rendering thousands of times. Find which user component drags them.
