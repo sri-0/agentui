@@ -158,7 +158,8 @@ components/
                               #   files sent to another workspace are said to be unusable in the chat
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
   sidebar/app-sidebar.tsx     # New chat, Search, Workspaces, Artifacts, Skills, Files; the thread list
-                              #   (Pinned, with a pin, then Today/Yesterday/7d/30d/Older) + run-status dots
+                              #   (Pinned, with a pin, then Today/Yesterday/7d/30d/Older) + run-status dots, and a moon
+                              #   on an idle thread the backend can still pick up (dormant_until)
   sidebar/thread-row.tsx      # one conversation row: its workspace (avatar and name) under the title,
                               #   the status dot, delete on hover
   workspaces/workspaces-view.tsx # the workspaces as cards (their latest chats as the preview; chats and
@@ -224,7 +225,8 @@ for reads and admin:
 - `POST /v1/agent/chat` → `201 {threadId, runId, seq}`: a new thread with its first turn,
   filed under `workspaceId` when the composer's workspace card names one
 - `GET /v1/agents`, `GET /v1/models`, `GET /v1/connectors`, `GET /v1/connectors/{id}`
-- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, workspace_id?, controlset_id?, created_at, updated_at, run_status?}]}`;
+- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, workspace_id?, controlset_id?, created_at, updated_at, run_status?, dormant_until?}]}`
+  (`dormant_until`: until when an idle thread can still be picked up, the sidebar's moon);
   fetched once, refetched when a run this tab watches starts or ends and on window focus (no polling)
 - `GET /v1/threads/{id}` (its `connectors` set the composer's toggles; `['thread', id]`), `PATCH`
   (`{workspace_id}` files it, `""` takes it out), `DELETE`

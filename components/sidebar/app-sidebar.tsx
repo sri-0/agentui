@@ -17,7 +17,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useThreads } from "@/lib/api/threads";
 import { useWorkspaces } from "@/lib/api/workspaces";
-import { groupThreads, threadTitle } from "@/lib/group-threads";
+import { dormant, groupThreads, threadTitle } from "@/lib/group-threads";
 import { useUiStore } from "@/stores/ui-store";
 import {
   BookOpenIcon,
@@ -178,6 +178,7 @@ export function AppSidebar() {
                       title={threadTitle(t)}
                       active={t.id === activeId}
                       runStatus={t.run_status}
+                      dormant={dormant(t)}
                       workspace={workspaceOf.get(t.workspace_id ?? "")}
                     />
                   ))}

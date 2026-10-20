@@ -14,6 +14,11 @@ function toMs(t: Thread): number {
   return d.isValid() ? d.valueOf() : 0;
 }
 
+/** Idle, but the backend can still pick it up (`dormant_until` ahead). */
+export function dormant(t: Thread, now = Date.now()): boolean {
+  return !t.run_status && !!t.dormant_until && dayjs(t.dormant_until).valueOf() > now;
+}
+
 /** Bucket threads into Today / Yesterday / Previous 7 days / 30 days / Older. */
 export function groupThreads(threads: Thread[], now?: number): ThreadGroup[] {
   const today = dayjs(now).startOf("day");

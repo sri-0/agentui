@@ -89,6 +89,8 @@ export type Thread = {
   updated_at?: string | number;
   /** present while a run owns the thread */
   run_status?: RunStatus;
+  /** until when the backend can still pick the idle thread up */
+  dormant_until?: string;
 };
 
 /** A folder of conversations; later, what people share. */

@@ -11,7 +11,7 @@ import type { RunStatus } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { WorkspaceAvatar } from "@/components/workspaces/workspace-avatar";
 import type { Workspace } from "@/lib/api/types";
-import { CircleAlertIcon, Trash2Icon } from "lucide-react";
+import { CircleAlertIcon, MoonIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -34,6 +34,7 @@ export function ThreadRow({
   title,
   active,
   runStatus,
+  dormant,
   workspace,
 }: {
   id: string;
@@ -41,6 +42,8 @@ export function ThreadRow({
   active: boolean;
   /** present while a run owns the thread */
   runStatus?: RunStatus;
+  /** idle, but the backend can still pick it up */
+  dormant?: boolean;
   /** the workspace it is filed under, shown under the title */
   workspace?: Workspace;
 }) {
@@ -66,7 +69,7 @@ export function ThreadRow({
           shows it too. (shadcn's showOnHover shows it whenever the row has
           focus, so after a click, on top of the status.) Below md the sidebar
           is a sheet with no hover: the trash stays and the status sits beside it. */}
-      {runStatus && (
+      {(runStatus || dormant) && (
         <span
           className={cn(
             "pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 transition duration-200 ease-out max-md:right-7 motion-reduce:transition-none",
@@ -79,8 +82,10 @@ export function ThreadRow({
               aria-label="Awaiting your input"
               className="size-3.5 text-amber-500"
             />
-          ) : (
+          ) : runStatus ? (
             <StatusDot />
+          ) : (
+            <MoonIcon aria-label="Recently active" className="size-3.5 text-muted-foreground/60" />
           )}
         </span>
       )}
