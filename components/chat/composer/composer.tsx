@@ -20,6 +20,7 @@ import { NextPrompts } from "../next-prompts";
 import { AgentSelector } from "./agent-selector";
 import { AttachButton, useAttach } from "./attach";
 import { ConnectorSelector } from "./connector-selector";
+import { ControlsetSelector } from "./controlset-selector";
 import { ModelSelector } from "./model-selector";
 import { ReferenceInput } from "./references";
 import { DictationBar, VoiceButton } from "./voice";
@@ -44,6 +45,8 @@ type ComposerProps = {
    *  (the answer's messageId and the turn's messages) and for what is typed;
    *  on a new chat for the typed text only */
   suggest?: SuggestFor;
+  /** nothing can be sent yet (a new chat with no control set picked) */
+  sendDisabled?: boolean;
 };
 
 // The provider holds the text the form sends; the editor writes it on each edit.
@@ -55,16 +58,20 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   );
 });
 
-function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder, images, suggest }: ComposerProps) {
+function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, placeholder, images, suggest, sendDisabled }: ComposerProps) {
   const idle = status === "ready";
   const editorRef = useRef<Editor | null>(null); // the voice prompt writes into it
   const [dictating, setDictating] = useState(false);
   const [voiceError, setVoiceError] = useState<string>();
   const attach = useAttach(editorRef);
-  // A chip that reads as nothing (an agent) can leave a space behind.
+  // A chip that reads as nothing (an agent) can leave a space behind. Enter
+  // still submits while sending is disabled: throwing refuses it and keeps the draft.
   const submit = useCallback(
-    (message: PromptInputMessage) => onSubmit({ ...message, text: message.text.trim() }),
-    [onSubmit],
+    (message: PromptInputMessage) => {
+      if (sendDisabled) throw new Error("nothing can be sent yet");
+      onSubmit({ ...message, text: message.text.trim() });
+    },
+    [onSubmit, sendDisabled],
   );
   const startDictation = useCallback(() => {
     setVoiceError(undefined);
@@ -134,6 +141,7 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
                       <ConnectorSelector />
                     </>
                   )}
+                  <ControlsetSelector />
                 </PromptInputTools>
                 <div className="flex shrink-0 items-center gap-2">
                   {contextSlot}
@@ -141,7 +149,12 @@ function ComposerInput({ onSubmit, status, onStop, contextSlot, autoFocus, place
                   <PromptInputSubmit
                     status={status}
                     onStop={onStop}
-                    className={cn("size-9 rounded-full border-0", idle && "ai-gradient-strong text-white hover:opacity-90")}
+                    // aria-disabled: a disabled control fades the whole input group
+                    aria-disabled={sendDisabled}
+                    className={cn(
+                      "size-9 rounded-full border-0 aria-disabled:pointer-events-none aria-disabled:opacity-50",
+                      idle && "ai-gradient-strong text-white hover:opacity-90",
+                    )}
                   />
                 </div>
               </>
