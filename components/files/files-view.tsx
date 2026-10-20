@@ -8,30 +8,57 @@ import {
   NavItem,
   NavSection,
 } from "@/components/library/library";
+import { VisibilityBadge } from "@/components/common/visibility";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { WorkspaceAvatar } from "@/components/workspaces/workspace-avatar";
-import { fileContentUrl, type UserFile, useDeleteFile, useFiles } from "@/lib/api/files";
+import { fileContentUrl, type UserFile, useDeleteFile, useFiles, useUpdateFile } from "@/lib/api/files";
 import { useWorkspaces } from "@/lib/api/workspaces";
 import dayjs from "@/lib/dayjs";
 import { cn } from "@/lib/utils";
-import { DownloadIcon, FilesIcon, InboxIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import {
+  DownloadIcon,
+  FilesIcon,
+  InboxIcon,
+  LockIcon,
+  MoreHorizontalIcon,
+  Trash2Icon,
+  UploadIcon,
+  UsersIcon,
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { type DragEvent, useState } from "react";
 
 import { FileKindIcon, formatSize } from "./file-icon";
 import { UploadDialog } from "./upload-dialog";
 
+/** /files with the filters given, the empty ones left out. */
+const filesHref = (filter: { workspace?: string; visibility?: string }) => {
+  const params = new URLSearchParams(Object.entries(filter).filter(([, v]) => v) as [string, string][]);
+  return params.size ? `/files?${params}` : "/files";
+};
+
 /**
- * The files the user uploaded, newest first, as cards (or rows): all of
- * them, the unfiled ones, or one workspace's (?workspace=<id>|none); search
- * matches names and tags. Upload (the button, or a drop anywhere on the
- * list) opens the upload dialog for the workspace shown, or none. A file is
- * downloaded, never opened in the browser.
+ * The files the user can see, their own and the shared ones, newest first,
+ * as cards (or rows): all of them, the unfiled ones, or one workspace's
+ * (?workspace=<id>|none), and, with ?visibility=mine|public, only those kept
+ * to the user or only the public ones; search matches names and tags. Upload
+ * (the button, or a drop anywhere on the list) opens the upload dialog for
+ * the workspace shown, or none. A file is downloaded, never opened in the
+ * browser.
  */
 export function FilesView() {
-  const param = useSearchParams().get("workspace");
+  const params = useSearchParams();
+  const param = params.get("workspace");
   const workspaceId = param === null ? undefined : param === "none" ? null : param; // undefined: all
+  const visibility = params.get("visibility") ?? undefined;
   const { data: workspaces = [] } = useWorkspaces();
   const { data: files = [], error, isPending } = useFiles(workspaceId);
   const { data: all } = useFiles(); // the total
@@ -41,8 +68,10 @@ export function FilesView() {
 
   const workspace = workspaces.find((w) => w.id === workspaceId);
   const q = search.trim().toLowerCase();
-  const shown = files.filter(
-    (f) => !q || f.name.toLowerCase().includes(q) || f.tags?.some((t) => t.toLowerCase().includes(q)),
+    const shown = files.filter(
+    (f) =>
+      (!q || f.name.toLowerCase().includes(q) || f.tags?.some((t) => t.toLowerCase().includes(q))) &&
+      (visibility === "mine" ? !f.is_shared : visibility === "public" ? f.is_shared : true),
   );
   const drop = (e: DragEvent) => {
     e.preventDefault();
@@ -52,19 +81,19 @@ export function FilesView() {
 
   const nav = (
     <>
-      <NavItem
+            <NavItem
         icon={<FilesIcon className="text-muted-foreground" />}
         label="All files"
         count={all?.length}
         active={workspaceId === undefined}
-        href="/files"
+        href={filesHref({ visibility })}
       />
       <NavSection label="Workspaces">
         <NavItem
           icon={<InboxIcon className="text-muted-foreground" />}
           label="No workspace"
           active={workspaceId === null}
-          href="/files?workspace=none"
+          href={filesHref({ workspace: "none", visibility })}
         />
         {workspaces.map((w) => (
           <NavItem
@@ -72,9 +101,26 @@ export function FilesView() {
             icon={<WorkspaceAvatar workspace={w} size="sm" />}
             label={w.name}
             active={workspaceId === w.id}
-            href={`/files?workspace=${encodeURIComponent(w.id)}`}
+            href={filesHref({ workspace: w.id, visibility })}
           />
         ))}
+      </NavSection>
+      {/* Choosing the chosen one again shows every file. */}
+      <NavSection label="Visibility">
+        <NavItem
+          icon={<LockIcon className="text-muted-foreground" />}
+          label="Only me"
+          count={all?.filter((f) => !f.is_shared).length}
+          active={visibility === "mine"}
+          href={filesHref({ workspace: param ?? undefined, visibility: visibility === "mine" ? undefined : "mine" })}
+        />
+        <NavItem
+          icon={<UsersIcon className="text-muted-foreground" />}
+          label="Public"
+          count={all?.filter((f) => f.is_shared).length}
+          active={visibility === "public"}
+          href={filesHref({ workspace: param ?? undefined, visibility: visibility === "public" ? undefined : "public" })}
+        />
       </NavSection>
     </>
   );
@@ -131,9 +177,12 @@ export function FilesView() {
 }
 
 /** One file: an image shows itself, anything else its icon; the first badge
- *  says whether search_userfiles finds it, the rest are its tags. */
+ *  says whether search_userfiles finds it, then who sees it when that is
+ *  worth saying, the rest are its tags. Its uploader's menu shares it or
+ *  keeps it to them, and deletes it; anyone else only downloads it. */
 export function FileItem({ file }: { file: UserFile }) {
   const del = useDeleteFile();
+  const update = useUpdateFile();
   return (
     <LibraryItem
       preview={
@@ -162,17 +211,39 @@ export function FileItem({ file }: { file: UserFile }) {
               <DownloadIcon />
             </a>
           </Button>
-          <Button
-            variant="secondary"
-            size="icon-sm"
-            aria-label={`Delete ${file.name}`}
-            title="Delete"
-            disabled={del.isPending}
-            onClick={() => confirm(`Delete ${file.name}? Chats can no longer use it.`) && del.mutate(file.id)}
-            className="shadow-xs"
-          >
-            <Trash2Icon />
-          </Button>
+                    {file.mine && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="icon-sm" aria-label={`More for ${file.name}`} className="shadow-xs">
+                  <MoreHorizontalIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={update.isPending}
+                  onSelect={() => update.mutate({ id: file.id, isShared: !file.is_shared })}
+                >
+                  {file.is_shared ? (
+                    <>
+                      <LockIcon /> Only me
+                    </>
+                  ) : (
+                    <>
+                      <UsersIcon /> Make public
+                    </>
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={del.isPending}
+                  onSelect={() => confirm(`Delete ${file.name}? Chats can no longer use it.`) && del.mutate(file.id)}
+                >
+                  <Trash2Icon /> Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </>
       }
     >
@@ -180,6 +251,7 @@ export function FileItem({ file }: { file: UserFile }) {
         <Badge variant="outline" title={STATUS[file.status].hint}>
           {STATUS[file.status].label}
         </Badge>
+        <VisibilityBadge shared={file.is_shared} mine={file.mine} by={file.user_created_by} />
         {file.tags?.map((t) => (
           <Badge key={t} variant="secondary">
             {t}

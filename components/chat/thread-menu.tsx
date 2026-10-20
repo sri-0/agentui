@@ -22,7 +22,8 @@ import { useRouter } from "next/navigation";
 import { useContext } from "react";
 
 /** The thread header's "…" menu: pin, move to a workspace, archive (leaves the
- *  sidebar) and delete the conversation. */
+ *  sidebar) and delete the conversation. Its creator's alone: a reader of a
+ *  shared conversation gets none. */
 export function ThreadMenu() {
   const threadId = useContext(ThreadIdContext) ?? "";
   const { data: thread } = useThreadRecord(threadId);
@@ -30,6 +31,7 @@ export function ThreadMenu() {
   const update = useUpdateThread();
   const del = useDeleteThread();
   const router = useRouter();
+  if (thread && !thread.mine) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

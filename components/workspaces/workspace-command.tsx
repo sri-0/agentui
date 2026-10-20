@@ -57,7 +57,7 @@ export function WorkspaceCommand({
                 value="create"
                 keywords={[name]}
                 disabled={create.isPending}
-                onSelect={() => create.mutate(name, { onSuccess: (w) => onChoose(w.id) })}
+                                onSelect={() => create.mutate({ name }, { onSuccess: (w) => onChoose(w.id) })}
                 className="gap-2"
               >
                 <FolderPlusIcon className="size-4" />

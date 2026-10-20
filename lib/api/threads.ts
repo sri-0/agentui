@@ -9,11 +9,14 @@ import { apiFetch } from "./client";
 import type { ListResponse, StoredMessage, Thread } from "./types";
 
 /**
- * The thread list. It is fetched once, refetched when a run this client
- * watches starts or ends (status, order change), and when the window regains
- * focus. There is no polling. TanStack dedupes the query across callers.
+ * The thread list: the user's own conversations (the sidebar's), or, given a
+ * workspace, the conversations filed under it that the user can see, their
+ * own and the public ones. It is fetched once, refetched when a run this
+ * client watches starts or ends (status, order change), and when the window
+ * regains focus. There is no polling. TanStack dedupes the query across
+ * callers.
  */
-export function useThreads() {
+export function useThreads(workspaceId?: string) {
   const qc = useQueryClient();
   useEffect(
     () =>
@@ -29,12 +32,14 @@ export function useThreads() {
       }),
     [qc],
   );
-  return useQuery({
-    queryKey: ["threads"],
+    return useQuery({
+    queryKey: workspaceId ? ["threads", "workspace", workspaceId] : ["threads"],
     retry: false,
     staleTime: 60_000,
     queryFn: async () => {
-      const res = await apiFetch<ListResponse<Thread>>("/v1/threads");
+      const res = await apiFetch<ListResponse<Thread>>(
+        `/v1/threads${workspaceId ? `?workspace=${encodeURIComponent(workspaceId)}` : ""}`,
+      );
       return res.data;
     },
   });
@@ -46,7 +51,15 @@ export function useThreads() {
  *  socket. */
 export function createThread(
   text: string,
-  opts: { agentId?: string; model?: string; connectors?: string[] | null; imageModel?: string; workspaceId?: string },
+    opts: {
+    agentId?: string;
+    model?: string;
+    connectors?: string[] | null;
+    imageModel?: string;
+    workspaceId?: string;
+    /** false keeps the conversation to its creator; it is public otherwise */
+    isShared?: boolean;
+  },
 ) {
   return apiFetch<{ threadId: string; runId: string; seq: string }>("/v1/agent/chat", {
     method: "POST",

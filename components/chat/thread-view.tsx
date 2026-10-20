@@ -25,7 +25,7 @@ import { openThread, useChatStore } from "@/lib/chat/store";
 import { ThreadIdContext } from "@/lib/chat/thread-context";
 import { useUiStore } from "@/stores/ui-store";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookOpenIcon, FileTextIcon, LoaderIcon } from "lucide-react";
+import { BookOpenIcon, FileTextIcon, LoaderIcon, UsersIcon } from "lucide-react";
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -35,6 +35,7 @@ import { ConversationSkeleton } from "./loading";
 import { messageText } from "./messages/message-actions";
 import { MessageList } from "./messages/message-list";
 import { pendingQuestion, QuestionPanel } from "./messages/question-card";
+import { ShareButton } from "./share-button";
 import { TaskBar } from "./task-bar";
 import { ThreadMenu } from "./thread-menu";
 import { ThreadTitle } from "./thread-title";
@@ -65,8 +66,11 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   }, [threadId, setConnectors, queryClient]);
   // An images conversation (from the Images page) keeps its agent, and its
   // composer picks the image model.
-  const record = useThreadRecord(threadId).data;
+    const record = useThreadRecord(threadId).data;
   const images = record?.agent_id === IMAGES_AGENT;
+  // A conversation shared with the user is theirs to read: its creator
+  // alone writes in it, so nothing here sends.
+  const readOnly = record?.mine === false;
   // While it is open, REST requests are made under its control set; until its
   // record is known, under none (never the picker's).
   const controlset = record?.controlset_id ?? "";
@@ -234,8 +238,10 @@ export function ThreadChat({ threadId }: { threadId: string }) {
 
           <div className="px-4 pb-5 pt-2">
             <TaskBar messages={messages} running={streaming} />
-            <div className="mx-auto w-full max-w-3xl">
-              {asking ? (
+                        <div className="mx-auto w-full max-w-3xl">
+              {readOnly ? (
+                <ReadOnlyNote by={record?.user_created_by} />
+              ) : asking ? (
                 <QuestionPanel key={questionId} part={asking} onAnswer={answer} onCancel={() => setPutAway(questionId)} autoFocus />
               ) : (
                 <>
@@ -287,6 +293,19 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   );
 }
 
+/** Where the composer would be, in a conversation shared with the user:
+ *  they read it, and its creator alone writes in it. */
+function ReadOnlyNote({ by }: { by?: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
+      <UsersIcon className="size-4 shrink-0" />
+      <span>
+        Shared by {by ?? "someone"}. You can read this conversation; only they can write in it.
+      </span>
+    </div>
+  );
+}
+
 /** Static thread header — memoized so it never re-renders during streaming. */
 const ThreadHeader = memo(function ThreadHeader({
   artifactCount,
@@ -311,9 +330,10 @@ const ThreadHeader = memo(function ThreadHeader({
         {sourceCount > 0 && (
           <PanelButton panel="sources" icon={<BookOpenIcon className="size-4" />} label="Sources" count={sourceCount} />
         )}
-        {artifactCount > 0 && (
+                {artifactCount > 0 && (
           <PanelButton panel="artifacts" icon={<FileTextIcon className="size-4" />} label="Artifacts" count={artifactCount} />
         )}
+        <ShareButton />
         <ThreadMenu />
       </div>
     </header>

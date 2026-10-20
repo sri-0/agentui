@@ -1,5 +1,6 @@
 "use client";
 
+import { VisibilityBadge, VisibilityField } from "@/components/common/visibility";
 import { LibraryItem, LibraryItems, LibraryPage, LibraryToolbar } from "@/components/library/library";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,22 +20,22 @@ import { Input } from "@/components/ui/input";
 import { useFiles } from "@/lib/api/files";
 import { useThreads } from "@/lib/api/threads";
 import type { Thread, Workspace } from "@/lib/api/types";
-import { useCreateWorkspace, useDeleteWorkspace, useRenameWorkspace, useWorkspaces } from "@/lib/api/workspaces";
+import { useCreateWorkspace, useDeleteWorkspace, useUpdateWorkspace, useWorkspaces } from "@/lib/api/workspaces";
 import dayjs from "@/lib/dayjs";
 import { threadTitle } from "@/lib/group-threads";
-import { FolderPlusIcon, MessageSquareIcon, MoreHorizontalIcon } from "lucide-react";
+import { FolderPlusIcon, LockIcon, MessageSquareIcon, MoreHorizontalIcon, UsersIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { WorkspaceAvatar } from "./workspace-avatar";
 
 /**
  * The workspaces as cards (or rows), as ChatGPT's Spaces shows its items:
- * each with its latest chats and how many chats and files it holds. A card
- * opens the workspace's page (WorkspaceView); New workspace makes one.
+ * the user's own and the public ones, each with its latest chats and how
+ * many chats and files it holds. A card opens the workspace's page
+ * (WorkspaceView); New workspace makes one, public unless it says otherwise.
  */
 export function WorkspacesView() {
   const { data: workspaces = [], isPending, error } = useWorkspaces();
-  const { data: threads = [] } = useThreads();
   const { data: files = [] } = useFiles();
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -67,26 +68,24 @@ export function WorkspacesView() {
       )}
       <LibraryItems>
         {shown.map((w) => (
-          <WorkspaceItem
-            key={w.id}
-            workspace={w}
-            threads={threads.filter((t) => t.workspace_id === w.id)}
-            files={files.filter((f) => f.workspace_id === w.id).length}
-          />
+                    <WorkspaceItem key={w.id} workspace={w} files={files.filter((f) => f.workspace_id === w.id).length} />
         ))}
       </LibraryItems>
       <NameDialog
         open={creating}
         onOpenChange={setCreating}
         title="New workspace"
-        onSave={(name) => create.mutateAsync(name)}
+        visibility
+        onSave={(name, shared) => create.mutateAsync({ name, isShared: shared })}
       />
     </LibraryPage>
   );
 }
 
-/** One workspace's card: its latest chats, its counts and its last activity. */
-function WorkspaceItem({ workspace, threads, files }: { workspace: Workspace; threads: Thread[]; files: number }) {
+/** One workspace's card: its latest chats (the user's own and the public
+ *  ones), its counts and its last activity. */
+function WorkspaceItem({ workspace, files }: { workspace: Workspace; files: number }) {
+  const { data: threads = [] } = useThreads(workspace.id);
   const last = threads[0]?.updated_at ?? workspace.updated_at; // threads come newest first
   return (
     <LibraryItem
@@ -97,7 +96,9 @@ function WorkspaceItem({ workspace, threads, files }: { workspace: Workspace; th
       subtitle={`${count(threads.length, "chat")} · ${count(files, "file")}`}
       meta={last ? `Updated ${dayjs(last).fromNow()}` : undefined}
       actions={<WorkspaceMenu workspace={workspace} className="shadow-xs" variant="secondary" />}
-    />
+    >
+      <VisibilityBadge shared={workspace.is_shared} mine={workspace.mine} by={workspace.user_created_by} />
+    </LibraryItem>
   );
 }
 
@@ -120,8 +121,9 @@ function ChatsPreview({ threads }: { threads: Thread[] }) {
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-/** A workspace's "…" menu: rename it, or delete it (its chats and files stay,
- *  in no workspace); onDeleted follows a delete. */
+/** A workspace's "…" menu, for its creator: rename it, make it public or
+ *  keep it to themselves, or delete it (its chats and files stay, in no
+ *  workspace); onDeleted follows a delete. Anyone else gets none. */
 export function WorkspaceMenu({
   workspace,
   onDeleted,
@@ -133,9 +135,10 @@ export function WorkspaceMenu({
   variant?: "ghost" | "secondary";
   className?: string;
 }) {
-  const [renaming, setRenaming] = useState(false);
-  const rename = useRenameWorkspace();
+    const [renaming, setRenaming] = useState(false);
+  const update = useUpdateWorkspace();
   const remove = useDeleteWorkspace();
+  if (!workspace.mine) return null;
   return (
     <>
       <DropdownMenu>
@@ -146,6 +149,20 @@ export function WorkspaceMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={() => setRenaming(true)}>Rename</DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={update.isPending}
+            onSelect={() => update.mutate({ id: workspace.id, isShared: !workspace.is_shared })}
+          >
+            {workspace.is_shared ? (
+              <>
+                <LockIcon /> Only me
+              </>
+            ) : (
+              <>
+                <UsersIcon /> Make public
+              </>
+            )}
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onSelect={() => remove.mutate(workspace.id, { onSuccess: onDeleted })}
@@ -158,32 +175,35 @@ export function WorkspaceMenu({
         open={renaming}
         onOpenChange={setRenaming}
         title="Rename workspace"
-        initial={workspace.name}
-        onSave={(name) => rename.mutateAsync({ id: workspace.id, name })}
+                initial={workspace.name}
+        onSave={(name) => update.mutateAsync({ id: workspace.id, name })}
       />
     </>
   );
 }
 
-/** Asks for a workspace's name; closes once onSave resolves. */
+/** Asks for a workspace's name, and, with visibility, who can see it (public
+ *  to start); closes once onSave resolves. */
 function NameDialog({
   open,
   onOpenChange,
   title,
   initial = "",
+  visibility,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   initial?: string;
-  onSave: (name: string) => Promise<unknown>;
+  visibility?: boolean;
+  onSave: (name: string, shared: boolean) => Promise<unknown>;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm" aria-describedby={undefined}>
         {/* Mounted per opening, so each starts from the current name. */}
-        <NameForm title={title} initial={initial} onSave={onSave} onDone={() => onOpenChange(false)} />
+        <NameForm title={title} initial={initial} visibility={visibility} onSave={onSave} onDone={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   );
@@ -192,21 +212,24 @@ function NameDialog({
 function NameForm({
   title,
   initial,
+  visibility,
   onSave,
   onDone,
 }: {
   title: string;
   initial: string;
-  onSave: (name: string) => Promise<unknown>;
+  visibility?: boolean;
+  onSave: (name: string, shared: boolean) => Promise<unknown>;
   onDone: () => void;
 }) {
   const [name, setName] = useState(initial);
+  const [shared, setShared] = useState(true);
   const [error, setError] = useState<string>();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await onSave(name.trim());
+      await onSave(name.trim(), shared);
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -219,6 +242,7 @@ function NameForm({
         <DialogTitle>{title}</DialogTitle>
       </DialogHeader>
       <Input autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="Name" />
+      {visibility && <VisibilityField value={shared} onChange={setShared} />}
       {error && <p className="text-xs text-destructive">{error}</p>}
       <DialogFooter>
         <Button type="submit" disabled={!name.trim()}>
