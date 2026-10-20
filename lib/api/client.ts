@@ -42,6 +42,15 @@ export async function apiText(path: string, init?: RequestInit): Promise<string>
   return text;
 }
 
+/** What a failure says to the user: the server's message, or, when the
+ *  server could not be reached at all, where it was looked for. */
+export function errorMessage(err: unknown): string {
+  if (err instanceof TypeError && /fetch|network|load failed/i.test(err.message)) {
+    return `Can't reach the server at ${API_URL}.`;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 /** The server's own message in an error body ({"message": …}), or the body. */
 function serverMessage(body: string) {
   try {

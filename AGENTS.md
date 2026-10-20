@@ -100,7 +100,7 @@ app/
 
 ```
 components/
-  providers.tsx               # QueryClientProvider + ThemeProvider + single TooltipProvider
+  providers.tsx               # QueryClientProvider + ThemeProvider + single TooltipProvider + the Toaster
   chat/
     use-thread.ts             # useThread(threadId): the thread's state + send/approve/answer/stop (see §5)
     reference-chip.tsx        # a reference in a text, in its font: the composer's chips and the sent message's
@@ -634,6 +634,12 @@ before large changes:
   to another one aren't put in the message (they wouldn't resolve). It renders outside those
   handlers, since React events bubble out of a portal. Add kinds to the table and their
   choices to `useChoices`, not another menu.
+- **A failure that is not a run's is a toast** (shadcn's sonner; `Toaster` in `providers.tsx`):
+  loading a conversation (with Retry), a refused message or answer, starting a chat. The store
+  keeps it as the thread's `error` (`ThreadError`: a title and the detail, which `errorMessage`
+  in `lib/api/client.ts` words); the thread view toasts it and dismisses it once the thread
+  moves on. A run's error sits on its message; a failure tied to content (an artifact body, a
+  source, a sub-agent's card) stays inline where that content is.
 - **`components/ui/` is shadcn registry output only** (style `radix-nova`, as the CLI writes
   it) and `components/ai-elements/` the AI Elements registry. Hand-written shared pieces go
   in `components/common/` or `components/library/`, never in `ui/`.

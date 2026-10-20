@@ -4,11 +4,13 @@ import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { RecentImages } from "@/components/images/recent-images";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { IMAGES_AGENT } from "@/lib/api/agents";
+import { errorMessage } from "@/lib/api/client";
 import { createThread } from "@/lib/api/threads";
 import { useUiStore } from "@/stores/ui-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
+import { toast } from "sonner";
 
 import { Composer } from "./composer/composer";
 import { type ChatMode, ModeToggle } from "./mode-toggle";
@@ -26,12 +28,12 @@ const SUGGESTIONS = [
  * Starts a conversation from a new-chat page: the first message creates the
  * thread over HTTP and starts its run, in the workspace bar's workspace, with
  * the composer's choices or the agent given (the Images page's); the thread
- * view then opens it, subscribes and replays the turn from its start.
+ * view then opens it, subscribes and replays the turn from its start. A
+ * refusal is a toast.
  */
 export function useStartChat(agentId?: string) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
 
   const start = useCallback(
     async (message: PromptInputMessage) => {
@@ -42,7 +44,7 @@ export function useStartChat(agentId?: string) {
         threadId = (await createThread(message.text, { ...runOptions(agentId), workspaceId }))
           .threadId;
       } catch (err) {
-        setError((err as Error).message);
+        toast.error("Couldn't start the conversation", { description: errorMessage(err) });
         return;
       }
       void queryClient.invalidateQueries({ queryKey: ["threads"] }); // the sidebar shows it, in its workspace
@@ -50,7 +52,7 @@ export function useStartChat(agentId?: string) {
     },
     [agentId, router, queryClient],
   );
-  return { start, error };
+  return { start };
 }
 
 /** A new chat's suggestions follow what is typed (it has no thread yet). */
@@ -75,7 +77,7 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
   // "Create with agent".
   const draft = useSearchParams().get("prompt") ?? undefined;
   const images = mode === "images";
-  const { start, error } = useStartChat(images ? IMAGES_AGENT : undefined);
+  const { start } = useStartChat(images ? IMAGES_AGENT : undefined);
   // A conversation is made under a control set, picked in the composer.
   const noControlset = useUiStore((s) => !s.selectedControlset);
 
@@ -95,7 +97,7 @@ export function LandingView({ mode = "chat" }: { mode?: ChatMode }) {
           <div className="mb-14 text-center">
             <h1 className="text-balance text-4xl font-semibold tracking-tight">{MODES[mode].title}</h1>
             <p className="mt-3 text-[15px] text-muted-foreground">
-              {error ?? (noControlset ? "Pick a control set to start a conversation." : MODES[mode].hint)}
+              {noControlset ? "Pick a control set to start a conversation." : MODES[mode].hint}
             </p>
           </div>
 

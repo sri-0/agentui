@@ -1,5 +1,6 @@
 "use client";
 
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
@@ -35,6 +36,16 @@ export function Providers({ children }: { children: ReactNode }) {
         disableTransitionOnChange
       >
         <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+        {/* Flat, no border; an error is the theme's red, with its text and
+            action set to read on it. The other types stay stock until used. */}
+        <Toaster
+          toastOptions={{
+            classNames: {
+              toast: "[--normal-border:transparent]",
+              error: "[--normal-bg:var(--destructive)] [--normal-text:white] [&_[data-description]]:text-white/85!",
+            },
+          }}
+        />
       </ThemeProvider>
     </QueryClientProvider>
   );

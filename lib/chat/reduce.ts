@@ -13,11 +13,15 @@ import type {
 
 export type ThreadStatus = "idle" | "streaming" | "awaiting_input" | "error";
 
+/** What a thread-level failure says, and whether loading it again can help. */
+export type ThreadError = { title: string; detail?: string; retry?: boolean };
+
 export type ThreadState = {
   messages: ChatMessage[];
   status: ThreadStatus;
-  /** A failure to start, resume or reach a run (REST); run errors sit on their message. */
-  error?: string;
+  /** A failure outside a run (loading the thread, a refused run or answer,
+   *  a refused subscription), shown as a toast; run errors sit on their message. */
+  error?: ThreadError;
   /** History has been fetched and folded. */
   loaded: boolean;
 };
