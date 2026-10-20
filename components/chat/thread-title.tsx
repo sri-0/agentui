@@ -19,8 +19,9 @@ const EDITABLE =
 
 /**
  * The conversation's place, in the thread header (shadcn Breadcrumb): its
- * workspace, then its title. A click on the workspace picks another (the
- * composer bar's list); a click on the title edits it in place.
+ * workspace, then its title. For its creator, a click on the workspace picks
+ * another (the composer bar's list) and a click on the title edits it in
+ * place; a reader of a shared conversation sees them as they are.
  */
 export function ThreadTitle() {
   const threadId = useContext(ThreadIdContext) ?? "";
@@ -30,13 +31,25 @@ export function ThreadTitle() {
   const update = useUpdateThread();
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState(false);
-  if (!thread) return null;
+    if (!thread) return null;
   const workspace = workspaces.find((w) => w.id === thread.workspace_id);
+  const editable = thread.mine;
 
   return (
     <Breadcrumb className="min-w-0">
       <BreadcrumbList className="flex-nowrap gap-1 sm:gap-1">
-        {workspace && (
+        {workspace && !editable && (
+          <>
+            <BreadcrumbItem className="shrink-0">
+              <span className="flex items-center gap-2 px-1.5 py-1">
+                <WorkspaceAvatar workspace={workspace} size="sm" />
+                <span className="max-w-48 truncate">{workspace.name}</span>
+              </span>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator>/</BreadcrumbSeparator>
+          </>
+        )}
+        {workspace && editable && (
           <>
             <BreadcrumbItem className="shrink-0">
               <Popover open={picking} onOpenChange={setPicking}>
@@ -63,8 +76,12 @@ export function ThreadTitle() {
             <BreadcrumbSeparator>/</BreadcrumbSeparator>
           </>
         )}
-        <BreadcrumbItem className="min-w-0">
-          {editing ? (
+                <BreadcrumbItem className="min-w-0">
+          {!editable ? (
+            <span className="flex min-w-0 items-center px-1.5 py-1 text-foreground">
+              <span className="truncate">{named(threadTitle(thread))}</span>
+            </span>
+          ) : editing ? (
             <TitleInput
               initial={thread.title ?? ""}
               onDone={(title) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { ArtifactItem } from "@/components/artifacts/artifacts-view";
+import { VisibilityBadge } from "@/components/common/visibility";
 import { UploadDialog } from "@/components/files/upload-dialog";
 import { FileItem } from "@/components/files/files-view";
 import { LibraryItem, LibraryItems, LibraryPage, LibraryToolbar } from "@/components/library/library";
@@ -72,10 +73,11 @@ export function WorkspaceView({ id }: { id: string }) {
     <LibraryPage title="Workspaces">
       {back}
       <LibraryToolbar
-        heading={
+                heading={
           <>
             <WorkspaceAvatar workspace={workspace} />
             <span className="truncate">{workspace.name}</span>
+            <VisibilityBadge shared={workspace.is_shared} mine={workspace.mine} by={workspace.user_created_by} />
           </>
         }
         search={search}
@@ -128,13 +130,12 @@ export function WorkspaceView({ id }: { id: string }) {
   );
 }
 
-/** The workspace's chats, newest first, archived ones too (the sidebar leaves
- *  those out). */
+/** The workspace's chats, newest first: the user's own, archived ones too
+ *  (the sidebar leaves those out), and the public ones others filed here. */
 function ChatList({ workspaceId, search }: { workspaceId: string; search: string }) {
-  const { data: threads = [], isPending } = useThreads();
+  const { data: chats = [], isPending } = useThreads(workspaceId);
   const named = useFileNames(); // a title holds the #ids the message named
   const q = search.trim().toLowerCase();
-  const chats = threads.filter((t) => t.workspace_id === workspaceId);
   const shown = chats.filter((t) => !q || named(threadTitle(t)).toLowerCase().includes(q));
   if (isPending) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!shown.length) {
@@ -155,8 +156,12 @@ function ChatList({ workspaceId, search }: { workspaceId: string; search: string
               <MessageSquareIcon className="size-4 text-muted-foreground" />
             </span>
           }
-          title={named(threadTitle(t))}
-          subtitle={t.archived ? "Archived" : undefined}
+                    title={named(threadTitle(t))}
+          subtitle={
+            [t.archived && "Archived", !t.mine && `Shared by ${t.user_created_by ?? "someone"}`, t.mine && !t.is_shared && "Only me"]
+              .filter(Boolean)
+              .join(" · ") || undefined
+          }
           meta={t.updated_at ? dayjs(t.updated_at).fromNow() : undefined}
         />
       ))}

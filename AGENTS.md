@@ -108,7 +108,9 @@ components/
                               #   mode the toggle sets, suggestions or the image carousel; useStartChat
     mode-toggle.tsx           # the Chat | Images toggle (shadcn Tabs) in the new-conversation
                               #   page's top bar: switches /chat and /images
-    thread-view.tsx (ThreadChat), task-bar.tsx
+        thread-view.tsx (ThreadChat), task-bar.tsx
+    share-button.tsx          # the thread header's Share (the creator's: Public or Only me, the link to copy),
+                              #   or, for a reader of a shared conversation, whose it is
     next-prompts.tsx          # next-prompt suggestions above the composer (AI Elements Suggestions)
     composer/                 # composer, model-selector, agent-selector, connector-selector,
                               #   controlset-selector, connector-icon, thread-usage-ring, references (the text, with /, @ and # chips),
@@ -131,7 +133,9 @@ components/
                               #   search, actions, grid/list toggle), LibraryItems/LibraryItem (card
                               #   or row, opened at its href or, without one, by nothing but its actions),
                               #   NavSection/NavItem; creatable-combobox (pick or create a value)
-  common/copy-button.tsx      # a copy-to-clipboard icon button for any page
+    common/copy-button.tsx      # a copy-to-clipboard icon button for any page
+  common/visibility.tsx       # who can see a conversation, workspace or file: VisibilityField (Only me |
+                              #   Public, with what that means) and VisibilityBadge (a lock, or Shared by X)
   artifacts/artifacts-view.tsx  # every artifact as a card with a preview of its body (fetched
                               #   once the card is in view), kind tabs, search; ?open=root/id
                               #   opens one full-page; an image card shows the image. ArtifactItem
@@ -157,7 +161,7 @@ components/
                               #   reasons; each kept file in the chat's workspace goes to onUploaded, and
                               #   files sent to another workspace are said to be unusable in the chat
   files/file-icon.tsx         # FileKindIcon (by media type) and formatSize, for the page, # chips and attachments
-  sidebar/app-sidebar.tsx     # New chat, Search, Workspaces, Artifacts, Skills, Files; the thread list
+    sidebar/app-sidebar.tsx     # New chat, Search, Workspaces, Artifacts, Skills, Files; the user's own threads
                               #   (Pinned, with a pin, then Today/Yesterday/7d/30d/Older) + run-status dots, and a moon
                               #   on an idle thread the backend can still pick up (dormant_until)
   sidebar/thread-row.tsx      # one conversation row: its workspace (avatar and name) under the title,
@@ -223,15 +227,21 @@ drops that subscription instead of retrying it on reconnect.
 REST (TanStack Query / `apiFetch` in `lib/api/*`) is for creating a thread and
 for reads and admin:
 - `POST /v1/agent/chat` → `201 {threadId, runId, seq}`: a new thread with its first turn,
-  filed under `workspaceId` when the composer's workspace card names one
+  filed under `workspaceId` when the composer's workspace card names one; public unless
+  `isShared: false`
 - `GET /v1/agents`, `GET /v1/models`, `GET /v1/connectors`, `GET /v1/connectors/{id}`
-- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, workspace_id?, controlset_id?, created_at, updated_at, run_status?, dormant_until?}]}`
-  (`dormant_until`: until when an idle thread can still be picked up, the sidebar's moon);
+- `GET /v1/threads` → `{data: [{id, root_id, title, agent_id, model, connectors?, workspace_id?, controlset_id?, created_at, updated_at, run_status?, dormant_until?, is_shared, mine, user_created_by}]}`:
+  the user's own conversations (the sidebar); `?workspace=<id>` a workspace's instead, the user's
+  own and the public ones (`['threads', 'workspace', id]`). `is_shared`: readable by its link by
+  everyone with access to its control set; `mine`: the user created it, so may change it and write
+  in it (`dormant_until`: until when an idle thread can still be picked up, the sidebar's moon);
   fetched once, refetched when a run this tab watches starts or ends and on window focus (no polling)
-- `GET /v1/threads/{id}` (its `connectors` set the composer's toggles; `['thread', id]`), `PATCH`
-  (`{workspace_id}` files it, `""` takes it out), `DELETE`
-- `GET /v1/workspaces` (by name), `POST {name}`, `PATCH /v1/workspaces/{id} {name}`,
-  `DELETE /v1/workspaces/{id}` (its conversations stay, outside any workspace)
+- `GET /v1/threads/{id}` (its `connectors` set the composer's toggles; `['thread', id]`; a public
+  conversation by its link too), `PATCH` (`{workspace_id}` files it, `""` takes it out; `{is_shared}`
+  shares it or keeps it to its creator), `DELETE`
+- `GET /v1/workspaces` (by name, the user's own and the public ones, each with `is_shared` and
+  `mine`), `POST {name, is_shared?}` (public unless `false`), `PATCH /v1/workspaces/{id}
+  {name?, is_shared?}`, `DELETE /v1/workspaces/{id}` (its conversations stay, outside any workspace)
 - `GET /v1/threads/{id}/artifacts` (the conversation's artifacts, no bodies) and
   `GET /v1/threads/{id}/artifacts/{artifactId}/content` (one body); refetched when a run ends
 - `GET /v1/artifacts?kind=&workspace=&after=&limit=` → `{data: [artifact + root_id, thread_id, thread_title], next?}`:
@@ -250,9 +260,11 @@ for reads and admin:
   a new description rewrites the SKILL.md), `DELETE /v1/skills/{name}`, and
   `GET /v1/skills/{name}/files/{path}` (one file, as written)
 - `GET /v1/rag/files?workspace=<id>|none` → `{data: [{id, name, media_type, size, workspace_id?, status,
-  created_at}]}` (newest first; no `workspace` is every file), `POST /v1/rag/files` as a multipart form
-  (`file`, optional `workspaceId`; the reply comes once the file is embedded; 415 for a type the
-  server doesn't take, 413 over 25 MiB, 502 when the embedding model refuses it),
+  is_shared, mine, user_created_by, created_at}]}` (the files the user can see, their own and the
+  shared ones, newest first; no `workspace` is every file), `POST /v1/rag/files` as a multipart form
+  (`file`, optional `workspaceId`, `is_shared` (the uploader's alone unless `true`); the reply comes
+  once the file is embedded; 415 for a type the server doesn't take, 413 over 25 MiB, 502 when the
+  embedding model refuses it), `PATCH /v1/rag/files/{id} {is_shared?, tags?}`,
   `GET /v1/rag/files/{id}/content` (the file itself) and `DELETE /v1/rag/files/{id}`. `status` is `ready`
   (embedded: `search_userfiles` finds it in its workspace's chats) or `stored` (a PDF: only `#id`
   gives it to the model). A sent `#id` makes a `file` activity `{id, name, mediaType}` in the turn
@@ -639,6 +651,18 @@ before large changes:
   to another one aren't put in the message (they wouldn't resolve). It renders outside those
   handlers, since React events bubble out of a portal. Add kinds to the table and their
   choices to `useChoices`, not another menu.
+- **Visibility** (agentlite docs/AUTH.md): a conversation, workspace or file is **Public**, seen by
+  everyone with access to its control set, or **Only me** (`is_shared`; files start private, the
+  rest public). `common/visibility.tsx` holds the one control (`VisibilityField`, in the new
+  workspace dialog, the upload dialog and the thread's Share popover) and the one badge
+  (`VisibilityBadge`: a lock for Only me, "Shared by X" for someone else's; nothing for the usual
+  case). A record's `mine` says whether the user may change it: a workspace's menu and a file's
+  menu (share, delete) show only for their creator, and a conversation shared with the user is
+  read-only: no composer (a note says whose it is), no "…" menu, no renaming or moving
+  (`chat/share-button.tsx` shows "Shared by X · read only"). The creator's Share popover sets the
+  conversation's visibility and, while public, shows the link to copy (`/chat/<id>`). The sidebar
+  lists the user's own conversations; a public one is reached by its link, or listed on its
+  workspace's page (`useThreads(workspaceId)`). The Files page's nav filters Only me | Public.
 - **A failure that is not a run's is a toast** (shadcn's sonner; `Toaster` in `providers.tsx`):
   loading a conversation (with Retry), a refused message or answer, starting a chat. The store
   keeps it as the thread's `error` (`ThreadError`: a title and the detail, which `errorMessage`

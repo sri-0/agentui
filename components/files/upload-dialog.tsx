@@ -1,5 +1,6 @@
 "use client";
 
+import { VisibilityField } from "@/components/common/visibility";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,8 +52,9 @@ const ACCEPT_ATTR = Object.entries(ACCEPT).flat(2).join(",");
 type Entry = { file: File; state: "ready" | "uploading" | "failed"; error?: string };
 
 /**
- * Upload files: drop or pick several, choose their workspace (workspaceId to
- * start; null is none), tag them all, upload. From a chat (chatWorkspaceId
+  * Upload files: drop or pick several, choose their workspace (workspaceId to
+ * start; null is none) and who sees them (the uploader alone, to start), tag
+ * them all, upload. From a chat (chatWorkspaceId
  * set), each kept file in the chat's workspace goes to onUploaded straight
  * away; files sent to another workspace can't be used there, which it says
  * instead. One the server refuses stays listed with its reason, to remove or
@@ -81,7 +83,8 @@ export function UploadDialog({
   const known = useKnownTags();
   const upload = useUploadFile();
   const [{ entries, refused }, setPicked] = useState(() => pick(initialFiles));
-  const [tags, setTags] = useState<string[]>([]);
+    const [tags, setTags] = useState<string[]>([]);
+  const [shared, setShared] = useState(false);
   const busy = entries.some((e) => e.state === "uploading");
 
   const browse = useRef<HTMLInputElement>(null);
@@ -100,7 +103,7 @@ export function UploadDialog({
     for (const { file } of todo) set(file, { state: "uploading", error: undefined });
     const results = await Promise.all(
       todo.map(({ file }) =>
-        upload.mutateAsync({ file, workspaceId: target, tags }).then(
+                upload.mutateAsync({ file, workspaceId: target, tags, shared }).then(
           (record) => {
             setPicked((p) => ({ ...p, entries: p.entries.filter((e) => e.file !== file) }));
             return record;
@@ -170,12 +173,15 @@ export function UploadDialog({
                   />
                 </PopoverContent>
               </Popover>
-              {elsewhere && (
+                            {elsewhere && (
                 <p className="text-xs text-muted-foreground">
                   Files in another workspace can&apos;t be used in this chat; they won&apos;t be added to your message.
                 </p>
               )}
             </div>
+
+            <VisibilityField value={shared} onChange={setShared} disabled={busy} label="Who can see them" />
+
 
             <button
               type="button"

@@ -21,20 +21,24 @@ export function useWorkspaces() {
   });
 }
 
+/** Makes a workspace: public, so everyone with access to the control set
+ *  sees it, unless isShared is false. */
 export function useCreateWorkspace() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) =>
-      apiFetch<Workspace>("/v1/workspaces", { method: "POST", body: JSON.stringify({ name }) }),
+    mutationFn: ({ name, isShared }: { name: string; isShared?: boolean }) =>
+      apiFetch<Workspace>("/v1/workspaces", { method: "POST", body: JSON.stringify({ name, is_shared: isShared }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workspaces"] }),
   });
 }
 
-export function useRenameWorkspace() {
+/** Renames a workspace, or shares it or keeps it to its creator; what is
+ *  left undefined stays. */
+export function useUpdateWorkspace() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      apiFetch<Workspace>(path(id), { method: "PATCH", body: JSON.stringify({ name }) }),
+    mutationFn: ({ id, name, isShared }: { id: string; name?: string; isShared?: boolean }) =>
+      apiFetch<Workspace>(path(id), { method: "PATCH", body: JSON.stringify({ name, is_shared: isShared }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workspaces"] }),
   });
 }
@@ -59,14 +63,25 @@ export function useDeleteWorkspace() {
 }
 
 /** Files a conversation under a workspace or takes it out (null), renames,
- *  pins or archives it; what is left undefined stays. */
+ *  pins or archives it, or shares it (isShared: readable by its link by
+ *  everyone with access to its control set) or keeps it to its creator; what
+ *  is left undefined stays. */
 export function useUpdateThread() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ threadId, workspaceId, ...flags }: { threadId: string; workspaceId?: string | null } & Pick<Thread, "title" | "pinned" | "archived">) =>
+    mutationFn: ({
+      threadId,
+      workspaceId,
+      isShared,
+      ...flags
+    }: { threadId: string; workspaceId?: string | null; isShared?: boolean } & Pick<Thread, "title" | "pinned" | "archived">) =>
       apiFetch<Thread>(`/v1/threads/${encodeURIComponent(threadId)}`, {
         method: "PATCH",
-        body: JSON.stringify({ workspace_id: workspaceId === undefined ? undefined : (workspaceId ?? ""), ...flags }),
+        body: JSON.stringify({
+          workspace_id: workspaceId === undefined ? undefined : (workspaceId ?? ""),
+          is_shared: isShared,
+          ...flags,
+        }),
       }),
     onSuccess: (thread) => {
       qc.setQueryData(["thread", thread.id], thread);

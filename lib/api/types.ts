@@ -89,14 +89,25 @@ export type Thread = {
   updated_at?: string | number;
   /** present while a run owns the thread */
   run_status?: RunStatus;
-  /** until when the backend can still pick the idle thread up */
+    /** until when the backend can still pick the idle thread up */
   dormant_until?: string;
+  /** readable, by its link, by everyone with access to its control set; else its creator's alone */
+  is_shared: boolean;
+  /** the user created it: they may change it and write in it; anyone else reads a public one */
+  mine: boolean;
+  /** the creator's username */
+  user_created_by?: string;
 };
 
-/** A folder of conversations; later, what people share. */
+/** A folder of conversations and files: public (everyone with access to its
+ *  control set sees it and files under it) or its creator's alone. */
 export type Workspace = {
   id: string;
   name: string;
+  is_shared: boolean;
+  /** the user created it: they may rename, share and delete it */
+  mine: boolean;
+  user_created_by?: string;
   created_at: string;
   updated_at: string;
 };

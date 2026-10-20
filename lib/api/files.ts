@@ -15,9 +15,14 @@ export type UserFile = {
   media_type: string;
   size: number;
   workspace_id?: string;
-  /** the uploader's, for finding it */
+    /** the uploader's, for finding it */
   tags?: string[];
   status: "ready" | "stored";
+  /** seen by everyone with access to its control set; else the uploader's alone (the default) */
+  is_shared: boolean;
+  /** the user uploaded it: they may share, retag and delete it */
+  mine: boolean;
+  user_created_by?: string;
   created_at: string;
 };
 
@@ -50,18 +55,43 @@ export function useFileNames() {
   );
 }
 
-/** Uploads a file into a workspace (null: none), with tags. The reply comes
- *  once the file is embedded. */
+/** Uploads a file into a workspace (null: none), with tags, the uploader's
+ *  alone unless shared. The reply comes once the file is embedded. */
 export function useUploadFile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ file, workspaceId, tags = [] }: { file: File; workspaceId: string | null; tags?: string[] }) => {
+    mutationFn: ({
+      file,
+      workspaceId,
+      tags = [],
+      shared = false,
+    }: {
+      file: File;
+      workspaceId: string | null;
+      tags?: string[];
+      shared?: boolean;
+    }) => {
       const form = new FormData();
       form.set("file", file);
       if (workspaceId) form.set("workspaceId", workspaceId);
       for (const t of tags) form.append("tags", t);
+      if (shared) form.set("is_shared", "true");
       return apiFetch<UserFile>("/v1/rag/files", { method: "POST", body: form });
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["files"] }),
+  });
+}
+
+/** Shares a file with everyone with access to its control set or keeps it
+ *  to its uploader, or replaces its tags; what is left undefined stays. */
+export function useUpdateFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isShared, tags }: { id: string; isShared?: boolean; tags?: string[] }) =>
+      apiFetch<UserFile>(`/v1/rag/files/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_shared: isShared, tags }),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["files"] }),
   });
 }
