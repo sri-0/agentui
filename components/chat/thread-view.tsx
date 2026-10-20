@@ -65,7 +65,16 @@ export function ThreadChat({ threadId }: { threadId: string }) {
   }, [threadId, setConnectors, queryClient]);
   // An images conversation (from the Images page) keeps its agent, and its
   // composer picks the image model.
-  const images = useThreadRecord(threadId).data?.agent_id === IMAGES_AGENT;
+  const record = useThreadRecord(threadId).data;
+  const images = record?.agent_id === IMAGES_AGENT;
+  // While it is open, REST requests are made under its control set; until its
+  // record is known, under none (never the picker's).
+  const controlset = record?.controlset_id ?? "";
+  const setThreadControlset = useUiStore((s) => s.setThreadControlset);
+  useEffect(() => {
+    setThreadControlset(controlset);
+    return () => setThreadControlset(null);
+  }, [controlset, setThreadControlset]);
   const connected = useChatStore((s) => s.connected);
 
   // A failure outside a run (loading the thread, a refused message) is a
